@@ -14,6 +14,7 @@ fi
 
 if ! nc -zw3 youtube.com 443 2>/dev/null; then
     echo "[$(date '+%Y-%m-%d %H:%M:%S')] ネットワーク未接続のためスキップ" >> "$LOG"
+    "$NOTIFY" -title "yt-learn" -message "  ネットワーク未接続のためスキップしました"
     exit 0
 fi
 
