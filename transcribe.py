@@ -82,19 +82,21 @@ def _load_channels() -> dict:
         line = line.strip()
         if not line or line.startswith("#") or "|" not in line:
             continue
-        name, url = line.split("|", 1)
-        channels[name.strip()] = url.strip()
+        parts = [p.strip() for p in line.split("|")]
+        name, url = parts[0], parts[1]
+        lang = parts[2] if len(parts) >= 3 and parts[2] else "ja"
+        channels[name] = {"url": url, "lang": lang}
     return channels
 
 
-def _add_channel(name: str, url: str) -> None:
+def _add_channel(name: str, url: str, lang: str = "ja") -> None:
     channels = _load_channels()
     if name in channels:
-        _err(f"[skip] {name} は既に登録済み: {channels[name]}")
+        _err(f"[skip] {name} は既に登録済み: {channels[name]['url']}")
         return
     with CHANNELS_FILE.open("a", encoding="utf-8") as f:
-        f.write(f"{name} | {url}\n")
-    _err(f"[added] {name} | {url}")
+        f.write(f"{name} | {url} | {lang}\n")
+    _err(f"[added] {name} | {url} | {lang}")
 
 
 def _list_channels() -> None:
@@ -102,8 +104,8 @@ def _list_channels() -> None:
     if not channels:
         _err("チャンネルが登録されていません。python transcribe.py add <name> <url> で追加してください。")
         return
-    for name, url in channels.items():
-        print(f"{name} | {url}")
+    for name, info in channels.items():
+        print(f"{name} | {info['url']} | {info['lang']}")
 
 
 # ── yt-dlp ヘルパー ────────────────────────────────────────────────────────────
@@ -358,6 +360,7 @@ AI要約は別スクリプト:
     p_add = sub.add_parser("add", help="チャンネルを channels.txt に追加")
     p_add.add_argument("name", help="チャンネル名（ディレクトリ名になる）")
     p_add.add_argument("url", help="チャンネルURL")
+    p_add.add_argument("--lang", default="ja", help="文字起こし言語 (default: ja)")
 
     sub.add_parser("list", help="登録チャンネル一覧を表示")
 
@@ -373,7 +376,6 @@ AI要約は別スクリプト:
 
     p_ch = sub.add_parser("channel", help="チャンネルの全動画を処理")
     p_ch.add_argument("name", help="channels.txt のチャンネル名")
-    p_ch.add_argument("--lang", default="ja")
     p_ch.add_argument("--model", default=WHISPER_MODEL,
                       choices=["tiny", "base", "small", "medium", "large", "large-v2", "large-v3"])
     p_ch.add_argument("--limit", type=int, default=0, help="最大処理動画数（0=全件）")
@@ -385,7 +387,6 @@ AI要約は別スクリプト:
                       help="再生数キャッシュの構築のみ行い、文字起こしはしない（--sort popular と併用）")
 
     p_all = sub.add_parser("all", help="全チャンネルを処理")
-    p_all.add_argument("--lang", default="ja")
     p_all.add_argument("--model", default=WHISPER_MODEL,
                        choices=["tiny", "base", "small", "medium", "large", "large-v2", "large-v3"])
     p_all.add_argument("--limit", type=int, default=0)
@@ -396,7 +397,7 @@ AI要約は別スクリプト:
     args = parser.parse_args()
 
     if args.cmd == "add":
-        _add_channel(args.name, args.url)
+        _add_channel(args.name, args.url, args.lang)
 
     elif args.cmd == "list":
         _list_channels()
@@ -426,7 +427,8 @@ AI要約は別スクリプト:
         if args.name not in channels:
             _err(f"[error] '{args.name}' が channels.txt に見つかりません")
             sys.exit(1)
-        _process_channel(args.name, channels[args.name], args.lang, args.limit, args.sort,
+        info = channels[args.name]
+        _process_channel(args.name, info["url"], info["lang"], args.limit, args.sort,
                          args.popular_sample, args.model, args.cache_only)
 
     elif args.cmd == "all":
@@ -434,8 +436,8 @@ AI要約は別スクリプト:
         if not channels:
             _err("[warn] channels.txt にチャンネルが登録されていません")
             sys.exit(0)
-        for name, url in channels.items():
-            _process_channel(name, url, args.lang, args.limit, args.sort, args.popular_sample, args.model, args.cache_only)
+        for name, info in channels.items():
+            _process_channel(name, info["url"], info["lang"], args.limit, args.sort, args.popular_sample, args.model, args.cache_only)
 
 
 if __name__ == "__main__":

@@ -76,14 +76,20 @@ class TestChannels:
         f.write_text("DAIGO | https://youtube.com/@daigo\n# comment\nFoo | https://youtube.com/@foo\n")
         result = transcribe._load_channels()
         assert result == {
-            "DAIGO": "https://youtube.com/@daigo",
-            "Foo": "https://youtube.com/@foo",
+            "DAIGO": {"url": "https://youtube.com/@daigo", "lang": "ja"},
+            "Foo": {"url": "https://youtube.com/@foo", "lang": "ja"},
         }
+
+    def test_load_parses_lang_field(self, tmp_path, monkeypatch):
+        f = self._setup(tmp_path, monkeypatch)
+        f.write_text("TestCh | https://youtube.com/@test | en\n")
+        result = transcribe._load_channels()
+        assert result == {"TestCh": {"url": "https://youtube.com/@test", "lang": "en"}}
 
     def test_load_skips_malformed_lines(self, tmp_path, monkeypatch):
         f = self._setup(tmp_path, monkeypatch)
         f.write_text("no pipe here\nOK | https://example.com\n")
-        assert transcribe._load_channels() == {"OK": "https://example.com"}
+        assert transcribe._load_channels() == {"OK": {"url": "https://example.com", "lang": "ja"}}
 
     def test_load_no_file_returns_empty(self, tmp_path, monkeypatch):
         self._setup(tmp_path, monkeypatch)
@@ -93,11 +99,17 @@ class TestChannels:
         f = self._setup(tmp_path, monkeypatch)
         f.write_text("")
         transcribe._add_channel("DAIGO", "https://youtube.com/@daigo")
-        assert "DAIGO | https://youtube.com/@daigo" in f.read_text()
+        assert "DAIGO | https://youtube.com/@daigo | ja" in f.read_text()
+
+    def test_add_channel_with_lang(self, tmp_path, monkeypatch):
+        f = self._setup(tmp_path, monkeypatch)
+        f.write_text("")
+        transcribe._add_channel("TestCh", "https://youtube.com/@test", "en")
+        assert "TestCh | https://youtube.com/@test | en" in f.read_text()
 
     def test_add_channel_skips_duplicate(self, tmp_path, monkeypatch, capsys):
         f = self._setup(tmp_path, monkeypatch)
-        f.write_text("DAIGO | https://youtube.com/@daigo\n")
+        f.write_text("DAIGO | https://youtube.com/@daigo | ja\n")
         transcribe._add_channel("DAIGO", "https://youtube.com/@daigo2")
         assert f.read_text().count("DAIGO") == 1
         assert "既に登録済み" in capsys.readouterr().err
@@ -108,7 +120,10 @@ class TestChannels:
         transcribe._add_channel("A", "https://a.com")
         transcribe._add_channel("B", "https://b.com")
         result = transcribe._load_channels()
-        assert result == {"A": "https://a.com", "B": "https://b.com"}
+        assert result == {
+            "A": {"url": "https://a.com", "lang": "ja"},
+            "B": {"url": "https://b.com", "lang": "ja"},
+        }
 
 
 # ── _save_transcript ──────────────────────────────────────────────────────────
