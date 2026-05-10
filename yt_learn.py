@@ -176,10 +176,10 @@ def _download_audio(url: str, out_dir: str) -> str:
 
 # ── 文字起こし ─────────────────────────────────────────────────────────────────
 
-def _transcribe(audio_path: str, lang: str = "ja") -> str:
+def _transcribe(audio_path: str, lang: str = "ja", model_size: str = WHISPER_MODEL) -> str:
     from faster_whisper import WhisperModel
-    _err(f"[model] {WHISPER_MODEL} をロード中...")
-    model = WhisperModel(WHISPER_MODEL, device="cpu", compute_type="int8", cpu_threads=8)
+    _err(f"[model] {model_size} をロード中...")
+    model = WhisperModel(model_size, device="cpu", compute_type="int8", cpu_threads=8)
     _err(f"[transcribe] {Path(audio_path).name}")
     segments_iter, _ = model.transcribe(
         audio_path,
@@ -204,7 +204,8 @@ def _save_transcript(channel_name: str, title: str, url: str, text: str, output_
 
 # ── 処理エントリポイント ───────────────────────────────────────────────────────
 
-def _process_url(url: str, channel_name: str, lang: str = "ja", title: str = None, output_dir: Path = None) -> bool:
+def _process_url(url: str, channel_name: str, lang: str = "ja", title: str = None,
+                 output_dir: Path = None, model_size: str = WHISPER_MODEL) -> bool:
     vid_id = _extract_video_id(url)
     index = _load_index(channel_name)
 
@@ -220,7 +221,7 @@ def _process_url(url: str, channel_name: str, lang: str = "ja", title: str = Non
     try:
         _err(f"[download] {url}")
         audio_path = _download_audio(url, tmpdir)
-        text = _transcribe(audio_path, lang)
+        text = _transcribe(audio_path, lang, model_size=model_size)
         saved = _save_transcript(channel_name, title, url, text, output_dir=output_dir)
 
         index[vid_id] = {
@@ -236,7 +237,8 @@ def _process_url(url: str, channel_name: str, lang: str = "ja", title: str = Non
         shutil.rmtree(tmpdir, ignore_errors=True)
 
 
-def _process_channel(channel_name: str, channel_url: str, lang: str = "ja", limit: int = 0, sort: str = "date") -> int:
+def _process_channel(channel_name: str, channel_url: str, lang: str = "ja", limit: int = 0,
+                     sort: str = "date", model_size: str = WHISPER_MODEL) -> int:
     sorted_url = _apply_sort(channel_url, sort)
     _err(f"[channel] {channel_name}: 動画リスト取得中... (sort={sort})")
     videos = _get_channel_videos(sorted_url)
@@ -254,7 +256,7 @@ def _process_channel(channel_name: str, channel_url: str, lang: str = "ja", limi
             continue
         _err(f"[{i}/{len(videos)}] {v['title']}")
         try:
-            if _process_url(v["url"], channel_name, lang, title=v["title"]):
+            if _process_url(v["url"], channel_name, lang, title=v["title"], model_size=model_size):
                 processed += 1
                 index = _load_index(channel_name)
         except Exception as e:
@@ -297,20 +299,27 @@ AI要約は別スクリプト:
 
     p_proc = sub.add_parser("process", help="特定URLを文字起こし（複数可）")
     p_proc.add_argument("urls", nargs="*", help="動画URL（複数可、省略時は --file が必須）")
-    p_proc.add_argument("--channel", required=True, help="チャンネル名")
+    p_proc.add_argument("--channel", default="misc", help="チャンネル名（省略時は misc）")
     p_proc.add_argument("--lang", default="ja")
+    p_proc.add_argument("--model", default=WHISPER_MODEL,
+                        choices=["tiny", "base", "small", "medium", "large", "large-v2", "large-v3"],
+                        help=f"Whisperモデル (default: {WHISPER_MODEL})")
     p_proc.add_argument("-f", "--file", help="URLを1行1件で記述したテキストファイル（#はコメント）")
     p_proc.add_argument("-o", "--output", help="出力ディレクトリ（省略時は transcripts/{channel}/）")
 
     p_ch = sub.add_parser("channel", help="チャンネルの全動画を処理")
     p_ch.add_argument("name", help="channels.txt のチャンネル名")
     p_ch.add_argument("--lang", default="ja")
+    p_ch.add_argument("--model", default=WHISPER_MODEL,
+                      choices=["tiny", "base", "small", "medium", "large", "large-v2", "large-v3"])
     p_ch.add_argument("--limit", type=int, default=0, help="最大処理動画数（0=全件）")
     p_ch.add_argument("--sort", choices=["date", "popular"], default="date",
                       help="取得順序: date=新着順(default), popular=人気順")
 
     p_all = sub.add_parser("all", help="全チャンネルを処理")
     p_all.add_argument("--lang", default="ja")
+    p_all.add_argument("--model", default=WHISPER_MODEL,
+                       choices=["tiny", "base", "small", "medium", "large", "large-v2", "large-v3"])
     p_all.add_argument("--limit", type=int, default=0)
     p_all.add_argument("--sort", choices=["date", "popular"], default="date")
 
@@ -338,14 +347,14 @@ AI要約は別スクリプト:
             sys.exit(1)
         output_dir = Path(args.output) if args.output else None
         for url in urls:
-            _process_url(url, args.channel, args.lang, output_dir=output_dir)
+            _process_url(url, args.channel, args.lang, output_dir=output_dir, model_size=args.model)
 
     elif args.cmd == "channel":
         channels = _load_channels()
         if args.name not in channels:
             _err(f"[error] '{args.name}' が channels.txt に見つかりません")
             sys.exit(1)
-        _process_channel(args.name, channels[args.name], args.lang, args.limit, args.sort)
+        _process_channel(args.name, channels[args.name], args.lang, args.limit, args.sort, args.model)
 
     elif args.cmd == "all":
         channels = _load_channels()
@@ -353,7 +362,7 @@ AI要約は別スクリプト:
             _err("[warn] channels.txt にチャンネルが登録されていません")
             sys.exit(0)
         for name, url in channels.items():
-            _process_channel(name, url, args.lang, args.limit, args.sort)
+            _process_channel(name, url, args.lang, args.limit, args.sort, args.model)
 
 
 if __name__ == "__main__":
