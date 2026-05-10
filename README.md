@@ -126,16 +126,22 @@ cat "summaries/メンタリスト DaiGo.md"
 
 ## 自動実行（launchd）
 
-`run.sh`（文字起こし）と `run_summarize.sh`（要約）を launchd で定期実行する。
+| ラベル | スクリプト | スケジュール | 実行内容 |
+|---|---|---|---|
+| `com.yoshihide.run_yt-learn` | `run.sh` | 毎日 0:00 | `yt_learn.py all --sort popular --limit 20` |
+| `com.yoshihide.run_yt-summarize` | `run_summarize.sh` | 毎日 1:00 | `summarize.py all --threshold 20` |
 
-| スクリプト | 実行内容 | 通知 |
-|---|---|---|
-| `run.sh` | `yt_learn.py all --sort popular --limit 20` | エラー時のみ |
-| `run_summarize.sh` | `summarize.py all --threshold 20` | 要約作成・更新時 / エラー時 |
+plist は `~/dotfiles-mac/LaunchAgents/` で管理し、`~/Library/LaunchAgents/` にシンボリックリンクを張る。
 
 ### 通知内容
 
+通知アイコンは `~/Applications/Notifiers/yt-learn.app`（[notifier](../notifier) プロジェクトでビルド）。
+
 ```
+# ネットワーク未接続でスキップしたとき
+[yt-learn]
+  ネットワーク未接続のためスキップしました
+
 # 要約ファイルを新規作成したとき
 [yt-learn]
   メンタリスト DaiGo の要約を作成しました（20件）
@@ -151,8 +157,6 @@ cat "summaries/メンタリスト DaiGo.md"
 [yt-learn]
   要約でエラーが発生しました。log/summarize.log を確認してください
 ```
-
-通知アイコンは `~/Applications/Notifiers/yt-learn.app`（[notifier](../notifier) プロジェクトでビルド）。
 
 ## 要約の仕組み
 
