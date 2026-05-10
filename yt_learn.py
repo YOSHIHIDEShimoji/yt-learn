@@ -2,12 +2,15 @@
 """YouTube動画の文字起こし・チャンネル管理ツール（AI要約なし）"""
 
 import argparse
+import json
 import os
 import re
 import shutil
 import sys
 import tempfile
+from datetime import date
 from pathlib import Path
+from urllib.parse import parse_qs, urlparse
 
 BASE_DIR = Path(__file__).parent.resolve()
 TRANSCRIPTS_DIR = BASE_DIR / "transcripts"
@@ -23,6 +26,37 @@ def _err(msg: str) -> None:
 def _sanitize(name: str) -> str:
     name = re.sub(r'[\\/:*?"<>|]', "_", name)
     return name.strip()[:200]
+
+
+def _extract_video_id(url: str) -> str:
+    """YouTube URLからvideo IDを抽出。非YouTubeはURLをそのまま返す"""
+    parsed = urlparse(url)
+    if "youtube.com" in parsed.netloc:
+        vid = parse_qs(parsed.query).get("v", [None])[0]
+        if vid:
+            return vid
+    elif "youtu.be" in parsed.netloc:
+        return parsed.path.lstrip("/")
+    return url
+
+
+# ── 動画インデックス ──────────────────────────────────────────────────────────
+
+def _index_path(channel_name: str) -> Path:
+    return TRANSCRIPTS_DIR / _sanitize(channel_name) / "_index.json"
+
+
+def _load_index(channel_name: str) -> dict:
+    p = _index_path(channel_name)
+    if p.exists():
+        return json.loads(p.read_text(encoding="utf-8"))
+    return {}
+
+
+def _save_index(channel_name: str, index: dict) -> None:
+    p = _index_path(channel_name)
+    p.parent.mkdir(parents=True, exist_ok=True)
+    p.write_text(json.dumps(index, ensure_ascii=False, indent=2), encoding="utf-8")
 
 
 def _load_env() -> None:
@@ -156,14 +190,16 @@ def _save_transcript(channel_name: str, title: str, url: str, text: str) -> Path
 # ── 処理エントリポイント ───────────────────────────────────────────────────────
 
 def _process_url(url: str, channel_name: str, lang: str = "ja", title: str = None) -> bool:
+    vid_id = _extract_video_id(url)
+    index = _load_index(channel_name)
+
+    if vid_id in index:
+        _err(f"[skip] 処理済み: {index[vid_id]['title']}")
+        return False
+
     if title is None:
         _err(f"[info] タイトル取得中: {url}")
         title = _get_video_title(url)
-
-    transcript_path = TRANSCRIPTS_DIR / _sanitize(channel_name) / f"{_sanitize(title)}.md"
-    if transcript_path.exists():
-        _err(f"[skip] 既存: {transcript_path.name}")
-        return False
 
     tmpdir = tempfile.mkdtemp(prefix="yt_learn_")
     try:
@@ -171,6 +207,14 @@ def _process_url(url: str, channel_name: str, lang: str = "ja", title: str = Non
         audio_path = _download_audio(url, tmpdir)
         text = _transcribe(audio_path, lang)
         saved = _save_transcript(channel_name, title, url, text)
+
+        index[vid_id] = {
+            "title": title,
+            "url": url,
+            "file": saved.name,
+            "transcribed_at": date.today().isoformat(),
+        }
+        _save_index(channel_name, index)
         _err(f"[saved] {saved}")
         return True
     finally:
@@ -185,12 +229,18 @@ def _process_channel(channel_name: str, channel_url: str, lang: str = "ja", limi
     if limit > 0:
         videos = videos[:limit]
 
+    index = _load_index(channel_name)
     processed = 0
     for i, v in enumerate(videos, 1):
+        vid_id = _extract_video_id(v["url"])
+        if vid_id in index:
+            _err(f"[{i}/{len(videos)}] [skip] {v['title']}")
+            continue
         _err(f"[{i}/{len(videos)}] {v['title']}")
         try:
             if _process_url(v["url"], channel_name, lang, title=v["title"]):
                 processed += 1
+                index = _load_index(channel_name)
         except Exception as e:
             _err(f"[error] {v['title']}: {e}")
 

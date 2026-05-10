@@ -1,3 +1,4 @@
+import json
 import os
 import sys
 from pathlib import Path
@@ -135,6 +136,52 @@ class TestSaveTranscript:
         assert ":" not in path.name
 
 
+# ── _extract_video_id ────────────────────────────────────────────────────────
+
+class TestExtractVideoId:
+    def test_youtube_watch_url(self):
+        assert yt_learn._extract_video_id("https://www.youtube.com/watch?v=abc123") == "abc123"
+
+    def test_youtu_be_short_url(self):
+        assert yt_learn._extract_video_id("https://youtu.be/abc123") == "abc123"
+
+    def test_youtube_url_with_extra_params(self):
+        assert yt_learn._extract_video_id("https://www.youtube.com/watch?v=abc123&t=30") == "abc123"
+
+    def test_non_youtube_url_returns_url(self):
+        url = "https://vimeo.com/123456"
+        assert yt_learn._extract_video_id(url) == url
+
+
+# ── _load_index / _save_index ────────────────────────────────────────────────
+
+class TestIndex:
+    def _setup(self, tmp_path, monkeypatch):
+        monkeypatch.setattr(yt_learn, "TRANSCRIPTS_DIR", tmp_path / "transcripts")
+
+    def test_load_returns_empty_when_no_file(self, tmp_path, monkeypatch):
+        self._setup(tmp_path, monkeypatch)
+        assert yt_learn._load_index("CH") == {}
+
+    def test_save_and_load_roundtrip(self, tmp_path, monkeypatch):
+        self._setup(tmp_path, monkeypatch)
+        index = {"abc123": {"title": "動画", "url": "https://youtu.be/abc123", "file": "動画.md", "transcribed_at": "2025-01-01"}}
+        yt_learn._save_index("CH", index)
+        assert yt_learn._load_index("CH") == index
+
+    def test_save_creates_channel_dir(self, tmp_path, monkeypatch):
+        self._setup(tmp_path, monkeypatch)
+        yt_learn._save_index("NewChannel", {})
+        assert (tmp_path / "transcripts" / "NewChannel").exists()
+
+    def test_index_file_is_valid_json(self, tmp_path, monkeypatch):
+        self._setup(tmp_path, monkeypatch)
+        yt_learn._save_index("CH", {"key": {"title": "タイトル"}})
+        p = tmp_path / "transcripts" / "CH" / "_index.json"
+        data = json.loads(p.read_text())
+        assert data == {"key": {"title": "タイトル"}}
+
+
 # ── _get_channel_videos ───────────────────────────────────────────────────────
 
 class TestGetChannelVideos:
@@ -179,12 +226,20 @@ class TestProcessUrl:
     def _setup(self, tmp_path, monkeypatch):
         monkeypatch.setattr(yt_learn, "TRANSCRIPTS_DIR", tmp_path / "transcripts")
 
-    def test_skips_existing_transcript(self, tmp_path, monkeypatch):
+    def test_skips_existing_by_url(self, tmp_path, monkeypatch):
+        # 同じvideo IDが既にインデックスにある場合スキップ
         self._setup(tmp_path, monkeypatch)
-        existing = tmp_path / "transcripts" / "CH" / "動画.md"
-        existing.parent.mkdir(parents=True)
-        existing.write_text("already exists")
-        result = yt_learn._process_url("https://youtu.be/xxx", "CH", title="動画")
+        index = {"abc123": {"title": "動画", "url": "https://youtu.be/abc123", "file": "動画.md", "transcribed_at": "2025-01-01"}}
+        yt_learn._save_index("CH", index)
+        result = yt_learn._process_url("https://youtu.be/abc123", "CH", title="動画")
+        assert result is False
+
+    def test_same_video_different_url_form_is_skipped(self, tmp_path, monkeypatch):
+        # youtu.be と youtube.com/watch?v= は同じIDとして扱う
+        self._setup(tmp_path, monkeypatch)
+        index = {"abc123": {"title": "動画", "url": "https://youtu.be/abc123", "file": "動画.md", "transcribed_at": "2025-01-01"}}
+        yt_learn._save_index("CH", index)
+        result = yt_learn._process_url("https://www.youtube.com/watch?v=abc123", "CH", title="動画")
         assert result is False
 
     def test_processes_new_url(self, tmp_path, monkeypatch):
@@ -193,11 +248,25 @@ class TestProcessUrl:
              patch.object(yt_learn, "_transcribe", return_value="文字起こし結果"), \
              patch("tempfile.mkdtemp", return_value="/tmp/fake"), \
              patch("shutil.rmtree"):
-            result = yt_learn._process_url("https://youtu.be/xxx", "CH", title="新しい動画")
+            result = yt_learn._process_url("https://youtu.be/newvid", "CH", title="新しい動画")
         assert result is True
         saved = tmp_path / "transcripts" / "CH" / "新しい動画.md"
         assert saved.exists()
         assert "文字起こし結果" in saved.read_text(encoding="utf-8")
+
+    def test_updates_index_after_processing(self, tmp_path, monkeypatch):
+        self._setup(tmp_path, monkeypatch)
+        with patch.object(yt_learn, "_download_audio", return_value="/tmp/audio.wav"), \
+             patch.object(yt_learn, "_transcribe", return_value="text"), \
+             patch("tempfile.mkdtemp", return_value="/tmp/fake"), \
+             patch("shutil.rmtree"):
+            yt_learn._process_url("https://youtu.be/newvid", "CH", title="動画タイトル")
+        index = yt_learn._load_index("CH")
+        assert "newvid" in index
+        assert index["newvid"]["title"] == "動画タイトル"
+        assert index["newvid"]["url"] == "https://youtu.be/newvid"
+        assert index["newvid"]["file"] == "動画タイトル.md"
+        assert "transcribed_at" in index["newvid"]
 
     def test_fetches_title_if_not_provided(self, tmp_path, monkeypatch):
         self._setup(tmp_path, monkeypatch)
@@ -223,19 +292,16 @@ class TestProcessUrl:
 
 class TestProcessChannel:
     def test_processes_new_skips_existing(self, tmp_path, monkeypatch):
-        # スキップは _process_url 内部で行われるため _process_channel は両方を呼ぶ
-        # _process_url 自体が既存ファイル検出時に False を返す挙動を検証する
         monkeypatch.setattr(yt_learn, "TRANSCRIPTS_DIR", tmp_path / "transcripts")
-        existing = tmp_path / "transcripts" / "CH" / "既存動画.md"
-        existing.parent.mkdir(parents=True)
-        existing.write_text("exists")
+        # インデックスに既存動画を登録済みにしておく
+        yt_learn._save_index("CH", {
+            "existid": {"title": "既存動画", "url": "https://youtu.be/existid", "file": "既存動画.md", "transcribed_at": "2025-01-01"}
+        })
 
         videos = [
-            {"title": "既存動画", "url": "https://youtu.be/a"},
-            {"title": "新規動画", "url": "https://youtu.be/b"},
+            {"title": "既存動画", "url": "https://youtu.be/existid"},
+            {"title": "新規動画", "url": "https://youtu.be/newid"},
         ]
-        # _process_url をモックせず実際のスキップロジックを通す
-        # 外部呼び出し(_download_audio, _transcribe)だけをモック
         with patch.object(yt_learn, "_get_channel_videos", return_value=videos), \
              patch.object(yt_learn, "_download_audio", return_value="/tmp/audio.wav"), \
              patch.object(yt_learn, "_transcribe", return_value="文字起こし"), \
@@ -243,10 +309,11 @@ class TestProcessChannel:
              patch("shutil.rmtree"):
             count = yt_learn._process_channel("CH", "https://youtube.com/@ch")
 
-        # 既存動画はスキップ、新規動画のみ処理 → 処理数は1
         assert count == 1
         assert (tmp_path / "transcripts" / "CH" / "新規動画.md").exists()
-        assert (tmp_path / "transcripts" / "CH" / "既存動画.md").read_text() == "exists"
+        index = yt_learn._load_index("CH")
+        assert "newid" in index
+        assert "existid" in index  # 既存エントリは保持
 
     def test_applies_limit(self, tmp_path, monkeypatch):
         monkeypatch.setattr(yt_learn, "TRANSCRIPTS_DIR", tmp_path / "transcripts")
