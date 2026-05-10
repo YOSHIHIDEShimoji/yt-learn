@@ -335,7 +335,7 @@ def _process_channel(channel_name: str, channel_url: str, lang: str = "ja", limi
         except Exception as e:
             _err(f"[error] {v['title']}: {e}")
 
-    _err(f"[done] {channel_name}: {processed} 件処理")
+    _err(f"[done] {channel_name}: {processed} 件処理\n")
     return processed
 
 
