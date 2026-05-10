@@ -576,6 +576,18 @@ class TestProcessChannel:
             yt_learn._process_channel("CH", "https://youtube.com/@ch", sort="popular", popular_sample=100)
         mock_sort.assert_called_once_with(videos, "CH", 100)
 
+    def test_cache_only_skips_processing(self, tmp_path, monkeypatch):
+        monkeypatch.setattr(yt_learn, "TRANSCRIPTS_DIR", tmp_path / "transcripts")
+        monkeypatch.setattr(yt_learn, "CACHE_DIR", tmp_path / "cache")
+        videos = [{"title": "動画A", "url": "https://youtu.be/abcdefghijk"}]
+        with patch.object(yt_learn, "_get_channel_videos", return_value=videos), \
+             patch.object(yt_learn, "_sort_by_popularity", return_value=videos) as mock_sort, \
+             patch.object(yt_learn, "_process_url") as mock_proc:
+            yt_learn._process_channel("CH", "https://youtube.com/@ch",
+                                      sort="popular", popular_sample=0, cache_only=True)
+        mock_sort.assert_called_once()
+        mock_proc.assert_not_called()
+
     def test_date_sort_does_not_call_sort_by_popularity(self, tmp_path, monkeypatch):
         monkeypatch.setattr(yt_learn, "TRANSCRIPTS_DIR", tmp_path / "transcripts")
         videos = [{"title": "動画A", "url": "https://youtu.be/a"}]

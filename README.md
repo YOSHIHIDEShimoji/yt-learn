@@ -81,10 +81,13 @@ python yt_learn.py all --sort popular --limit 50
 `--sort popular` は再生数キャッシュ（`cache/`）を使ってソートする。
 
 ```bash
-# 初回: 全動画の再生数を取得してキャッシュ（3000本規模で約80分）
-python yt_learn.py channel "メンタリスト DaiGo" --sort popular --limit 5 --model tiny
+# 全チャンネルのキャッシュを一括構築（文字起こしなし）
+python yt_learn.py all --sort popular --cache-only
 
-# 2回目以降: キャッシュ済みはスキップ → 即ソート開始
+# 特定チャンネルのキャッシュのみ構築
+python yt_learn.py channel "メンタリスト DaiGo" --sort popular --cache-only
+
+# キャッシュ構築済み後の通常処理: キャッシュ済みはスキップ → 即ソート開始
 python yt_learn.py channel "メンタリスト DaiGo" --sort popular --limit 5 --model tiny
 
 # 取得件数を絞って動作確認（先頭10件だけ再生数取得）

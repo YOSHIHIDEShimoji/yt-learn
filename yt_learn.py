@@ -295,14 +295,18 @@ def _process_url(url: str, channel_name: str, lang: str = "ja", title: str = Non
 
 
 def _process_channel(channel_name: str, channel_url: str, lang: str = "ja", limit: int = 0,
-                     sort: str = "date", popular_sample: int = 500,
-                     model_size: str = WHISPER_MODEL) -> int:
+                     sort: str = "date", popular_sample: int = 0,
+                     model_size: str = WHISPER_MODEL, cache_only: bool = False) -> int:
     _err(f"[channel] {channel_name}: 動画リスト取得中... (sort={sort})")
     videos = _get_channel_videos(channel_url)
     _err(f"[channel] {len(videos)} 件の動画を発見\n")
 
     if sort == "popular":
         videos = _sort_by_popularity(videos, channel_name, popular_sample)
+
+    if cache_only:
+        _err(f"[cache-only] {channel_name}: キャッシュ構築のみ完了")
+        return 0
 
     if limit > 0:
         videos = videos[:limit]
@@ -377,6 +381,8 @@ AI要約は別スクリプト:
                       help="取得順序: date=新着順(default), popular=人気順")
     p_ch.add_argument("--popular-sample", type=int, default=0,
                       help="人気順ソート時に再生数を取得する動画数（0=上限なし、default: 0）")
+    p_ch.add_argument("--cache-only", action="store_true",
+                      help="再生数キャッシュの構築のみ行い、文字起こしはしない（--sort popular と併用）")
 
     p_all = sub.add_parser("all", help="全チャンネルを処理")
     p_all.add_argument("--lang", default="ja")
@@ -385,6 +391,7 @@ AI要約は別スクリプト:
     p_all.add_argument("--limit", type=int, default=0)
     p_all.add_argument("--sort", choices=["date", "popular"], default="date")
     p_all.add_argument("--popular-sample", type=int, default=0)
+    p_all.add_argument("--cache-only", action="store_true")
 
     args = parser.parse_args()
 
@@ -420,7 +427,7 @@ AI要約は別スクリプト:
             _err(f"[error] '{args.name}' が channels.txt に見つかりません")
             sys.exit(1)
         _process_channel(args.name, channels[args.name], args.lang, args.limit, args.sort,
-                         args.popular_sample, args.model)
+                         args.popular_sample, args.model, args.cache_only)
 
     elif args.cmd == "all":
         channels = _load_channels()
@@ -428,7 +435,7 @@ AI要約は別スクリプト:
             _err("[warn] channels.txt にチャンネルが登録されていません")
             sys.exit(0)
         for name, url in channels.items():
-            _process_channel(name, url, args.lang, args.limit, args.sort, args.popular_sample, args.model)
+            _process_channel(name, url, args.lang, args.limit, args.sort, args.popular_sample, args.model, args.cache_only)
 
 
 if __name__ == "__main__":
