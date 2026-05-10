@@ -25,6 +25,13 @@ def _err(msg: str) -> None:
     tqdm.write(msg, file=sys.stderr)
 
 
+class _TqdmLogger:
+    def debug(self, msg): pass
+    def info(self, msg): pass
+    def warning(self, msg): pass
+    def error(self, msg): _err(msg)
+
+
 def _sanitize(name: str) -> str:
     name = re.sub(r'[\\/:*?"<>|]', "_", name)
     return name.strip()[:200]
@@ -156,7 +163,7 @@ def _get_channel_videos(channel_url: str) -> list:
 def _fetch_view_count(video_id: str) -> int:
     import yt_dlp
     url = f"https://www.youtube.com/watch?v={video_id}"
-    ydl_opts = {"quiet": True, "no_warnings": True, "skip_download": True}
+    ydl_opts = {"quiet": True, "no_warnings": True, "skip_download": True, "logger": _TqdmLogger()}
     with yt_dlp.YoutubeDL(ydl_opts) as ydl:
         info = ydl.extract_info(url, download=False) or {}
     return info.get("view_count") or 0
@@ -301,13 +308,13 @@ def _process_channel(channel_name: str, channel_url: str, lang: str = "ja", limi
                      model_size: str = WHISPER_MODEL, cache_only: bool = False) -> int:
     _err(f"[channel] {channel_name}: 動画リスト取得中... (sort={sort})")
     videos = _get_channel_videos(channel_url)
-    _err(f"[channel] {len(videos)} 件の動画を発見\n")
+    _err(f"[channel] {len(videos)} 件の動画を発見")
 
     if sort == "popular":
         videos = _sort_by_popularity(videos, channel_name, popular_sample)
 
     if cache_only:
-        _err(f"[cache-only] {channel_name}: キャッシュ構築のみ完了")
+        _err(f"[cache-only] {channel_name}: キャッシュ構築のみ完了\n")
         return 0
 
     if limit > 0:
