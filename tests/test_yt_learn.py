@@ -135,6 +135,13 @@ class TestSaveTranscript:
         assert "/" not in path.name
         assert ":" not in path.name
 
+    def test_output_dir_overrides_default(self, tmp_path, monkeypatch):
+        monkeypatch.setattr(yt_learn, "TRANSCRIPTS_DIR", tmp_path / "transcripts")
+        custom = tmp_path / "custom"
+        path = yt_learn._save_transcript("CH", "動画", "https://youtu.be/x", "text", output_dir=custom)
+        assert path.parent == custom
+        assert not (tmp_path / "transcripts").exists()
+
 
 # ── _apply_sort ───────────────────────────────────────────────────────────────
 
@@ -289,8 +296,18 @@ class TestProcessUrl:
         assert "newvid" in index
         assert index["newvid"]["title"] == "動画タイトル"
         assert index["newvid"]["url"] == "https://youtu.be/newvid"
-        assert index["newvid"]["file"] == "動画タイトル.md"
         assert "transcribed_at" in index["newvid"]
+
+    def test_output_dir_overrides_default(self, tmp_path, monkeypatch):
+        self._setup(tmp_path, monkeypatch)
+        custom_dir = tmp_path / "custom_output"
+        with patch.object(yt_learn, "_download_audio", return_value="/tmp/audio.wav"), \
+             patch.object(yt_learn, "_transcribe", return_value="text"), \
+             patch("tempfile.mkdtemp", return_value="/tmp/fake"), \
+             patch("shutil.rmtree"):
+            yt_learn._process_url("https://youtu.be/vid1", "CH", title="動画", output_dir=custom_dir)
+        assert (custom_dir / "動画.md").exists()
+        assert not (tmp_path / "transcripts" / "CH" / "動画.md").exists()
 
     def test_fetches_title_if_not_provided(self, tmp_path, monkeypatch):
         self._setup(tmp_path, monkeypatch)
@@ -313,6 +330,65 @@ class TestProcessUrl:
 
 
 # ── _process_channel ──────────────────────────────────────────────────────────
+
+# ── process CLI（URLファイル / -o オプション）────────────────────────────────
+
+class TestProcessCLI:
+    def _setup(self, tmp_path, monkeypatch):
+        monkeypatch.setattr(yt_learn, "TRANSCRIPTS_DIR", tmp_path / "transcripts")
+        monkeypatch.setattr(yt_learn, "CHANNELS_FILE", tmp_path / "channels.txt")
+        return tmp_path
+
+    def _mock_process(self):
+        return patch.object(yt_learn, "_process_url", return_value=True)
+
+    def test_url_file_is_read(self, tmp_path, monkeypatch):
+        self._setup(tmp_path, monkeypatch)
+        url_file = tmp_path / "urls.txt"
+        url_file.write_text("https://youtu.be/aaa\n# コメント\nhttps://youtu.be/bbb\n")
+        with self._mock_process() as mock_proc, \
+             patch("sys.argv", ["yt_learn.py", "process", "--channel", "CH", "-f", str(url_file)]):
+            yt_learn.main()
+        called_urls = [c[0][0] for c in mock_proc.call_args_list]
+        assert called_urls == ["https://youtu.be/aaa", "https://youtu.be/bbb"]
+
+    def test_urls_and_file_are_merged(self, tmp_path, monkeypatch):
+        self._setup(tmp_path, monkeypatch)
+        url_file = tmp_path / "urls.txt"
+        url_file.write_text("https://youtu.be/bbb\n")
+        with self._mock_process() as mock_proc, \
+             patch("sys.argv", ["yt_learn.py", "process", "https://youtu.be/aaa",
+                                "--channel", "CH", "-f", str(url_file)]):
+            yt_learn.main()
+        called_urls = [c[0][0] for c in mock_proc.call_args_list]
+        assert "https://youtu.be/aaa" in called_urls
+        assert "https://youtu.be/bbb" in called_urls
+
+    def test_no_urls_exits_with_error(self, tmp_path, monkeypatch):
+        self._setup(tmp_path, monkeypatch)
+        with patch("sys.argv", ["yt_learn.py", "process", "--channel", "CH"]):
+            with pytest.raises(SystemExit) as exc:
+                yt_learn.main()
+        assert exc.value.code == 1
+
+    def test_output_dir_passed_to_process_url(self, tmp_path, monkeypatch):
+        self._setup(tmp_path, monkeypatch)
+        custom = tmp_path / "out"
+        with self._mock_process() as mock_proc, \
+             patch("sys.argv", ["yt_learn.py", "process", "https://youtu.be/aaa",
+                                "--channel", "CH", "-o", str(custom)]):
+            yt_learn.main()
+        _, kwargs = mock_proc.call_args
+        assert kwargs.get("output_dir") == custom
+
+    def test_missing_url_file_exits(self, tmp_path, monkeypatch):
+        self._setup(tmp_path, monkeypatch)
+        with patch("sys.argv", ["yt_learn.py", "process", "--channel", "CH",
+                                "-f", str(tmp_path / "nonexistent.txt")]):
+            with pytest.raises(SystemExit) as exc:
+                yt_learn.main()
+        assert exc.value.code == 1
+
 
 class TestProcessChannel:
     def test_processes_new_skips_existing(self, tmp_path, monkeypatch):

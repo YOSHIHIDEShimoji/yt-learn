@@ -191,8 +191,8 @@ def _transcribe(audio_path: str, lang: str = "ja") -> str:
     return "\n".join(seg.text.strip() for seg in segments_iter if seg.text.strip())
 
 
-def _save_transcript(channel_name: str, title: str, url: str, text: str) -> Path:
-    out_dir = TRANSCRIPTS_DIR / _sanitize(channel_name)
+def _save_transcript(channel_name: str, title: str, url: str, text: str, output_dir: Path = None) -> Path:
+    out_dir = output_dir if output_dir is not None else TRANSCRIPTS_DIR / _sanitize(channel_name)
     out_dir.mkdir(parents=True, exist_ok=True)
     out_path = out_dir / f"{_sanitize(title)}.md"
     out_path.write_text(
@@ -204,7 +204,7 @@ def _save_transcript(channel_name: str, title: str, url: str, text: str) -> Path
 
 # ── 処理エントリポイント ───────────────────────────────────────────────────────
 
-def _process_url(url: str, channel_name: str, lang: str = "ja", title: str = None) -> bool:
+def _process_url(url: str, channel_name: str, lang: str = "ja", title: str = None, output_dir: Path = None) -> bool:
     vid_id = _extract_video_id(url)
     index = _load_index(channel_name)
 
@@ -221,12 +221,12 @@ def _process_url(url: str, channel_name: str, lang: str = "ja", title: str = Non
         _err(f"[download] {url}")
         audio_path = _download_audio(url, tmpdir)
         text = _transcribe(audio_path, lang)
-        saved = _save_transcript(channel_name, title, url, text)
+        saved = _save_transcript(channel_name, title, url, text, output_dir=output_dir)
 
         index[vid_id] = {
             "title": title,
             "url": url,
-            "file": saved.name,
+            "file": str(saved),
             "transcribed_at": date.today().isoformat(),
         }
         _save_index(channel_name, index)
@@ -296,9 +296,11 @@ AI要約は別スクリプト:
     sub.add_parser("list", help="登録チャンネル一覧を表示")
 
     p_proc = sub.add_parser("process", help="特定URLを文字起こし（複数可）")
-    p_proc.add_argument("urls", nargs="+", help="動画URL")
+    p_proc.add_argument("urls", nargs="*", help="動画URL（複数可、省略時は --file が必須）")
     p_proc.add_argument("--channel", required=True, help="チャンネル名")
     p_proc.add_argument("--lang", default="ja")
+    p_proc.add_argument("-f", "--file", help="URLを1行1件で記述したテキストファイル（#はコメント）")
+    p_proc.add_argument("-o", "--output", help="出力ディレクトリ（省略時は transcripts/{channel}/）")
 
     p_ch = sub.add_parser("channel", help="チャンネルの全動画を処理")
     p_ch.add_argument("name", help="channels.txt のチャンネル名")
@@ -321,8 +323,22 @@ AI要約は別スクリプト:
         _list_channels()
 
     elif args.cmd == "process":
-        for url in args.urls:
-            _process_url(url, args.channel, args.lang)
+        urls = list(args.urls)
+        if args.file:
+            try:
+                for line in Path(args.file).read_text(encoding="utf-8").splitlines():
+                    line = line.strip()
+                    if line and not line.startswith("#"):
+                        urls.append(line)
+            except FileNotFoundError:
+                _err(f"[error] ファイルが見つかりません: {args.file}")
+                sys.exit(1)
+        if not urls:
+            _err("[error] URLを引数で渡すか、--file でテキストファイルを指定してください")
+            sys.exit(1)
+        output_dir = Path(args.output) if args.output else None
+        for url in urls:
+            _process_url(url, args.channel, args.lang, output_dir=output_dir)
 
     elif args.cmd == "channel":
         channels = _load_channels()
