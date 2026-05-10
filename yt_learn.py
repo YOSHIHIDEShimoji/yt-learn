@@ -106,6 +106,21 @@ def _list_channels() -> None:
 
 # ── yt-dlp ヘルパー ────────────────────────────────────────────────────────────
 
+def _apply_sort(channel_url: str, sort: str) -> str:
+    """チャンネルURLにソートパラメータを付与する"""
+    if sort != "popular":
+        return channel_url
+    base = channel_url.rstrip("/")
+    # /videos タブが含まれていなければ追加
+    if "/videos" not in base:
+        base += "/videos"
+    # すでに?sort=pがついている場合はそのまま
+    if "sort=p" not in base:
+        sep = "&" if "?" in base else "?"
+        base += f"{sep}sort=p"
+    return base
+
+
 def _get_video_title(url: str) -> str:
     import yt_dlp
     with yt_dlp.YoutubeDL({"quiet": True, "no_warnings": True}) as ydl:
@@ -221,9 +236,10 @@ def _process_url(url: str, channel_name: str, lang: str = "ja", title: str = Non
         shutil.rmtree(tmpdir, ignore_errors=True)
 
 
-def _process_channel(channel_name: str, channel_url: str, lang: str = "ja", limit: int = 0) -> int:
-    _err(f"[channel] {channel_name}: 動画リスト取得中...")
-    videos = _get_channel_videos(channel_url)
+def _process_channel(channel_name: str, channel_url: str, lang: str = "ja", limit: int = 0, sort: str = "date") -> int:
+    sorted_url = _apply_sort(channel_url, sort)
+    _err(f"[channel] {channel_name}: 動画リスト取得中... (sort={sort})")
+    videos = _get_channel_videos(sorted_url)
     _err(f"[channel] {len(videos)} 件の動画を発見")
 
     if limit > 0:
@@ -262,8 +278,9 @@ examples:
   python yt_learn.py list
   python yt_learn.py process https://youtu.be/xxx https://youtu.be/yyy --channel メンタリストDAIGO
   python yt_learn.py channel メンタリストDAIGO
-  python yt_learn.py channel メンタリストDAIGO --limit 10
-  python yt_learn.py all
+  python yt_learn.py channel メンタリストDAIGO --limit 100 --sort popular
+  python yt_learn.py channel メンタリストDAIGO --limit 100 --sort popular  # 2回目は101-200本目を処理
+  python yt_learn.py all --sort popular --limit 50
 
 AI要約は別スクリプト:
   python summarize.py メンタリストDAIGO
@@ -287,10 +304,13 @@ AI要約は別スクリプト:
     p_ch.add_argument("name", help="channels.txt のチャンネル名")
     p_ch.add_argument("--lang", default="ja")
     p_ch.add_argument("--limit", type=int, default=0, help="最大処理動画数（0=全件）")
+    p_ch.add_argument("--sort", choices=["date", "popular"], default="date",
+                      help="取得順序: date=新着順(default), popular=人気順")
 
     p_all = sub.add_parser("all", help="全チャンネルを処理")
     p_all.add_argument("--lang", default="ja")
     p_all.add_argument("--limit", type=int, default=0)
+    p_all.add_argument("--sort", choices=["date", "popular"], default="date")
 
     args = parser.parse_args()
 
@@ -309,7 +329,7 @@ AI要約は別スクリプト:
         if args.name not in channels:
             _err(f"[error] '{args.name}' が channels.txt に見つかりません")
             sys.exit(1)
-        _process_channel(args.name, channels[args.name], args.lang, args.limit)
+        _process_channel(args.name, channels[args.name], args.lang, args.limit, args.sort)
 
     elif args.cmd == "all":
         channels = _load_channels()
@@ -317,7 +337,7 @@ AI要約は別スクリプト:
             _err("[warn] channels.txt にチャンネルが登録されていません")
             sys.exit(0)
         for name, url in channels.items():
-            _process_channel(name, url, args.lang, args.limit)
+            _process_channel(name, url, args.lang, args.limit, args.sort)
 
 
 if __name__ == "__main__":

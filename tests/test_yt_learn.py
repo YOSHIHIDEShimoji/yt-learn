@@ -136,6 +136,30 @@ class TestSaveTranscript:
         assert ":" not in path.name
 
 
+# ── _apply_sort ───────────────────────────────────────────────────────────────
+
+class TestApplySort:
+    def test_popular_appends_sort_param(self):
+        url = yt_learn._apply_sort("https://www.youtube.com/@daigo", "popular")
+        assert "sort=p" in url
+
+    def test_popular_adds_videos_tab_if_missing(self):
+        url = yt_learn._apply_sort("https://www.youtube.com/@daigo", "popular")
+        assert "/videos" in url
+
+    def test_popular_does_not_duplicate_videos_tab(self):
+        url = yt_learn._apply_sort("https://www.youtube.com/@daigo/videos", "popular")
+        assert url.count("/videos") == 1
+
+    def test_popular_does_not_duplicate_sort_param(self):
+        url = yt_learn._apply_sort("https://www.youtube.com/@daigo/videos?sort=p", "popular")
+        assert url.count("sort=p") == 1
+
+    def test_date_returns_url_unchanged(self):
+        original = "https://www.youtube.com/@daigo"
+        assert yt_learn._apply_sort(original, "date") == original
+
+
 # ── _extract_video_id ────────────────────────────────────────────────────────
 
 class TestExtractVideoId:
