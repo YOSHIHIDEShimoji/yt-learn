@@ -2,9 +2,15 @@
 # フォーマット: チャンネル名 | チャンネルURL
 # 例:
 # メンタリストDAIGO | https://www.youtube.com/@mentalistdaigo
-メンタリスト DaiGo | https://www.youtube.com/@mentalistdaigo
-ひろゆき, hiroyuki | https://www.youtube.com/@hirox246
-REWIRE | https://www.youtube.com/@rewireyourlife0
-ジョージ -メンズコーチ- | https://www.youtube.com/@coachjoji
-Paranoia_パラノイア【有益】 | https://www.youtube.com/@paranoia369
-片倉岳人/ダイエットの知恵袋 | https://www.youtube.com/@gakutoktkr
+
+メンタリスト DaiGo | https://www.youtube.com/@mentalistdaigo | ja
+ひろゆき, hiroyuki | https://www.youtube.com/@hirox246 | ja
+REWIRE | https://www.youtube.com/@rewireyourlife0 | ja
+ジョージ -メンズコーチ- | https://www.youtube.com/@coachjoji | ja
+Paranoia_パラノイア【有益】 | https://www.youtube.com/@paranoia369 | ja
+片倉岳人/ダイエットの知恵袋 | https://www.youtube.com/@gakutoktkr | ja
+両学長 リベラルアーツ大学 | https://www.youtube.com/@ryogakucho | ja
+中田敦彦のYouTube大学 - NAKATA UNIVERSITY | https://www.youtube.com/@NKTofficial | ja
+Fireship | https://www.youtube.com/@Fireship/videos | en
+3Blue1Brown | https://www.youtube.com/@3blue1brown | en
+TED | https://www.youtube.com/@TED/videos | en
