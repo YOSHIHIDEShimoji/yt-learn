@@ -360,7 +360,7 @@ AI要約は別スクリプト:
     p_add = sub.add_parser("add", help="チャンネルを channels.txt に追加")
     p_add.add_argument("name", help="チャンネル名（ディレクトリ名になる）")
     p_add.add_argument("url", help="チャンネルURL")
-    p_add.add_argument("--lang", default="ja", help="文字起こし言語 (default: ja)")
+    p_add.add_argument("lang", nargs="?", default="ja", help="文字起こし言語 (default: ja)")
 
     sub.add_parser("list", help="登録チャンネル一覧を表示")
 
