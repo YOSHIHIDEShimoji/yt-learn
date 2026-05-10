@@ -1,5 +1,5 @@
 #!/Users/yoshihide/.pyenv/versions/yt-learn-3.11.9/bin/python
-"""YouTube学習データベース構築ツール"""
+"""YouTube動画の文字起こし・チャンネル管理ツール（AI要約なし）"""
 
 import argparse
 import os
@@ -7,15 +7,12 @@ import re
 import shutil
 import sys
 import tempfile
-from datetime import date
 from pathlib import Path
 
 BASE_DIR = Path(__file__).parent.resolve()
 TRANSCRIPTS_DIR = BASE_DIR / "transcripts"
-SUMMARIES_DIR = BASE_DIR / "summaries"
 CHANNELS_FILE = BASE_DIR / "channels.txt"
 
-GEMINI_MODEL = "gemini-2.5-flash-lite"
 WHISPER_MODEL = "large-v3"
 
 
@@ -26,6 +23,17 @@ def _err(msg: str) -> None:
 def _sanitize(name: str) -> str:
     name = re.sub(r'[\\/:*?"<>|]', "_", name)
     return name.strip()[:200]
+
+
+def _load_env() -> None:
+    env_file = BASE_DIR / ".env"
+    if not env_file.exists():
+        return
+    for line in env_file.read_text(encoding="utf-8").splitlines():
+        line = line.strip()
+        if line and not line.startswith("#") and "=" in line:
+            key, _, val = line.partition("=")
+            os.environ.setdefault(key.strip(), val.strip())
 
 
 # ── channels.txt 操作 ──────────────────────────────────────────────────────────
@@ -56,7 +64,7 @@ def _add_channel(name: str, url: str) -> None:
 def _list_channels() -> None:
     channels = _load_channels()
     if not channels:
-        _err("チャンネルが登録されていません。yt-learn add <name> <url> で追加してください。")
+        _err("チャンネルが登録されていません。python yt_learn.py add <name> <url> で追加してください。")
         return
     for name, url in channels.items():
         print(f"{name} | {url}")
@@ -145,75 +153,9 @@ def _save_transcript(channel_name: str, title: str, url: str, text: str) -> Path
     return out_path
 
 
-# ── Gemini サマリー更新 ────────────────────────────────────────────────────────
-
-def _update_summary(channel_name: str, transcript: str, video_title: str) -> None:
-    api_key = os.environ.get("GEMINI_API_KEY")
-    if not api_key:
-        _err("[warn] GEMINI_API_KEY が未設定。サマリー更新をスキップします。")
-        return
-
-    from google import genai
-
-    SUMMARIES_DIR.mkdir(parents=True, exist_ok=True)
-    summary_path = SUMMARIES_DIR / f"{_sanitize(channel_name)}.md"
-
-    existing = summary_path.read_text(encoding="utf-8") if summary_path.exists() else ""
-
-    video_count = 0
-    for line in existing.splitlines():
-        if line.startswith("動画数:"):
-            try:
-                video_count = int(line.split(":")[1].strip())
-            except ValueError:
-                pass
-    video_count += 1
-    today = date.today().isoformat()
-
-    prompt = f"""あなたはYouTubeチャンネル「{channel_name}」の学習内容をまとめるアシスタントです。
-
-## 既存のサマリー
-{existing if existing else "（まだサマリーはありません）"}
-
-## 新しい動画の文字起こし
-タイトル: {video_title}
-
-{transcript}
-
-## 指示
-新しい文字起こしから、既存のサマリーに**まだ含まれていないユニークな洞察・テーマ・主張**のみを抽出し、サマリーに追加してください。
-
-ルール:
-- 既存サマリーにある内容は追加しない（重複排除）
-- 言い回しが違っても内容が同じなら重複とみなす
-- 新しい洞察がなければサマリーをそのまま返す
-- 「最終更新」と「動画数」は必ず以下の値に更新する
-
-完全なサマリー全体を以下のフォーマットで返してください:
-
-# {channel_name} - Learning Summary
-
-## 主要テーマ
-- （テーマをリスト）
-
-## キーインサイト
-- （ユニークな洞察をリスト）
-
----
-最終更新: {today}
-動画数: {video_count}
-"""
-
-    client = genai.Client(api_key=api_key)
-    response = client.models.generate_content(model=GEMINI_MODEL, contents=prompt)
-    summary_path.write_text(response.text.strip() + "\n", encoding="utf-8")
-    _err(f"[summary] 更新: {summary_path}")
-
-
 # ── 処理エントリポイント ───────────────────────────────────────────────────────
 
 def _process_url(url: str, channel_name: str, lang: str = "ja", title: str = None) -> bool:
-    """単一URLを処理。新規文字起こしした場合 True を返す"""
     if title is None:
         _err(f"[info] タイトル取得中: {url}")
         title = _get_video_title(url)
@@ -230,13 +172,12 @@ def _process_url(url: str, channel_name: str, lang: str = "ja", title: str = Non
         text = _transcribe(audio_path, lang)
         saved = _save_transcript(channel_name, title, url, text)
         _err(f"[saved] {saved}")
-        _update_summary(channel_name, text, title)
         return True
     finally:
         shutil.rmtree(tmpdir, ignore_errors=True)
 
 
-def _process_channel(channel_name: str, channel_url: str, lang: str = "ja", limit: int = 0) -> None:
+def _process_channel(channel_name: str, channel_url: str, lang: str = "ja", limit: int = 0) -> int:
     _err(f"[channel] {channel_name}: 動画リスト取得中...")
     videos = _get_channel_videos(channel_url)
     _err(f"[channel] {len(videos)} 件の動画を発見")
@@ -254,23 +195,29 @@ def _process_channel(channel_name: str, channel_url: str, lang: str = "ja", limi
             _err(f"[error] {v['title']}: {e}")
 
     _err(f"[done] {channel_name}: {processed} 件処理")
+    return processed
 
 
 # ── CLI ────────────────────────────────────────────────────────────────────────
 
 def main() -> None:
+    _load_env()
+
     parser = argparse.ArgumentParser(
-        description="YouTube学習データベース構築ツール",
+        description="YouTube動画の文字起こし・チャンネル管理ツール",
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""\
 examples:
-  yt-learn add メンタリストDAIGO https://www.youtube.com/@mentalistdaigo
-  yt-learn list
-  yt-learn process https://youtu.be/xxx --channel メンタリストDAIGO
-  yt-learn process https://youtu.be/xxx https://youtu.be/yyy --channel メンタリストDAIGO
-  yt-learn channel メンタリストDAIGO
-  yt-learn channel メンタリストDAIGO --limit 10
-  yt-learn all
+  python yt_learn.py add メンタリストDAIGO https://www.youtube.com/@mentalistdaigo
+  python yt_learn.py list
+  python yt_learn.py process https://youtu.be/xxx https://youtu.be/yyy --channel メンタリストDAIGO
+  python yt_learn.py channel メンタリストDAIGO
+  python yt_learn.py channel メンタリストDAIGO --limit 10
+  python yt_learn.py all
+
+AI要約は別スクリプト:
+  python summarize.py メンタリストDAIGO
+  python summarize.py all
 """,
     )
     sub = parser.add_subparsers(dest="cmd", required=True)

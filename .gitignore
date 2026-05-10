@@ -1,5 +1,6 @@
 transcripts/
 summaries/
+log/
 __pycache__/
 *.wav
 *.tmp
