@@ -100,7 +100,7 @@ def _add_channel(name: str, url: str) -> None:
 def _list_channels() -> None:
     channels = _load_channels()
     if not channels:
-        _err("チャンネルが登録されていません。python yt_learn.py add <name> <url> で追加してください。")
+        _err("チャンネルが登録されていません。python transcribe.py add <name> <url> で追加してください。")
         return
     for name, url in channels.items():
         print(f"{name} | {url}")
@@ -274,7 +274,7 @@ def _process_url(url: str, channel_name: str, lang: str = "ja", title: str = Non
         _err(f"[info] タイトル取得中: {url}")
         title = _get_video_title(url)
 
-    tmpdir = tempfile.mkdtemp(prefix="yt_learn_")
+    tmpdir = tempfile.mkdtemp(prefix="transcribe_")
     try:
         _err(f"[download] {url}")
         audio_path = _download_audio(url, tmpdir)
@@ -340,13 +340,13 @@ def main() -> None:
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""\
 examples:
-  python yt_learn.py add メンタリストDAIGO https://www.youtube.com/@mentalistdaigo
-  python yt_learn.py list
-  python yt_learn.py process https://youtu.be/xxx https://youtu.be/yyy --channel メンタリストDAIGO
-  python yt_learn.py channel メンタリストDAIGO
-  python yt_learn.py channel メンタリストDAIGO --limit 100 --sort popular
-  python yt_learn.py channel メンタリストDAIGO --limit 100 --sort popular  # 2回目は101-200本目を処理
-  python yt_learn.py all --sort popular --limit 50
+  python transcribe.py add メンタリストDAIGO https://www.youtube.com/@mentalistdaigo
+  python transcribe.py list
+  python transcribe.py process https://youtu.be/xxx https://youtu.be/yyy --channel メンタリストDAIGO
+  python transcribe.py channel メンタリストDAIGO
+  python transcribe.py channel メンタリストDAIGO --limit 100 --sort popular
+  python transcribe.py channel メンタリストDAIGO --limit 100 --sort popular  # 2回目は101-200本目を処理
+  python transcribe.py all --sort popular --limit 50
 
 AI要約は別スクリプト:
   python summarize.py メンタリストDAIGO
