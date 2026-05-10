@@ -8,19 +8,21 @@ import re
 import shutil
 import sys
 import tempfile
-from datetime import date
+from datetime import date, datetime
 from pathlib import Path
 from urllib.parse import parse_qs, urlparse
 
 BASE_DIR = Path(__file__).parent.resolve()
 TRANSCRIPTS_DIR = BASE_DIR / "transcripts"
+CACHE_DIR = BASE_DIR / "cache"
 CHANNELS_FILE = BASE_DIR / "channels.txt"
 
 WHISPER_MODEL = "large-v3"
 
 
 def _err(msg: str) -> None:
-    print(msg, file=sys.stderr)
+    from tqdm import tqdm
+    tqdm.write(msg, file=sys.stderr)
 
 
 def _sanitize(name: str) -> str:
@@ -106,21 +108,6 @@ def _list_channels() -> None:
 
 # ── yt-dlp ヘルパー ────────────────────────────────────────────────────────────
 
-def _apply_sort(channel_url: str, sort: str) -> str:
-    """チャンネルURLにソートパラメータを付与する"""
-    if sort != "popular":
-        return channel_url
-    base = channel_url.rstrip("/")
-    # /videos タブが含まれていなければ追加
-    if "/videos" not in base:
-        base += "/videos"
-    # すでに?sort=pがついている場合はそのまま
-    if "sort=p" not in base:
-        sep = "&" if "?" in base else "?"
-        base += f"{sep}sort=p"
-    return base
-
-
 def _get_video_title(url: str) -> str:
     import yt_dlp
     with yt_dlp.YoutubeDL({"quiet": True, "no_warnings": True}) as ydl:
@@ -128,8 +115,17 @@ def _get_video_title(url: str) -> str:
         return (info or {}).get("title", "untitled")
 
 
+def _normalize_channel_url(channel_url: str) -> str:
+    """チャンネルURLを /videos タブに正規化する（タブ指定がない場合）"""
+    base = channel_url.rstrip("/")
+    if not any(tab in base for tab in ["/videos", "/shorts", "/streams", "/live"]):
+        base += "/videos"
+    return base
+
+
 def _get_channel_videos(channel_url: str) -> list:
     import yt_dlp
+    url = _normalize_channel_url(channel_url)
     ydl_opts = {
         "extract_flat": "in_playlist",
         "quiet": True,
@@ -137,20 +133,70 @@ def _get_channel_videos(channel_url: str) -> list:
         "ignoreerrors": True,
     }
     with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-        info = ydl.extract_info(channel_url, download=False) or {}
+        info = ydl.extract_info(url, download=False) or {}
 
     videos = []
     for e in info.get("entries", []) or []:
         if not e:
             continue
         vid_id = e.get("id") or ""
+        # YouTube video IDは常に11文字。チャンネルIDや他のエントリを除外する
+        if len(vid_id) != 11:
+            continue
         title = e.get("title") or vid_id
-        url = e.get("url") or (f"https://www.youtube.com/watch?v={vid_id}" if vid_id else "")
-        if not url.startswith("http") and vid_id:
-            url = f"https://www.youtube.com/watch?v={vid_id}"
-        if url:
-            videos.append({"title": title, "url": url})
+        vid_url = e.get("url") or ""
+        if not vid_url.startswith("http"):
+            vid_url = f"https://www.youtube.com/watch?v={vid_id}"
+        videos.append({"title": title, "url": vid_url})
     return videos
+
+
+def _fetch_view_count(video_id: str) -> int:
+    import yt_dlp
+    url = f"https://www.youtube.com/watch?v={video_id}"
+    ydl_opts = {"quiet": True, "no_warnings": True, "skip_download": True}
+    with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+        info = ydl.extract_info(url, download=False) or {}
+    return info.get("view_count") or 0
+
+
+def _view_cache_path(channel_name: str) -> Path:
+    return CACHE_DIR / f"{_sanitize(channel_name)}_view_cache.json"
+
+
+def _load_view_cache(channel_name: str) -> dict:
+    p = _view_cache_path(channel_name)
+    if p.exists():
+        return json.loads(p.read_text(encoding="utf-8"))
+    return {}
+
+
+def _save_view_cache(channel_name: str, cache: dict) -> None:
+    p = _view_cache_path(channel_name)
+    p.parent.mkdir(parents=True, exist_ok=True)
+    p.write_text(json.dumps(cache, ensure_ascii=False, indent=2), encoding="utf-8")
+
+
+def _sort_by_popularity(videos: list, channel_name: str, sample_size: int) -> list:
+    from tqdm import tqdm
+    cache = _load_view_cache(channel_name)
+    to_fetch = [v for v in videos if _extract_video_id(v["url"]) not in cache]
+    sample = to_fetch if sample_size == 0 else to_fetch[:sample_size]
+
+    if sample:
+        _err(f"[popular] {len(sample)} 件の再生数を取得中...")
+        for v in tqdm(sample, desc="view count", file=sys.stderr, dynamic_ncols=True):
+            vid_id = _extract_video_id(v["url"])
+            try:
+                cache[vid_id] = _fetch_view_count(vid_id)
+            except Exception:
+                cache[vid_id] = 0
+        _save_view_cache(channel_name, cache)
+
+    def _key(v):
+        return cache.get(_extract_video_id(v["url"]), 0)
+
+    return sorted(videos, key=_key, reverse=True)
 
 
 def _download_audio(url: str, out_dir: str) -> str:
@@ -178,25 +224,36 @@ def _download_audio(url: str, out_dir: str) -> str:
 
 def _transcribe(audio_path: str, lang: str = "ja", model_size: str = WHISPER_MODEL) -> str:
     from faster_whisper import WhisperModel
+    from tqdm import tqdm
     _err(f"[model] {model_size} をロード中...")
     model = WhisperModel(model_size, device="cpu", compute_type="int8", cpu_threads=8)
     _err(f"[transcribe] {Path(audio_path).name}")
-    segments_iter, _ = model.transcribe(
+    segments_iter, info = model.transcribe(
         audio_path,
         language=lang,
         beam_size=5,
         vad_filter=True,
         vad_parameters={"min_silence_duration_ms": 500},
     )
-    return "\n".join(seg.text.strip() for seg in segments_iter if seg.text.strip())
+    duration = info.duration or 0.0
+    bar_fmt = "{l_bar}{bar}| {n:.0f}/{total:.0f}s [{elapsed}<{remaining}]"
+    texts = []
+    with tqdm(total=duration, unit="s", bar_format=bar_fmt, file=sys.stderr, dynamic_ncols=True) as pbar:
+        for seg in segments_iter:
+            if seg.text.strip():
+                texts.append(seg.text.strip())
+            pbar.update(seg.end - pbar.n)
+    return "\n".join(texts)
 
 
-def _save_transcript(channel_name: str, title: str, url: str, text: str, output_dir: Path = None) -> Path:
+def _save_transcript(channel_name: str, title: str, url: str, text: str,
+                     output_dir: Path = None, model_size: str = WHISPER_MODEL) -> Path:
     out_dir = output_dir if output_dir is not None else TRANSCRIPTS_DIR / _sanitize(channel_name)
     out_dir.mkdir(parents=True, exist_ok=True)
     out_path = out_dir / f"{_sanitize(title)}.md"
+    now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     out_path.write_text(
-        f"# {title}\n\nチャンネル: {channel_name}\nURL: {url}\n\n---\n\n{text}\n",
+        f"# {title}\n\nチャンネル: {channel_name}\nURL: {url}\nモデル: {model_size}\n処理日時: {now}\n\n---\n\n{text}\n",
         encoding="utf-8",
     )
     return out_path
@@ -222,7 +279,7 @@ def _process_url(url: str, channel_name: str, lang: str = "ja", title: str = Non
         _err(f"[download] {url}")
         audio_path = _download_audio(url, tmpdir)
         text = _transcribe(audio_path, lang, model_size=model_size)
-        saved = _save_transcript(channel_name, title, url, text, output_dir=output_dir)
+        saved = _save_transcript(channel_name, title, url, text, output_dir=output_dir, model_size=model_size)
 
         index[vid_id] = {
             "title": title,
@@ -238,11 +295,14 @@ def _process_url(url: str, channel_name: str, lang: str = "ja", title: str = Non
 
 
 def _process_channel(channel_name: str, channel_url: str, lang: str = "ja", limit: int = 0,
-                     sort: str = "date", model_size: str = WHISPER_MODEL) -> int:
-    sorted_url = _apply_sort(channel_url, sort)
+                     sort: str = "date", popular_sample: int = 500,
+                     model_size: str = WHISPER_MODEL) -> int:
     _err(f"[channel] {channel_name}: 動画リスト取得中... (sort={sort})")
-    videos = _get_channel_videos(sorted_url)
-    _err(f"[channel] {len(videos)} 件の動画を発見")
+    videos = _get_channel_videos(channel_url)
+    _err(f"[channel] {len(videos)} 件の動画を発見\n")
+
+    if sort == "popular":
+        videos = _sort_by_popularity(videos, channel_name, popular_sample)
 
     if limit > 0:
         videos = videos[:limit]
@@ -252,9 +312,9 @@ def _process_channel(channel_name: str, channel_url: str, lang: str = "ja", limi
     for i, v in enumerate(videos, 1):
         vid_id = _extract_video_id(v["url"])
         if vid_id in index:
-            _err(f"[{i}/{len(videos)}] [skip] {v['title']}")
+            _err(f"[{i}/{len(videos)}] [skip] 処理済み: {v['title']}")
             continue
-        _err(f"[{i}/{len(videos)}] {v['title']}")
+        _err(f"\n[{i}/{len(videos)}] {v['title']}")
         try:
             if _process_url(v["url"], channel_name, lang, title=v["title"], model_size=model_size):
                 processed += 1
@@ -315,6 +375,8 @@ AI要約は別スクリプト:
     p_ch.add_argument("--limit", type=int, default=0, help="最大処理動画数（0=全件）")
     p_ch.add_argument("--sort", choices=["date", "popular"], default="date",
                       help="取得順序: date=新着順(default), popular=人気順")
+    p_ch.add_argument("--popular-sample", type=int, default=0,
+                      help="人気順ソート時に再生数を取得する動画数（0=上限なし、default: 0）")
 
     p_all = sub.add_parser("all", help="全チャンネルを処理")
     p_all.add_argument("--lang", default="ja")
@@ -322,6 +384,7 @@ AI要約は別スクリプト:
                        choices=["tiny", "base", "small", "medium", "large", "large-v2", "large-v3"])
     p_all.add_argument("--limit", type=int, default=0)
     p_all.add_argument("--sort", choices=["date", "popular"], default="date")
+    p_all.add_argument("--popular-sample", type=int, default=0)
 
     args = parser.parse_args()
 
@@ -346,7 +409,9 @@ AI要約は別スクリプト:
             _err("[error] URLを引数で渡すか、--file でテキストファイルを指定してください")
             sys.exit(1)
         output_dir = Path(args.output) if args.output else None
-        for url in urls:
+        for i, url in enumerate(urls):
+            if i > 0:
+                _err("")
             _process_url(url, args.channel, args.lang, output_dir=output_dir, model_size=args.model)
 
     elif args.cmd == "channel":
@@ -354,7 +419,8 @@ AI要約は別スクリプト:
         if args.name not in channels:
             _err(f"[error] '{args.name}' が channels.txt に見つかりません")
             sys.exit(1)
-        _process_channel(args.name, channels[args.name], args.lang, args.limit, args.sort, args.model)
+        _process_channel(args.name, channels[args.name], args.lang, args.limit, args.sort,
+                         args.popular_sample, args.model)
 
     elif args.cmd == "all":
         channels = _load_channels()
@@ -362,7 +428,7 @@ AI要約は別スクリプト:
             _err("[warn] channels.txt にチャンネルが登録されていません")
             sys.exit(0)
         for name, url in channels.items():
-            _process_channel(name, url, args.lang, args.limit, args.sort, args.model)
+            _process_channel(name, url, args.lang, args.limit, args.sort, args.popular_sample, args.model)
 
 
 if __name__ == "__main__":

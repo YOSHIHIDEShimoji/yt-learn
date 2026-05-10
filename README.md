@@ -11,8 +11,10 @@ yt-learn/
 ├── summarize.py         # AI要約スクリプト（手動実行、APIコスト管理のため分離）
 ├── run.sh               # launchd ラッパー
 ├── .env                 # 環境変数（GEMINI_API_KEY など）※ git管理外
+├── cache/               # 再生数キャッシュ（チャンネル別）
 ├── transcripts/         # チャンネル別の文字起こしファイル ※ git管理外
 │   └── {チャンネル名}/
+│       ├── _index.json      # 処理済み動画のインデックス
 │       └── {動画タイトル}.md
 └── summaries/           # チャンネル別サマリー ※ git管理外
     ├── {チャンネル名}.md
@@ -33,51 +35,92 @@ echo "GEMINI_API_KEY=your_key_here" > .env
 ```bash
 # チャンネルを追加
 python yt_learn.py add メンタリストDAIGO https://www.youtube.com/@mentalistdaigo
+python yt_learn.py add ひろゆき https://www.youtube.com/@hiroyuki_daihyo
 
 # 登録チャンネル一覧
 python yt_learn.py list
 ```
 
-### 文字起こし
+### 単発処理（特定URLを文字起こし）
 
 ```bash
-# チャンネルの全動画を処理（既存はスキップ）
-python yt_learn.py channel メンタリストDAIGO
+# チャンネル指定なし → transcripts/misc/ に保存
+python yt_learn.py process https://youtu.be/xxx --model tiny
 
-# 最初は --limit で本数を絞って試す
-python yt_learn.py channel メンタリストDAIGO --limit 5
+# チャンネル指定あり → transcripts/メンタリストDAIGO/ に保存
+python yt_learn.py process https://youtu.be/xxx --channel メンタリストDAIGO --model tiny
 
-# 特定URLを指定（複数可）
-python yt_learn.py process https://youtu.be/xxx https://youtu.be/yyy --channel メンタリストDAIGO
+# 複数URL同時
+python yt_learn.py process https://youtu.be/aaa https://youtu.be/bbb --channel メンタリストDAIGO
 
-# 全チャンネルを処理
-python yt_learn.py all
+# URLファイルから読み込み → transcripts/ひろゆき/ に保存
+python yt_learn.py process -f urls.txt --channel ひろゆき
+
+# 出力先を完全に指定（チャンネルディレクトリ無視）
+python yt_learn.py process https://youtu.be/xxx -o ~/Desktop/output
+```
+
+### チャンネル全取得
+
+```bash
+# 人気順で上位5本（動作確認用）
+python yt_learn.py channel メンタリストDAIGO --sort popular --limit 5 --model tiny
+
+# 人気順で上位100本（本番）
+python yt_learn.py channel メンタリストDAIGO --sort popular --limit 100
+
+# 2回目は自動で101〜200本目になる
+python yt_learn.py channel メンタリストDAIGO --sort popular --limit 100
+
+# 全チャンネルを人気順50本ずつ
+python yt_learn.py all --sort popular --limit 50
+```
+
+`--sort popular` は再生数キャッシュ（`cache/`）を使ってソートする。
+
+```bash
+# 初回: 全動画の再生数を取得してキャッシュ（3000本規模で約80分）
+python yt_learn.py channel メンタリストDAIGO --sort popular --limit 5 --model tiny
+
+# 2回目以降: キャッシュ済みはスキップ → 即ソート開始
+python yt_learn.py channel メンタリストDAIGO --sort popular --limit 5 --model tiny
+
+# 取得件数を絞って動作確認（先頭10件だけ再生数取得）
+python yt_learn.py channel メンタリストDAIGO --sort popular --popular-sample 10 --limit 3 --model tiny
 ```
 
 ### AI要約（手動実行）
 
 ```bash
-# 指定チャンネルの未要約動画をGeminiで要約
+# 特定チャンネルのサマリー更新
 python summarize.py メンタリストDAIGO
 
-# 全チャンネルを一括処理
+# 全チャンネル一括
 python summarize.py all
 
-# 処理済みを無視して全件再処理
+# 処理済みを無視して全件再生成
 python summarize.py メンタリストDAIGO --force
 ```
 
-### 要約の仕組み
+### 確認
+
+```bash
+# 登録チャンネル一覧
+python yt_learn.py list
+
+# 文字起こしファイル確認
+ls transcripts/メンタリストDAIGO/
+cat "transcripts/メンタリストDAIGO/動画タイトル.md"
+
+# インデックス確認（処理済み動画一覧）
+cat transcripts/メンタリストDAIGO/_index.json | python -m json.tool | head -30
+
+# サマリー確認
+cat summaries/メンタリストDAIGO.md
+```
+
+## 要約の仕組み
 
 - 1動画ずつ既存サマリーに「まだない内容のみ」を追加（重複排除）
 - どの動画まで処理済みかを `summaries/{チャンネル名}_processed.json` で管理
 - APIコストを抑えるため文字起こしと要約を分離
-
-## 自動実行
-
-launchd で毎日0:00に文字起こしのみ自動実行。要約は手動でタイミングを選んで実行。
-
-```bash
-# 要約をlaunchdで自動化したくなったら
-launchctl load ~/Library/LaunchAgents/com.yoshihide.run_yt-summarize.plist
-```

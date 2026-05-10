@@ -116,12 +116,14 @@ class TestChannels:
 class TestSaveTranscript:
     def test_creates_file_with_correct_content(self, tmp_path, monkeypatch):
         monkeypatch.setattr(yt_learn, "TRANSCRIPTS_DIR", tmp_path / "transcripts")
-        path = yt_learn._save_transcript("DAIGO", "タイトル", "https://youtu.be/xxx", "文字起こし本文")
+        path = yt_learn._save_transcript("DAIGO", "タイトル", "https://youtu.be/xxx", "文字起こし本文", model_size="tiny")
         assert path.exists()
         content = path.read_text(encoding="utf-8")
         assert "# タイトル" in content
         assert "チャンネル: DAIGO" in content
         assert "URL: https://youtu.be/xxx" in content
+        assert "モデル: tiny" in content
+        assert "処理日時:" in content
         assert "文字起こし本文" in content
 
     def test_creates_channel_directory(self, tmp_path, monkeypatch):
@@ -143,28 +145,112 @@ class TestSaveTranscript:
         assert not (tmp_path / "transcripts").exists()
 
 
-# ── _apply_sort ───────────────────────────────────────────────────────────────
+# ── _load_view_cache / _save_view_cache / _sort_by_popularity ─────────────────
 
-class TestApplySort:
-    def test_popular_appends_sort_param(self):
-        url = yt_learn._apply_sort("https://www.youtube.com/@daigo", "popular")
-        assert "sort=p" in url
+class TestViewCache:
+    def _setup(self, tmp_path, monkeypatch):
+        monkeypatch.setattr(yt_learn, "CACHE_DIR", tmp_path / "cache")
 
-    def test_popular_adds_videos_tab_if_missing(self):
-        url = yt_learn._apply_sort("https://www.youtube.com/@daigo", "popular")
-        assert "/videos" in url
+    def test_load_empty_when_no_file(self, tmp_path, monkeypatch):
+        self._setup(tmp_path, monkeypatch)
+        assert yt_learn._load_view_cache("CH") == {}
 
-    def test_popular_does_not_duplicate_videos_tab(self):
-        url = yt_learn._apply_sort("https://www.youtube.com/@daigo/videos", "popular")
-        assert url.count("/videos") == 1
+    def test_save_and_load_roundtrip(self, tmp_path, monkeypatch):
+        self._setup(tmp_path, monkeypatch)
+        cache = {"abc": 1000, "def": 500}
+        yt_learn._save_view_cache("CH", cache)
+        assert yt_learn._load_view_cache("CH") == cache
 
-    def test_popular_does_not_duplicate_sort_param(self):
-        url = yt_learn._apply_sort("https://www.youtube.com/@daigo/videos?sort=p", "popular")
-        assert url.count("sort=p") == 1
+    def test_save_creates_cache_dir(self, tmp_path, monkeypatch):
+        self._setup(tmp_path, monkeypatch)
+        yt_learn._save_view_cache("NewChannel", {"vid": 100})
+        assert (tmp_path / "cache").exists()
 
-    def test_date_returns_url_unchanged(self):
-        original = "https://www.youtube.com/@daigo"
-        assert yt_learn._apply_sort(original, "date") == original
+
+class TestSortByPopularity:
+    def _setup(self, tmp_path, monkeypatch):
+        monkeypatch.setattr(yt_learn, "CACHE_DIR", tmp_path / "cache")
+
+    def test_sorts_by_view_count_descending(self, tmp_path, monkeypatch):
+        self._setup(tmp_path, monkeypatch)
+        videos = [
+            {"title": "低", "url": "https://youtu.be/low"},
+            {"title": "高", "url": "https://youtu.be/high"},
+            {"title": "中", "url": "https://youtu.be/mid"},
+        ]
+        yt_learn._save_view_cache("CH", {"low": 100, "high": 9000, "mid": 500})
+        result = yt_learn._sort_by_popularity(videos, "CH", sample_size=0)
+        assert [v["title"] for v in result] == ["高", "中", "低"]
+
+    def test_fetches_counts_for_uncached_videos(self, tmp_path, monkeypatch):
+        self._setup(tmp_path, monkeypatch)
+        videos = [{"title": "動画", "url": "https://youtu.be/abc123"}]
+        with patch.object(yt_learn, "_fetch_view_count", return_value=42000) as mock_fetch:
+            yt_learn._sort_by_popularity(videos, "CH", sample_size=10)
+        mock_fetch.assert_called_once_with("abc123")
+
+    def test_skips_cached_videos(self, tmp_path, monkeypatch):
+        self._setup(tmp_path, monkeypatch)
+        videos = [{"title": "動画", "url": "https://youtu.be/abc123"}]
+        yt_learn._save_view_cache("CH", {"abc123": 5000})
+        with patch.object(yt_learn, "_fetch_view_count") as mock_fetch:
+            yt_learn._sort_by_popularity(videos, "CH", sample_size=10)
+        mock_fetch.assert_not_called()
+
+    def test_sample_size_limits_fetches(self, tmp_path, monkeypatch):
+        self._setup(tmp_path, monkeypatch)
+        videos = [{"title": f"動画{i}", "url": f"https://youtu.be/vid{i}"} for i in range(5)]
+        with patch.object(yt_learn, "_fetch_view_count", return_value=0) as mock_fetch:
+            yt_learn._sort_by_popularity(videos, "CH", sample_size=2)
+        assert mock_fetch.call_count == 2
+
+    def test_sample_size_zero_fetches_all(self, tmp_path, monkeypatch):
+        self._setup(tmp_path, monkeypatch)
+        videos = [{"title": f"動画{i}", "url": f"https://youtu.be/vid{i}"} for i in range(5)]
+        with patch.object(yt_learn, "_fetch_view_count", return_value=0) as mock_fetch:
+            yt_learn._sort_by_popularity(videos, "CH", sample_size=0)
+        assert mock_fetch.call_count == 5
+
+    def test_saves_cache_after_fetching(self, tmp_path, monkeypatch):
+        self._setup(tmp_path, monkeypatch)
+        videos = [{"title": "動画", "url": "https://youtu.be/abc"}]
+        with patch.object(yt_learn, "_fetch_view_count", return_value=999):
+            yt_learn._sort_by_popularity(videos, "CH", sample_size=10)
+        cache = yt_learn._load_view_cache("CH")
+        assert cache.get("abc") == 999
+
+    def test_fetch_error_defaults_to_zero(self, tmp_path, monkeypatch):
+        self._setup(tmp_path, monkeypatch)
+        videos = [{"title": "動画", "url": "https://youtu.be/abc"}]
+        with patch.object(yt_learn, "_fetch_view_count", side_effect=RuntimeError("API error")):
+            result = yt_learn._sort_by_popularity(videos, "CH", sample_size=10)
+        assert len(result) == 1
+
+    def test_popular_sort_returns_expected_top3(self, tmp_path, monkeypatch):
+        # 新着順に並んだリストで人気3本が正しく先頭に来ることを確認
+        self._setup(tmp_path, monkeypatch)
+        videos = [
+            {"title": "新しい動画A",                                          "url": "https://youtu.be/newvid01234"},
+            {"title": "新しい動画B",                                          "url": "https://youtu.be/newvid56789"},
+            {"title": "新しい動画C",                                          "url": "https://youtu.be/newvidabcde"},
+            {"title": "【芸能界の闇】田村淳についてお話します。",               "url": "https://youtu.be/tgk9dFB5e9k"},
+            {"title": "DaiGoがつけて人生変わった最強の癖TOP5",                 "url": "https://youtu.be/Ld8x6w9v6_8"},
+            {"title": "京アニ実名報道を批判したら【テレビから連絡が来ました】", "url": "https://youtu.be/KyoAni_1234"},
+        ]
+        yt_learn._save_view_cache("CH", {
+            "newvid01234": 100,
+            "newvid56789": 200,
+            "newvidabcde": 300,
+            "tgk9dFB5e9k": 5_000_000,
+            "Ld8x6w9v6_8": 4_000_000,
+            "KyoAni_1234": 3_000_000,
+        })
+        result = yt_learn._sort_by_popularity(videos, "CH", sample_size=0)
+        assert [v["title"] for v in result[:3]] == [
+            "【芸能界の闇】田村淳についてお話します。",
+            "DaiGoがつけて人生変わった最強の癖TOP5",
+            "京アニ実名報道を批判したら【テレビから連絡が来ました】",
+        ]
 
 
 # ── _extract_video_id ────────────────────────────────────────────────────────
@@ -213,14 +299,40 @@ class TestIndex:
         assert data == {"key": {"title": "タイトル"}}
 
 
+# ── _normalize_channel_url ───────────────────────────────────────────────────
+
+class TestNormalizeChannelUrl:
+    def test_appends_videos_tab_to_bare_channel(self):
+        url = yt_learn._normalize_channel_url("https://www.youtube.com/@daigo")
+        assert url.endswith("/videos")
+
+    def test_does_not_duplicate_videos_tab(self):
+        url = yt_learn._normalize_channel_url("https://www.youtube.com/@daigo/videos")
+        assert url.count("/videos") == 1
+
+    def test_strips_trailing_slash_before_appending(self):
+        url = yt_learn._normalize_channel_url("https://www.youtube.com/@daigo/")
+        assert url == "https://www.youtube.com/@daigo/videos"
+
+    def test_leaves_shorts_tab_unchanged(self):
+        url = yt_learn._normalize_channel_url("https://www.youtube.com/@daigo/shorts")
+        assert "/videos" not in url
+        assert url.endswith("/shorts")
+
+    def test_leaves_streams_tab_unchanged(self):
+        url = yt_learn._normalize_channel_url("https://www.youtube.com/@daigo/streams")
+        assert url.endswith("/streams")
+
+
 # ── _get_channel_videos ───────────────────────────────────────────────────────
 
 class TestGetChannelVideos:
+    # YouTube video IDs are exactly 11 chars; use realistic-length IDs in fixtures
     def test_returns_video_list(self):
         mock_info = {
             "entries": [
-                {"id": "abc", "title": "動画1", "url": "https://youtube.com/watch?v=abc"},
-                {"id": "def", "title": "動画2", "url": "https://youtube.com/watch?v=def"},
+                {"id": "abcdefghijk", "title": "動画1", "url": "https://youtube.com/watch?v=abcdefghijk"},
+                {"id": "defghijklmn", "title": "動画2", "url": "https://youtube.com/watch?v=defghijklmn"},
             ]
         }
         with patch("yt_dlp.YoutubeDL") as mock_ydl:
@@ -228,21 +340,42 @@ class TestGetChannelVideos:
             result = yt_learn._get_channel_videos("https://youtube.com/@test")
         assert len(result) == 2
         assert result[0]["title"] == "動画1"
-        assert result[1]["url"] == "https://youtube.com/watch?v=def"
+        assert result[1]["url"] == "https://youtube.com/watch?v=defghijklmn"
 
     def test_skips_none_entries(self):
-        mock_info = {"entries": [None, {"id": "abc", "title": "動画1", "url": "https://youtube.com/watch?v=abc"}]}
+        mock_info = {"entries": [None, {"id": "abcdefghijk", "title": "動画1", "url": "https://youtube.com/watch?v=abcdefghijk"}]}
         with patch("yt_dlp.YoutubeDL") as mock_ydl:
             mock_ydl.return_value.__enter__.return_value.extract_info.return_value = mock_info
             result = yt_learn._get_channel_videos("https://youtube.com/@test")
         assert len(result) == 1
 
-    def test_builds_youtube_url_from_id(self):
-        mock_info = {"entries": [{"id": "xyz123", "title": "動画", "url": "xyz123"}]}
+    def test_skips_channel_tab_entries(self):
+        # Channel tab entries have IDs like "UCxxxxxx..." (24 chars), not 11-char video IDs
+        mock_info = {
+            "entries": [
+                {"id": "UCFdBehO71GQaIom4WfVeGSw", "title": "Videos", "url": "https://youtube.com/@test/videos"},
+                {"id": "abcdefghijk", "title": "実際の動画", "url": "https://youtube.com/watch?v=abcdefghijk"},
+            ]
+        }
         with patch("yt_dlp.YoutubeDL") as mock_ydl:
             mock_ydl.return_value.__enter__.return_value.extract_info.return_value = mock_info
             result = yt_learn._get_channel_videos("https://youtube.com/@test")
-        assert result[0]["url"] == "https://www.youtube.com/watch?v=xyz123"
+        assert len(result) == 1
+        assert result[0]["title"] == "実際の動画"
+
+    def test_builds_youtube_url_from_id(self):
+        mock_info = {"entries": [{"id": "xyz1234abcd", "title": "動画", "url": "xyz1234abcd"}]}
+        with patch("yt_dlp.YoutubeDL") as mock_ydl:
+            mock_ydl.return_value.__enter__.return_value.extract_info.return_value = mock_info
+            result = yt_learn._get_channel_videos("https://youtube.com/@test")
+        assert result[0]["url"] == "https://www.youtube.com/watch?v=xyz1234abcd"
+
+    def test_appends_videos_tab_to_url(self):
+        with patch("yt_dlp.YoutubeDL") as mock_ydl:
+            mock_ydl.return_value.__enter__.return_value.extract_info.return_value = {"entries": []}
+            yt_learn._get_channel_videos("https://youtube.com/@test")
+        called_url = mock_ydl.return_value.__enter__.return_value.extract_info.call_args[0][0]
+        assert called_url.endswith("/videos")
 
     def test_returns_empty_on_failure(self):
         with patch("yt_dlp.YoutubeDL") as mock_ydl:
@@ -407,7 +540,7 @@ class TestProcessChannel:
              patch.object(yt_learn, "_transcribe", return_value="文字起こし"), \
              patch("tempfile.mkdtemp", return_value="/tmp/fake"), \
              patch("shutil.rmtree"):
-            count = yt_learn._process_channel("CH", "https://youtube.com/@ch")
+            count = yt_learn._process_channel("CH", "https://youtube.com/@ch", popular_sample=0)
 
         assert count == 1
         assert (tmp_path / "transcripts" / "CH" / "新規動画.md").exists()
@@ -420,7 +553,7 @@ class TestProcessChannel:
         videos = [{"title": f"動画{i}", "url": f"https://youtu.be/{i}"} for i in range(10)]
         with patch.object(yt_learn, "_get_channel_videos", return_value=videos), \
              patch.object(yt_learn, "_process_url", return_value=True) as mock_proc:
-            yt_learn._process_channel("CH", "https://youtube.com/@ch", limit=3)
+            yt_learn._process_channel("CH", "https://youtube.com/@ch", limit=3, popular_sample=0)
         assert mock_proc.call_count == 3
 
     def test_continues_on_error(self, tmp_path, monkeypatch):
@@ -431,5 +564,23 @@ class TestProcessChannel:
         ]
         with patch.object(yt_learn, "_get_channel_videos", return_value=videos), \
              patch.object(yt_learn, "_process_url", side_effect=[RuntimeError("失敗"), True]) as mock_proc:
-            yt_learn._process_channel("CH", "https://youtube.com/@ch")
+            yt_learn._process_channel("CH", "https://youtube.com/@ch", popular_sample=0)
         assert mock_proc.call_count == 2
+
+    def test_popular_sort_calls_sort_by_popularity(self, tmp_path, monkeypatch):
+        monkeypatch.setattr(yt_learn, "TRANSCRIPTS_DIR", tmp_path / "transcripts")
+        videos = [{"title": "動画A", "url": "https://youtu.be/a"}]
+        with patch.object(yt_learn, "_get_channel_videos", return_value=videos), \
+             patch.object(yt_learn, "_sort_by_popularity", return_value=videos) as mock_sort, \
+             patch.object(yt_learn, "_process_url", return_value=True):
+            yt_learn._process_channel("CH", "https://youtube.com/@ch", sort="popular", popular_sample=100)
+        mock_sort.assert_called_once_with(videos, "CH", 100)
+
+    def test_date_sort_does_not_call_sort_by_popularity(self, tmp_path, monkeypatch):
+        monkeypatch.setattr(yt_learn, "TRANSCRIPTS_DIR", tmp_path / "transcripts")
+        videos = [{"title": "動画A", "url": "https://youtu.be/a"}]
+        with patch.object(yt_learn, "_get_channel_videos", return_value=videos), \
+             patch.object(yt_learn, "_sort_by_popularity") as mock_sort, \
+             patch.object(yt_learn, "_process_url", return_value=True):
+            yt_learn._process_channel("CH", "https://youtube.com/@ch", sort="date", popular_sample=0)
+        mock_sort.assert_not_called()
