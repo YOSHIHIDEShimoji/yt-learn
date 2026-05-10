@@ -34,7 +34,7 @@ echo "GEMINI_API_KEY=your_key_here" > .env
 
 ```bash
 # チャンネルを追加
-python yt_learn.py add メンタリストDAIGO https://www.youtube.com/@mentalistdaigo
+python yt_learn.py add メンタリスト DaiGo https://www.youtube.com/@mentalistdaigo
 python yt_learn.py add ひろゆき https://www.youtube.com/@hiroyuki_daihyo
 
 # 登録チャンネル一覧
@@ -47,11 +47,11 @@ python yt_learn.py list
 # チャンネル指定なし → transcripts/misc/ に保存
 python yt_learn.py process https://youtu.be/xxx --model tiny
 
-# チャンネル指定あり → transcripts/メンタリストDAIGO/ に保存
-python yt_learn.py process https://youtu.be/xxx --channel メンタリストDAIGO --model tiny
+# チャンネル指定あり → transcripts/メンタリスト DaiGo/ に保存
+python yt_learn.py process https://youtu.be/xxx --channel メンタリスト DaiGo --model tiny
 
 # 複数URL同時
-python yt_learn.py process https://youtu.be/aaa https://youtu.be/bbb --channel メンタリストDAIGO
+python yt_learn.py process https://youtu.be/aaa https://youtu.be/bbb --channel メンタリスト DaiGo
 
 # URLファイルから読み込み → transcripts/ひろゆき/ に保存
 python yt_learn.py process -f urls.txt --channel ひろゆき
@@ -64,13 +64,13 @@ python yt_learn.py process https://youtu.be/xxx -o ~/Desktop/output
 
 ```bash
 # 人気順で上位5本（動作確認用）
-python yt_learn.py channel メンタリストDAIGO --sort popular --limit 5 --model tiny
+python yt_learn.py channel メンタリスト DaiGo --sort popular --limit 5 --model tiny
 
 # 人気順で上位100本（本番）
-python yt_learn.py channel メンタリストDAIGO --sort popular --limit 100
+python yt_learn.py channel メンタリスト DaiGo --sort popular --limit 100
 
 # 2回目は自動で101〜200本目になる
-python yt_learn.py channel メンタリストDAIGO --sort popular --limit 100
+python yt_learn.py channel メンタリスト DaiGo --sort popular --limit 100
 
 # 全チャンネルを人気順50本ずつ
 python yt_learn.py all --sort popular --limit 50
@@ -80,26 +80,26 @@ python yt_learn.py all --sort popular --limit 50
 
 ```bash
 # 初回: 全動画の再生数を取得してキャッシュ（3000本規模で約80分）
-python yt_learn.py channel メンタリストDAIGO --sort popular --limit 5 --model tiny
+python yt_learn.py channel メンタリスト DaiGo --sort popular --limit 5 --model tiny
 
 # 2回目以降: キャッシュ済みはスキップ → 即ソート開始
-python yt_learn.py channel メンタリストDAIGO --sort popular --limit 5 --model tiny
+python yt_learn.py channel メンタリスト DaiGo --sort popular --limit 5 --model tiny
 
 # 取得件数を絞って動作確認（先頭10件だけ再生数取得）
-python yt_learn.py channel メンタリストDAIGO --sort popular --popular-sample 10 --limit 3 --model tiny
+python yt_learn.py channel メンタリスト DaiGo --sort popular --popular-sample 10 --limit 3 --model tiny
 ```
 
 ### AI要約（手動実行）
 
 ```bash
 # 特定チャンネルのサマリー更新
-python summarize.py メンタリストDAIGO
+python summarize.py メンタリスト DaiGo
 
 # 全チャンネル一括
 python summarize.py all
 
 # 処理済みを無視して全件再生成
-python summarize.py メンタリストDAIGO --force
+python summarize.py メンタリスト DaiGo --force
 ```
 
 ### 確認
@@ -109,14 +109,14 @@ python summarize.py メンタリストDAIGO --force
 python yt_learn.py list
 
 # 文字起こしファイル確認
-ls transcripts/メンタリストDAIGO/
-cat "transcripts/メンタリストDAIGO/動画タイトル.md"
+ls transcripts/メンタリスト DaiGo/
+cat "transcripts/メンタリスト DaiGo/動画タイトル.md"
 
 # インデックス確認（処理済み動画一覧）
-cat transcripts/メンタリストDAIGO/_index.json | python -m json.tool | head -30
+cat transcripts/メンタリスト DaiGo/_index.json | python -m json.tool | head -30
 
 # サマリー確認
-cat summaries/メンタリストDAIGO.md
+cat summaries/メンタリスト DaiGo.md
 ```
 
 ## 要約の仕組み
