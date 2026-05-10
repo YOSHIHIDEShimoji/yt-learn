@@ -2,3 +2,5 @@
 # フォーマット: チャンネル名 | チャンネルURL
 # 例:
 # メンタリストDAIGO | https://www.youtube.com/@mentalistdaigo
+メンタリスト DaiGo | https://www.youtube.com/@mentalistdaigo
+ひろゆき, hiroyuki | https://www.youtube.com/@hirox246
