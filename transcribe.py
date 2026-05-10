@@ -119,7 +119,7 @@ def _list_channels() -> None:
 
 def _get_video_title(url: str) -> str:
     import yt_dlp
-    with yt_dlp.YoutubeDL({"quiet": True, "no_warnings": True}) as ydl:
+    with yt_dlp.YoutubeDL({"quiet": True, "no_warnings": True, "cookiesfrombrowser": ("chrome",)}) as ydl:
         info = ydl.extract_info(url, download=False)
         return (info or {}).get("title", "untitled")
 
@@ -140,6 +140,7 @@ def _get_channel_videos(channel_url: str) -> list:
         "quiet": True,
         "no_warnings": True,
         "ignoreerrors": True,
+        "cookiesfrombrowser": ("chrome",),
     }
     with yt_dlp.YoutubeDL(ydl_opts) as ydl:
         info = ydl.extract_info(url, download=False) or {}
@@ -163,7 +164,7 @@ def _get_channel_videos(channel_url: str) -> list:
 def _fetch_view_count(video_id: str) -> int:
     import yt_dlp
     url = f"https://www.youtube.com/watch?v={video_id}"
-    ydl_opts = {"quiet": True, "no_warnings": True, "skip_download": True, "logger": _TqdmLogger()}
+    ydl_opts = {"quiet": True, "no_warnings": True, "skip_download": True, "logger": _TqdmLogger(), "cookiesfrombrowser": ("chrome",)}
     with yt_dlp.YoutubeDL(ydl_opts) as ydl:
         info = ydl.extract_info(url, download=False) or {}
     return info.get("view_count") or 0
@@ -220,6 +221,7 @@ def _download_audio(url: str, out_dir: str) -> str:
         }],
         "quiet": True,
         "no_warnings": True,
+        "cookiesfrombrowser": ("chrome",),
     }
     with yt_dlp.YoutubeDL(ydl_opts) as ydl:
         ydl.download([url])
