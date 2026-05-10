@@ -1,0 +1,8 @@
+transcripts/
+summaries/
+__pycache__/
+*.wav
+*.tmp
+.env
+*.pyc
+.DS_Store

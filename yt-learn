@@ -1,0 +1,327 @@
+#!/Users/yoshihide/.pyenv/versions/yt-learn-3.11.9/bin/python
+"""YouTube学習データベース構築ツール"""
+
+import argparse
+import os
+import re
+import shutil
+import sys
+import tempfile
+from datetime import date
+from pathlib import Path
+
+BASE_DIR = Path(__file__).parent.resolve()
+TRANSCRIPTS_DIR = BASE_DIR / "transcripts"
+SUMMARIES_DIR = BASE_DIR / "summaries"
+CHANNELS_FILE = BASE_DIR / "channels.txt"
+
+GEMINI_MODEL = "gemini-2.5-flash-lite"
+WHISPER_MODEL = "large-v3"
+
+
+def _err(msg: str) -> None:
+    print(msg, file=sys.stderr)
+
+
+def _sanitize(name: str) -> str:
+    name = re.sub(r'[\\/:*?"<>|]', "_", name)
+    return name.strip()[:200]
+
+
+# ── channels.txt 操作 ──────────────────────────────────────────────────────────
+
+def _load_channels() -> dict:
+    if not CHANNELS_FILE.exists():
+        return {}
+    channels = {}
+    for line in CHANNELS_FILE.read_text(encoding="utf-8").splitlines():
+        line = line.strip()
+        if not line or line.startswith("#") or "|" not in line:
+            continue
+        name, url = line.split("|", 1)
+        channels[name.strip()] = url.strip()
+    return channels
+
+
+def _add_channel(name: str, url: str) -> None:
+    channels = _load_channels()
+    if name in channels:
+        _err(f"[skip] {name} は既に登録済み: {channels[name]}")
+        return
+    with CHANNELS_FILE.open("a", encoding="utf-8") as f:
+        f.write(f"{name} | {url}\n")
+    _err(f"[added] {name} | {url}")
+
+
+def _list_channels() -> None:
+    channels = _load_channels()
+    if not channels:
+        _err("チャンネルが登録されていません。yt-learn add <name> <url> で追加してください。")
+        return
+    for name, url in channels.items():
+        print(f"{name} | {url}")
+
+
+# ── yt-dlp ヘルパー ────────────────────────────────────────────────────────────
+
+def _get_video_title(url: str) -> str:
+    import yt_dlp
+    with yt_dlp.YoutubeDL({"quiet": True, "no_warnings": True}) as ydl:
+        info = ydl.extract_info(url, download=False)
+        return (info or {}).get("title", "untitled")
+
+
+def _get_channel_videos(channel_url: str) -> list:
+    import yt_dlp
+    ydl_opts = {
+        "extract_flat": "in_playlist",
+        "quiet": True,
+        "no_warnings": True,
+        "ignoreerrors": True,
+    }
+    with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+        info = ydl.extract_info(channel_url, download=False) or {}
+
+    videos = []
+    for e in info.get("entries", []) or []:
+        if not e:
+            continue
+        vid_id = e.get("id") or ""
+        title = e.get("title") or vid_id
+        url = e.get("url") or (f"https://www.youtube.com/watch?v={vid_id}" if vid_id else "")
+        if not url.startswith("http") and vid_id:
+            url = f"https://www.youtube.com/watch?v={vid_id}"
+        if url:
+            videos.append({"title": title, "url": url})
+    return videos
+
+
+def _download_audio(url: str, out_dir: str) -> str:
+    import yt_dlp
+    ydl_opts = {
+        "format": "bestaudio/best",
+        "outtmpl": os.path.join(out_dir, "%(title)s.%(ext)s"),
+        "postprocessors": [{
+            "key": "FFmpegExtractAudio",
+            "preferredcodec": "wav",
+            "preferredquality": "192",
+        }],
+        "quiet": True,
+        "no_warnings": True,
+    }
+    with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+        ydl.download([url])
+    for f in Path(out_dir).iterdir():
+        if f.suffix == ".wav":
+            return str(f)
+    raise RuntimeError(f"WAVファイルが見つかりません: {out_dir}")
+
+
+# ── 文字起こし ─────────────────────────────────────────────────────────────────
+
+def _transcribe(audio_path: str, lang: str = "ja") -> str:
+    from faster_whisper import WhisperModel
+    _err(f"[model] {WHISPER_MODEL} をロード中...")
+    model = WhisperModel(WHISPER_MODEL, device="cpu", compute_type="int8", cpu_threads=8)
+    _err(f"[transcribe] {Path(audio_path).name}")
+    segments_iter, _ = model.transcribe(
+        audio_path,
+        language=lang,
+        beam_size=5,
+        vad_filter=True,
+        vad_parameters={"min_silence_duration_ms": 500},
+    )
+    return "\n".join(seg.text.strip() for seg in segments_iter if seg.text.strip())
+
+
+def _save_transcript(channel_name: str, title: str, url: str, text: str) -> Path:
+    out_dir = TRANSCRIPTS_DIR / _sanitize(channel_name)
+    out_dir.mkdir(parents=True, exist_ok=True)
+    out_path = out_dir / f"{_sanitize(title)}.md"
+    out_path.write_text(
+        f"# {title}\n\nチャンネル: {channel_name}\nURL: {url}\n\n---\n\n{text}\n",
+        encoding="utf-8",
+    )
+    return out_path
+
+
+# ── Gemini サマリー更新 ────────────────────────────────────────────────────────
+
+def _update_summary(channel_name: str, transcript: str, video_title: str) -> None:
+    api_key = os.environ.get("GEMINI_API_KEY")
+    if not api_key:
+        _err("[warn] GEMINI_API_KEY が未設定。サマリー更新をスキップします。")
+        return
+
+    from google import genai
+
+    SUMMARIES_DIR.mkdir(parents=True, exist_ok=True)
+    summary_path = SUMMARIES_DIR / f"{_sanitize(channel_name)}.md"
+
+    existing = summary_path.read_text(encoding="utf-8") if summary_path.exists() else ""
+
+    video_count = 0
+    for line in existing.splitlines():
+        if line.startswith("動画数:"):
+            try:
+                video_count = int(line.split(":")[1].strip())
+            except ValueError:
+                pass
+    video_count += 1
+    today = date.today().isoformat()
+
+    prompt = f"""あなたはYouTubeチャンネル「{channel_name}」の学習内容をまとめるアシスタントです。
+
+## 既存のサマリー
+{existing if existing else "（まだサマリーはありません）"}
+
+## 新しい動画の文字起こし
+タイトル: {video_title}
+
+{transcript}
+
+## 指示
+新しい文字起こしから、既存のサマリーに**まだ含まれていないユニークな洞察・テーマ・主張**のみを抽出し、サマリーに追加してください。
+
+ルール:
+- 既存サマリーにある内容は追加しない（重複排除）
+- 言い回しが違っても内容が同じなら重複とみなす
+- 新しい洞察がなければサマリーをそのまま返す
+- 「最終更新」と「動画数」は必ず以下の値に更新する
+
+完全なサマリー全体を以下のフォーマットで返してください:
+
+# {channel_name} - Learning Summary
+
+## 主要テーマ
+- （テーマをリスト）
+
+## キーインサイト
+- （ユニークな洞察をリスト）
+
+---
+最終更新: {today}
+動画数: {video_count}
+"""
+
+    client = genai.Client(api_key=api_key)
+    response = client.models.generate_content(model=GEMINI_MODEL, contents=prompt)
+    summary_path.write_text(response.text.strip() + "\n", encoding="utf-8")
+    _err(f"[summary] 更新: {summary_path}")
+
+
+# ── 処理エントリポイント ───────────────────────────────────────────────────────
+
+def _process_url(url: str, channel_name: str, lang: str = "ja", title: str = None) -> bool:
+    """単一URLを処理。新規文字起こしした場合 True を返す"""
+    if title is None:
+        _err(f"[info] タイトル取得中: {url}")
+        title = _get_video_title(url)
+
+    transcript_path = TRANSCRIPTS_DIR / _sanitize(channel_name) / f"{_sanitize(title)}.md"
+    if transcript_path.exists():
+        _err(f"[skip] 既存: {transcript_path.name}")
+        return False
+
+    tmpdir = tempfile.mkdtemp(prefix="yt_learn_")
+    try:
+        _err(f"[download] {url}")
+        audio_path = _download_audio(url, tmpdir)
+        text = _transcribe(audio_path, lang)
+        saved = _save_transcript(channel_name, title, url, text)
+        _err(f"[saved] {saved}")
+        _update_summary(channel_name, text, title)
+        return True
+    finally:
+        shutil.rmtree(tmpdir, ignore_errors=True)
+
+
+def _process_channel(channel_name: str, channel_url: str, lang: str = "ja", limit: int = 0) -> None:
+    _err(f"[channel] {channel_name}: 動画リスト取得中...")
+    videos = _get_channel_videos(channel_url)
+    _err(f"[channel] {len(videos)} 件の動画を発見")
+
+    if limit > 0:
+        videos = videos[:limit]
+
+    processed = 0
+    for i, v in enumerate(videos, 1):
+        _err(f"[{i}/{len(videos)}] {v['title']}")
+        try:
+            if _process_url(v["url"], channel_name, lang, title=v["title"]):
+                processed += 1
+        except Exception as e:
+            _err(f"[error] {v['title']}: {e}")
+
+    _err(f"[done] {channel_name}: {processed} 件処理")
+
+
+# ── CLI ────────────────────────────────────────────────────────────────────────
+
+def main() -> None:
+    parser = argparse.ArgumentParser(
+        description="YouTube学習データベース構築ツール",
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        epilog="""\
+examples:
+  yt-learn add メンタリストDAIGO https://www.youtube.com/@mentalistdaigo
+  yt-learn list
+  yt-learn process https://youtu.be/xxx --channel メンタリストDAIGO
+  yt-learn process https://youtu.be/xxx https://youtu.be/yyy --channel メンタリストDAIGO
+  yt-learn channel メンタリストDAIGO
+  yt-learn channel メンタリストDAIGO --limit 10
+  yt-learn all
+""",
+    )
+    sub = parser.add_subparsers(dest="cmd", required=True)
+
+    p_add = sub.add_parser("add", help="チャンネルを channels.txt に追加")
+    p_add.add_argument("name", help="チャンネル名（ディレクトリ名になる）")
+    p_add.add_argument("url", help="チャンネルURL")
+
+    sub.add_parser("list", help="登録チャンネル一覧を表示")
+
+    p_proc = sub.add_parser("process", help="特定URLを文字起こし（複数可）")
+    p_proc.add_argument("urls", nargs="+", help="動画URL")
+    p_proc.add_argument("--channel", required=True, help="チャンネル名")
+    p_proc.add_argument("--lang", default="ja")
+
+    p_ch = sub.add_parser("channel", help="チャンネルの全動画を処理")
+    p_ch.add_argument("name", help="channels.txt のチャンネル名")
+    p_ch.add_argument("--lang", default="ja")
+    p_ch.add_argument("--limit", type=int, default=0, help="最大処理動画数（0=全件）")
+
+    p_all = sub.add_parser("all", help="全チャンネルを処理")
+    p_all.add_argument("--lang", default="ja")
+    p_all.add_argument("--limit", type=int, default=0)
+
+    args = parser.parse_args()
+
+    if args.cmd == "add":
+        _add_channel(args.name, args.url)
+
+    elif args.cmd == "list":
+        _list_channels()
+
+    elif args.cmd == "process":
+        for url in args.urls:
+            _process_url(url, args.channel, args.lang)
+
+    elif args.cmd == "channel":
+        channels = _load_channels()
+        if args.name not in channels:
+            _err(f"[error] '{args.name}' が channels.txt に見つかりません")
+            sys.exit(1)
+        _process_channel(args.name, channels[args.name], args.lang, args.limit)
+
+    elif args.cmd == "all":
+        channels = _load_channels()
+        if not channels:
+            _err("[warn] channels.txt にチャンネルが登録されていません")
+            sys.exit(0)
+        for name, url in channels.items():
+            _process_channel(name, url, args.lang, args.limit)
+
+
+if __name__ == "__main__":
+    main()

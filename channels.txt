@@ -1,0 +1,4 @@
+# YouTube学習チャンネル管理ファイル
+# フォーマット: チャンネル名 | チャンネルURL
+# 例:
+# メンタリストDAIGO | https://www.youtube.com/@mentalistdaigo
