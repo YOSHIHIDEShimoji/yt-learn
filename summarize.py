@@ -26,6 +26,16 @@ def _err(msg: str) -> None:
     print(msg, file=sys.stderr)
 
 
+def _notify(message: str) -> None:
+    import subprocess
+    notifier = Path.home() / "Applications/Notifiers/yt-learn.app/Contents/MacOS/yt-learn"
+    subprocess.run([
+        str(notifier),
+        "-title", "yt-learn",
+        "-message", message,
+    ], check=False)
+
+
 def _sanitize(name: str) -> str:
     import re
     name = re.sub(r'[\\/:*?"<>|]', "_", name)
@@ -129,7 +139,7 @@ def _update_summary(channel_name: str, transcript: str, video_title: str, api_ke
 
 # ── チャンネル処理 ────────────────────────────────────────────────────────────
 
-def _summarize_channel(channel_name: str, api_key: str, force: bool = False) -> None:
+def _summarize_channel(channel_name: str, api_key: str, force: bool = False, threshold: int = 0) -> None:
     channel_dir = TRANSCRIPTS_DIR / _sanitize(channel_name)
     if not channel_dir.exists():
         _err(f"[skip] トランスクリプトなし: {channel_dir}")
@@ -143,11 +153,19 @@ def _summarize_channel(channel_name: str, api_key: str, force: bool = False) -> 
     processed = set() if force else _load_processed(channel_name)
     new_transcripts = [t for t in all_transcripts if t.name not in processed]
 
+    if threshold > 0 and len(new_transcripts) < threshold:
+        _err(f"[skip] {channel_name}: 未処理 {len(new_transcripts)} 件 < {threshold} 件")
+        return
+
     if not new_transcripts:
         _err(f"[skip] {channel_name}: 未処理のトランスクリプトがありません（{len(all_transcripts)} 件処理済み）")
         return
 
     _err(f"[summarize] {channel_name}: {len(new_transcripts)} 件を処理（合計 {len(all_transcripts)} 件中）")
+
+    summary_path = SUMMARIES_DIR / f"{_sanitize(channel_name)}.md"
+    is_new = not summary_path.exists()
+    done_count = 0
 
     for i, t in enumerate(new_transcripts, 1):
         _err(f"  [{i}/{len(new_transcripts)}] {t.stem}")
@@ -157,8 +175,13 @@ def _summarize_channel(channel_name: str, api_key: str, force: bool = False) -> 
             _update_summary(channel_name, transcript_text, t.stem, api_key, video_count)
             processed.add(t.name)
             _save_processed(channel_name, processed)
+            done_count += 1
         except Exception as e:
             _err(f"  [error] {t.name}: {e}")
+
+    if done_count > 0:
+        action = "作成" if is_new else "更新"
+        _notify(f"  {channel_name} の要約を{action}しました（{done_count}件）")
 
     _err(f"[done] {channel_name}: サマリー更新完了")
 
@@ -193,6 +216,10 @@ examples:
         action="store_true",
         help="処理済みを無視して全トランスクリプトを再処理",
     )
+    parser.add_argument(
+        "--threshold", type=int, default=0,
+        help="未処理ファイルがこの件数未満のチャンネルはスキップ（0=常に実行）",
+    )
     args = parser.parse_args()
 
     if args.target == "all":
@@ -201,9 +228,9 @@ examples:
             _err("[warn] channels.txt にチャンネルが登録されていません")
             sys.exit(0)
         for name in channels:
-            _summarize_channel(name, api_key, args.force)
+            _summarize_channel(name, api_key, args.force, args.threshold)
     else:
-        _summarize_channel(args.target, api_key, args.force)
+        _summarize_channel(args.target, api_key, args.force, args.threshold)
 
 
 if __name__ == "__main__":

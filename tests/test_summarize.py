@@ -173,6 +173,58 @@ class TestSummarizeChannel:
         summarize._summarize_channel("CH", "fake_key")
         assert "0件" in capsys.readouterr().err
 
+    def test_threshold_skips_below_count(self, tmp_path, monkeypatch, capsys):
+        self._setup(tmp_path, monkeypatch)
+        self._make_transcripts(tmp_path, "CH", ["動画A", "動画B", "動画C"])
+        with patch.object(summarize, "_update_summary") as mock_upd:
+            summarize._summarize_channel("CH", "fake_key", threshold=5)
+        mock_upd.assert_not_called()
+        assert "< 5 件" in capsys.readouterr().err
+
+    def test_threshold_processes_at_or_above_count(self, tmp_path, monkeypatch):
+        self._setup(tmp_path, monkeypatch)
+        self._make_transcripts(tmp_path, "CH", ["動画A", "動画B", "動画C"])
+        with patch.object(summarize, "_update_summary") as mock_upd, \
+             patch.object(summarize, "_notify"):
+            summarize._summarize_channel("CH", "fake_key", threshold=3)
+        assert mock_upd.call_count == 3
+
+    def test_threshold_zero_always_processes(self, tmp_path, monkeypatch):
+        self._setup(tmp_path, monkeypatch)
+        self._make_transcripts(tmp_path, "CH", ["動画A"])
+        with patch.object(summarize, "_update_summary") as mock_upd, \
+             patch.object(summarize, "_notify"):
+            summarize._summarize_channel("CH", "fake_key", threshold=0)
+        assert mock_upd.call_count == 1
+
+    def test_notifies_on_new_summary(self, tmp_path, monkeypatch):
+        self._setup(tmp_path, monkeypatch)
+        self._make_transcripts(tmp_path, "CH", ["動画A"])
+        with patch.object(summarize, "_update_summary"), \
+             patch.object(summarize, "_notify") as mock_notify:
+            summarize._summarize_channel("CH", "fake_key")
+        mock_notify.assert_called_once()
+        assert "作成" in mock_notify.call_args[0][0]
+
+    def test_notifies_on_updated_summary(self, tmp_path, monkeypatch):
+        self._setup(tmp_path, monkeypatch)
+        self._make_transcripts(tmp_path, "CH", ["動画A"])
+        (tmp_path / "summaries").mkdir()
+        (tmp_path / "summaries" / "CH.md").write_text("既存サマリー")
+        with patch.object(summarize, "_update_summary"), \
+             patch.object(summarize, "_notify") as mock_notify:
+            summarize._summarize_channel("CH", "fake_key")
+        mock_notify.assert_called_once()
+        assert "更新" in mock_notify.call_args[0][0]
+
+    def test_no_notify_when_all_errors(self, tmp_path, monkeypatch):
+        self._setup(tmp_path, monkeypatch)
+        self._make_transcripts(tmp_path, "CH", ["動画A"])
+        with patch.object(summarize, "_update_summary", side_effect=RuntimeError("失敗")), \
+             patch.object(summarize, "_notify") as mock_notify:
+            summarize._summarize_channel("CH", "fake_key")
+        mock_notify.assert_not_called()
+
 
 # ── CLI ───────────────────────────────────────────────────────────────────────
 
