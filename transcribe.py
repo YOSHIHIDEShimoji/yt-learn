@@ -85,6 +85,35 @@ def _save_index(channel_name: str, index: dict) -> None:
     p.write_text(json.dumps(index, ensure_ascii=False, indent=2), encoding="utf-8")
 
 
+def _ranking_path(channel_name: str) -> Path:
+    return TRANSCRIPTS_DIR / _sanitize(channel_name) / "_ranking.json"
+
+
+def _update_ranking(channel_name: str, sorted_videos: list) -> None:
+    index = _load_index(channel_name)
+    cache = _load_view_cache(channel_name)
+    ranking = []
+    rank = 1
+    for v in sorted_videos:
+        vid_id = _extract_video_id(v["url"])
+        if vid_id not in index:
+            continue
+        ranking.append({
+            "rank": rank,
+            "video_id": vid_id,
+            "title": index[vid_id]["title"],
+            "views": cache.get(vid_id, 0),
+            "file": index[vid_id]["file"],
+        })
+        rank += 1
+    p = _ranking_path(channel_name)
+    p.parent.mkdir(parents=True, exist_ok=True)
+    p.write_text(json.dumps({
+        "updated_at": date.today().isoformat(),
+        "ranking": ranking,
+    }, ensure_ascii=False, indent=2), encoding="utf-8")
+
+
 def _load_env() -> None:
     env_file = BASE_DIR / ".env"
     if not env_file.exists():
@@ -351,6 +380,7 @@ def _process_channel(channel_name: str, channel_url: str, lang: str = "ja", limi
 
     if sort == "popular":
         videos = _sort_by_popularity(videos, channel_name, popular_sample)
+        _update_ranking(channel_name, videos)
 
     if cache_only:
         _err(f"[cache-only] {channel_name}: キャッシュ構築のみ完了\n")
@@ -374,6 +404,8 @@ def _process_channel(channel_name: str, channel_url: str, lang: str = "ja", limi
         except Exception as e:
             _err(f"[error] {v['title']}: {e}")
 
+    if sort == "popular" and processed > 0:
+        _update_ranking(channel_name, videos)
     _err(f"[done] {channel_name}: {processed} 件処理\n")
     return processed
 
