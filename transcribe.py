@@ -21,6 +21,8 @@ COOKIES_FILE = BASE_DIR / "cookies.txt"
 WHISPER_MODEL = "large-v3"
 WSL_HOST = "win"
 WSL_COOKIES_DEST = "/home/wsl-yoshihide/my-projects/yt-learn/cookies.txt"
+RCLONE_REMOTE = "gdrive"
+RCLONE_DEST = f"{RCLONE_REMOTE}:yt-learn"
 
 _cookies_pushed = False
 
@@ -410,6 +412,27 @@ def _process_channel(channel_name: str, channel_url: str, lang: str = "ja", limi
     return processed
 
 
+def _sync_drive(dirs: list[str] | None = None) -> None:
+    import subprocess
+    if dirs is None:
+        dirs = ["transcripts", "summaries"]
+    if not shutil.which("rclone"):
+        _err("[error] rclone がインストールされていません。brew install rclone を実行してください")
+        sys.exit(1)
+    for d in dirs:
+        src = BASE_DIR / d
+        dest = f"{RCLONE_DEST}/{d}"
+        _err(f"[sync] {src} → {dest}")
+        result = subprocess.run(
+            ["rclone", "sync", str(src), dest, "--progress"],
+            text=True,
+        )
+        if result.returncode != 0:
+            _err(f"[error] 同期失敗: {d}")
+            sys.exit(1)
+    _err("[done] Google Drive への同期が完了しました")
+
+
 def _sync_cookies() -> None:
     import subprocess
     import sys
@@ -494,6 +517,10 @@ AI要約は別スクリプト:
 
     sub.add_parser("sync-cookies", help="Mac の Chrome クッキーを WSL に転送")
 
+    p_sync = sub.add_parser("sync", help="transcripts/ と summaries/ を Google Drive に同期")
+    p_sync.add_argument("--only", choices=["transcripts", "summaries"],
+                        help="同期対象を絞る（省略時は両方）")
+
     args = parser.parse_args()
 
     if args.cmd == "add":
@@ -533,6 +560,10 @@ AI要約は別スクリプト:
 
     elif args.cmd == "sync-cookies":
         _sync_cookies()
+
+    elif args.cmd == "sync":
+        dirs = [args.only] if args.only else None
+        _sync_drive(dirs)
 
     elif args.cmd == "all":
         channels = _load_channels()

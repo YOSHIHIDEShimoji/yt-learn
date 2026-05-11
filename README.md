@@ -17,6 +17,7 @@ yt-learn/
 ├── transcripts/         # チャンネル別の文字起こしファイル ※ git管理外
 │   └── {チャンネル名}/
 │       ├── _index.json      # 処理済み動画のインデックス
+│       ├── _ranking.json    # 人気順ランキング（--sort popular 時に生成）
 │       └── {動画タイトル}.md
 └── summaries/           # チャンネル別サマリー ※ git管理外
     ├── {チャンネル名}.md
@@ -28,6 +29,38 @@ yt-learn/
 ```bash
 # .env を作成してGemini APIキーを設定
 echo "GEMINI_API_KEY=your_key_here" > .env
+```
+
+### Google Drive 同期（rclone）
+
+`transcripts/` と `summaries/` を Google Drive に同期するために rclone を使う。
+
+```bash
+# Mac
+brew install rclone
+
+# WSL
+sudo apt install rclone
+```
+
+初回のみ Google Drive のリモートを設定する（ブラウザが開く）：
+
+```bash
+rclone config
+# → n（新規）→ 名前: gdrive → Google Drive を選択 → ブラウザで認証
+```
+
+設定後、Drive 上の `yt-learn/` フォルダに同期される：
+
+```bash
+# transcripts/ と summaries/ を両方同期
+python transcribe.py sync
+
+# transcripts/ だけ同期
+python transcribe.py sync --only transcripts
+
+# summaries/ だけ同期
+python transcribe.py sync --only summaries
 ```
 
 ## 使い方
@@ -126,6 +159,17 @@ cat "transcripts/メンタリスト DaiGo/_index.json" | python -m json.tool | h
 # サマリー確認
 cat "summaries/メンタリスト DaiGo.md"
 ```
+
+### Mac → WSL クッキー同期
+
+`ssh win` 経由で Mac の Chrome クッキーを WSL に転送する。WSL 側で YouTube ダウンロードに使われる。
+
+```bash
+# 明示的に同期（YouTube に再ログイン後など）
+python transcribe.py sync-cookies
+```
+
+Mac で `transcribe.py` が yt-dlp を実行するタイミングでも自動でバックグラウンド転送される。
 
 ## 自動実行（launchd）
 
