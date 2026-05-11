@@ -43,14 +43,39 @@ brew install rclone
 sudo apt install rclone
 ```
 
-初回のみ Google Drive のリモートを設定する（ブラウザが開く）：
+初回のみ Google Drive のリモートを設定する：
 
 ```bash
 rclone config
-# → n（新規）→ 名前: gdrive → Google Drive を選択 → ブラウザで認証
 ```
 
-設定後、Drive 上の `yt-learn/` フォルダに同期される：
+対話形式で以下のように進める：
+
+```
+n) New remote → n
+name> gdrive
+Storage> Google Drive の番号を入力
+client_id>            （空のままEnter）
+client_secret>        （空のままEnter）
+scope> 1              （Full access all files）
+root_folder_id>       （空のままEnter）
+service_account_file> （空のままEnter）
+Edit advanced config? → n
+Use auto config? → y  （Mac: ブラウザが開く / WSL: n を選んで表示されたURLをMacで開く）
+Configure as Shared Drive? → n
+y) Yes this is OK → y
+```
+
+接続確認：
+
+```bash
+rclone lsd gdrive:
+# マイドライブ直下のフォルダ一覧が表示されればOK
+```
+
+### 使い方
+
+同期先は Google Drive マイドライブ直下の `yt-learn/` フォルダ。
 
 ```bash
 # transcripts/ と summaries/ を両方同期
@@ -62,6 +87,8 @@ python transcribe.py sync --only transcripts
 # summaries/ だけ同期
 python transcribe.py sync --only summaries
 ```
+
+Mac・WSL どちらから実行しても同じ Drive フォルダに集約される。
 
 ## 使い方
 
