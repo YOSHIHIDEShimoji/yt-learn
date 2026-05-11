@@ -19,6 +19,22 @@ CHANNELS_FILE = BASE_DIR / "channels.txt"
 COOKIES_FILE = BASE_DIR / "cookies.txt"
 
 WHISPER_MODEL = "large-v3"
+WSL_HOST = "win"
+WSL_COOKIES_DEST = "/home/wsl-yoshihide/my-projects/yt-learn/cookies.txt"
+
+_cookies_pushed = False
+
+def _push_cookies_to_wsl() -> None:
+    global _cookies_pushed
+    import sys, subprocess
+    if sys.platform != "darwin" or _cookies_pushed or not COOKIES_FILE.exists():
+        return
+    subprocess.Popen(
+        ["scp", str(COOKIES_FILE), f"{WSL_HOST}:{WSL_COOKIES_DEST}"],
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL,
+    )
+    _cookies_pushed = True
 
 
 def _err(msg: str) -> None:
@@ -121,16 +137,28 @@ def _list_channels() -> None:
 def _cookie_opts() -> dict:
     """Mac: Chromeから読んでcookies.txtに書き出す。それ以外: cookies.txtを使う。"""
     import sys
-    opts = {"cookiefile": str(COOKIES_FILE)}
+    opts = {
+        "cookiefile": str(COOKIES_FILE),
+        "remote_components": ["ejs:github"],
+    }
     if sys.platform == "darwin":
         opts["cookiesfrombrowser"] = ("chrome",)
     return opts
 
 def _get_video_title(url: str) -> str:
     import yt_dlp
-    with yt_dlp.YoutubeDL({"quiet": True, "no_warnings": True, **_cookie_opts()}) as ydl:
+    opts = {
+        "quiet": True,
+        "no_warnings": True,
+        "skip_download": True,
+        "format": "bestaudio/best",
+        "ignore_no_formats_error": True,
+        **_cookie_opts(),
+    }
+    with yt_dlp.YoutubeDL(opts) as ydl:
         info = ydl.extract_info(url, download=False)
-        return (info or {}).get("title", "untitled")
+    _push_cookies_to_wsl()
+    return (info or {}).get("title", "untitled")
 
 
 def _normalize_channel_url(channel_url: str) -> str:
@@ -350,6 +378,26 @@ def _process_channel(channel_name: str, channel_url: str, lang: str = "ja", limi
     return processed
 
 
+def _sync_cookies() -> None:
+    import subprocess
+    import sys
+    if sys.platform != "darwin":
+        _err("[error] sync-cookies は Mac からのみ実行できます")
+        sys.exit(1)
+    _err("[info] Chrome からクッキーを取得中...")
+    import yt_dlp
+    with yt_dlp.YoutubeDL({"quiet": True, "no_warnings": True, **_cookie_opts()}) as ydl:
+        ydl.extract_info("https://www.youtube.com/", download=False)
+    _err(f"[info] {WSL_HOST} に転送中...")
+    wsl_cmd = f"wsl -- bash -c 'mkdir -p {Path(WSL_COOKIES_DEST).parent} && cat > {WSL_COOKIES_DEST}'"
+    with open(COOKIES_FILE, "rb") as f:
+        result = subprocess.run(["ssh", WSL_HOST, wsl_cmd], stdin=f, capture_output=True)
+    if result.returncode != 0:
+        _err(f"[error] 転送失敗:\n{result.stderr.decode()}")
+        sys.exit(1)
+    _err(f"[done] cookies.txt を {WSL_HOST}:{WSL_COOKIES_DEST} に送信しました")
+
+
 # ── CLI ────────────────────────────────────────────────────────────────────────
 
 def main() -> None:
@@ -412,6 +460,8 @@ AI要約は別スクリプト:
     p_all.add_argument("--popular-sample", type=int, default=0)
     p_all.add_argument("--cache-only", action="store_true")
 
+    sub.add_parser("sync-cookies", help="Mac の Chrome クッキーを WSL に転送")
+
     args = parser.parse_args()
 
     if args.cmd == "add":
@@ -448,6 +498,9 @@ AI要約は別スクリプト:
         info = channels[args.name]
         _process_channel(args.name, info["url"], info["lang"], args.limit, args.sort,
                          args.popular_sample, args.model, args.cache_only)
+
+    elif args.cmd == "sync-cookies":
+        _sync_cookies()
 
     elif args.cmd == "all":
         channels = _load_channels()
