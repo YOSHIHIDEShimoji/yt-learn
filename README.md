@@ -207,7 +207,6 @@ while true; do
     python transcribe.py all --sort popular --limit 20
     python summarize.py all --threshold 20
     python transcribe.py sync
-    sleep 3600  # 1時間待機
 done
 ```
 
