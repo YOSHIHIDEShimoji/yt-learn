@@ -26,3 +26,8 @@ if [ $exit_code -ne 0 ]; then
     "$NOTIFY" -title "yt-learn" \
         -message "  要約でエラーが発生しました。log/summarize.log を確認してください"
 fi
+
+sync_output=$("$PYTHON" transcribe.py sync --only summaries 2>&1)
+sync_exit=$?
+echo "[$(date '+%Y-%m-%d %H:%M:%S')] sync exit=$sync_exit" >> "$LOG"
+echo "$sync_output" >> "$LOG"
