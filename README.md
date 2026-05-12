@@ -198,6 +198,23 @@ python transcribe.py sync-cookies
 
 Mac で `transcribe.py` が yt-dlp を実行するタイミングでも自動でバックグラウンド転送される。
 
+## WSL での継続実行
+
+Windows の WSL で回し続ける場合のコマンド。キャッシュ取得・ソート・文字起こし・即時 Drive 転送・要約・最終同期まで一括で行う。
+
+```bash
+while true; do
+    python transcribe.py all --sort popular --limit 20
+    python summarize.py all --threshold 20
+    python transcribe.py sync
+    sleep 3600  # 1時間待機
+done
+```
+
+- `transcribe.py all --sort popular` の中で再生数キャッシュ取得・ランキング更新・文字起こし・Drive への即時転送が順に行われる
+- 文字起こし完了ごとに `transcripts/` の該当ファイルが Drive に転送される（途中終了しても済んだ分は保持される）
+- 末尾の `transcribe.py sync` で `summaries/` と取りこぼした `transcripts/` を補完同期する
+
 ## 自動実行（launchd）
 
 | ラベル | スクリプト | スケジュール | 実行内容 |
