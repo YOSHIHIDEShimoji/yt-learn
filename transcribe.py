@@ -268,7 +268,7 @@ def _sort_by_popularity(videos: list, channel_name: str, sample_size: int) -> li
             try:
                 cache[vid_id] = _fetch_view_count(vid_id)
             except Exception:
-                cache[vid_id] = 0
+                pass
         _save_view_cache(channel_name, cache)
 
     def _key(v):
