@@ -368,6 +368,7 @@ def _process_url(url: str, channel_name: str, lang: str = "ja", title: str = Non
         }
         _save_index(channel_name, index)
         _err(f"[saved] {saved}")
+        _copy_file_to_drive(saved)
         return True
     finally:
         shutil.rmtree(tmpdir, ignore_errors=True)
@@ -410,6 +411,20 @@ def _process_channel(channel_name: str, channel_url: str, lang: str = "ja", limi
         _update_ranking(channel_name, videos)
     _err(f"[done] {channel_name}: {processed} 件処理\n")
     return processed
+
+
+def _copy_file_to_drive(file_path: Path) -> None:
+    import subprocess
+    if not shutil.which("rclone"):
+        return
+    rel = file_path.relative_to(BASE_DIR)
+    dest = f"{RCLONE_DEST}/{rel.parent}"
+    subprocess.run(
+        ["rclone", "copy", str(file_path), dest],
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL,
+    )
+    _err(f"[drive] {rel} → {dest}")
 
 
 def _sync_drive(dirs: list[str] | None = None) -> None:
