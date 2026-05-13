@@ -3,8 +3,11 @@
 # 使い方: ./check_cache.sh
 
 cd "$(dirname "$0")"
-# PYTHON=/Users/yoshihide/.pyenv/versions/yt-learn-3.11.9/bin/python
-PYTHON=/home/wsl-yoshihide/.pyenv/versions/yt-learn-3.11.9/bin/python
+if [[ "$(uname)" == "Darwin" ]]; then
+    PYTHON=/Users/yoshihide/.pyenv/versions/yt-learn-3.11.9/bin/python
+else
+    PYTHON=/home/wsl-yoshihide/.pyenv/versions/yt-learn-3.11.9/bin/python
+fi
 
 "$PYTHON" - <<'EOF'
 import json
