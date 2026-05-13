@@ -115,7 +115,7 @@ python transcribe.py process https://youtu.be/xxx --channel "メンタリスト 
 # 複数URL同時
 python transcribe.py process https://youtu.be/aaa https://youtu.be/bbb --channel "メンタリスト DaiGo" --model small
 
-# URLファイルから読み込み
+# URLファイルから読み込み（URL | en で言語指定可、# はコメント）
 python transcribe.py process -f urls.txt --channel ひろゆき
 
 # 出力先を完全に指定

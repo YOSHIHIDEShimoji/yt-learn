@@ -530,7 +530,7 @@ AI要約は別スクリプト:
     p_proc.add_argument("--model", default=WHISPER_MODEL,
                         choices=["tiny", "base", "small", "medium", "large", "large-v2", "large-v3"],
                         help=f"Whisperモデル (default: {WHISPER_MODEL})")
-    p_proc.add_argument("-f", "--file", help="URLを1行1件で記述したテキストファイル（#はコメント）")
+    p_proc.add_argument("-f", "--file", help="URLを1行1件で記述したテキストファイル（#はコメント、'URL | en' で言語指定可）")
     p_proc.add_argument("-o", "--output", help="出力ディレクトリ（省略時は transcripts/{channel}/）")
 
     p_ch = sub.add_parser("channel", help="チャンネルの全動画を処理")
@@ -568,24 +568,29 @@ AI要約は別スクリプト:
         _list_channels()
 
     elif args.cmd == "process":
-        urls = list(args.urls)
+        url_langs = [(u, args.lang) for u in args.urls]
         if args.file:
             try:
                 for line in Path(args.file).read_text(encoding="utf-8").splitlines():
                     line = line.strip()
-                    if line and not line.startswith("#"):
-                        urls.append(line)
+                    if not line or line.startswith("#"):
+                        continue
+                    if "|" in line:
+                        url, lang = line.split("|", 1)
+                        url_langs.append((url.strip(), lang.strip()))
+                    else:
+                        url_langs.append((line, args.lang))
             except FileNotFoundError:
                 _err(f"[error] ファイルが見つかりません: {args.file}")
                 sys.exit(1)
-        if not urls:
+        if not url_langs:
             _err("[error] URLを引数で渡すか、--file でテキストファイルを指定してください")
             sys.exit(1)
         output_dir = Path(args.output) if args.output else None
-        for i, url in enumerate(urls):
+        for i, (url, lang) in enumerate(url_langs):
             if i > 0:
                 _err("")
-            _process_url(url, args.channel, args.lang, output_dir=output_dir, model_size=args.model)
+            _process_url(url, args.channel, lang, output_dir=output_dir, model_size=args.model)
 
     elif args.cmd == "channel":
         channels = _load_channels()
