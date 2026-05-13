@@ -202,9 +202,14 @@ def main() -> None:
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""\
 examples:
-  python summarize.py メンタリストDAIGO
-  python summarize.py all
-  python summarize.py メンタリストDAIGO --force
+  # 特定チャンネルのサマリー更新
+  python summarize.py "メンタリストDAIGO" --threshold 20
+
+  # 全チャンネル一括（未処理20本未満はスキップ）
+  python summarize.py all --threshold 20
+
+  # 処理済みを無視して全件再生成
+  python summarize.py "メンタリストDAIGO" --force
 """,
     )
     parser.add_argument(

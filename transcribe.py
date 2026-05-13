@@ -478,17 +478,40 @@ def main() -> None:
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""\
 examples:
+  # チャンネル追加（言語省略時は ja）
   python transcribe.py add メンタリストDAIGO https://www.youtube.com/@mentalistdaigo
+  python transcribe.py add 3Blue1Brown https://www.youtube.com/@3blue1brown en
+
+  # 登録チャンネル一覧
   python transcribe.py list
-  python transcribe.py process https://youtu.be/xxx https://youtu.be/yyy --channel メンタリストDAIGO
-  python transcribe.py channel メンタリストDAIGO
-  python transcribe.py channel メンタリストDAIGO --limit 100 --sort popular
-  python transcribe.py channel メンタリストDAIGO --limit 100 --sort popular  # 2回目は101-200本目を処理
-  python transcribe.py all --sort popular --limit 50
+
+  # 単発URL（--model で軽量モデルを指定して高速化）
+  python transcribe.py process https://youtu.be/xxx --model tiny
+  python transcribe.py process https://youtu.be/aaa https://youtu.be/bbb --channel "メンタリストDAIGO"
+  python transcribe.py process -f urls.txt --channel ひろゆき
+  python transcribe.py process https://youtu.be/xxx -o ~/Desktop/output --model small
+
+  # チャンネル全取得
+  python transcribe.py channel "メンタリストDAIGO" --sort popular --limit 5 --model tiny
+  python transcribe.py channel "メンタリストDAIGO" --sort popular --limit 100
+  python transcribe.py channel "メンタリストDAIGO" --sort popular --cache-only  # 再生数キャッシュのみ構築
+  python transcribe.py channel "メンタリストDAIGO" --sort popular --popular-sample 50 --limit 10
+
+  # 全チャンネル一括
+  python transcribe.py all --sort popular --limit 20
+  python transcribe.py all --sort popular --cache-only
+
+  # Google Drive 同期
+  python transcribe.py sync --only transcripts
+  python transcribe.py sync --only summaries
+  python transcribe.py sync
+
+  # クッキー同期（Mac → WSL）
+  python transcribe.py sync-cookies
 
 AI要約は別スクリプト:
-  python summarize.py メンタリストDAIGO
-  python summarize.py all
+  python summarize.py "メンタリストDAIGO" --threshold 20
+  python summarize.py all --force
 """,
     )
     sub = parser.add_subparsers(dest="cmd", required=True)

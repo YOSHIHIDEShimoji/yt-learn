@@ -95,9 +95,9 @@ Mac・WSL どちらから実行しても同じ Drive フォルダに集約され
 ### チャンネル管理
 
 ```bash
-# チャンネルを追加
-python transcribe.py add メンタリスト DaiGo https://www.youtube.com/@mentalistdaigo
-python transcribe.py add ひろゆき https://www.youtube.com/@hiroyuki_daihyo
+# チャンネル追加（言語省略時は ja）
+python transcribe.py add "メンタリスト DaiGo" https://www.youtube.com/@mentalistdaigo
+python transcribe.py add 3Blue1Brown https://www.youtube.com/@3blue1brown en
 
 # 登録チャンネル一覧
 python transcribe.py list
@@ -106,21 +106,23 @@ python transcribe.py list
 ### 単発処理（特定URLを文字起こし）
 
 ```bash
-# チャンネル指定なし → transcripts/misc/ に保存
+# 単発URL（--model で軽量モデルを指定して高速化）
 python transcribe.py process https://youtu.be/xxx --model tiny
 
 # チャンネル指定あり → transcripts/メンタリスト DaiGo/ に保存
 python transcribe.py process https://youtu.be/xxx --channel "メンタリスト DaiGo" --model tiny
 
 # 複数URL同時
-python transcribe.py process https://youtu.be/aaa https://youtu.be/bbb --channel "メンタリスト DaiGo"
+python transcribe.py process https://youtu.be/aaa https://youtu.be/bbb --channel "メンタリスト DaiGo" --model small
 
-# URLファイルから読み込み → transcripts/ひろゆき/ に保存
+# URLファイルから読み込み
 python transcribe.py process -f urls.txt --channel ひろゆき
 
-# 出力先を完全に指定（チャンネルディレクトリ無視）
-python transcribe.py process https://youtu.be/xxx -o ~/Desktop/output
+# 出力先を完全に指定
+python transcribe.py process https://youtu.be/xxx -o ~/Desktop/output --model tiny
 ```
+
+`--model` の選択肢: `tiny` / `base` / `small` / `medium` / `large` / `large-v2` / `large-v3`（default: large-v3）
 
 ### チャンネル全取得
 
@@ -128,68 +130,52 @@ python transcribe.py process https://youtu.be/xxx -o ~/Desktop/output
 # 人気順で上位5本（動作確認用）
 python transcribe.py channel "メンタリスト DaiGo" --sort popular --limit 5 --model tiny
 
-# 人気順で上位100本（本番）
+# 人気順で上位100本
 python transcribe.py channel "メンタリスト DaiGo" --sort popular --limit 100
 
 # 2回目は自動で101〜200本目になる
 python transcribe.py channel "メンタリスト DaiGo" --sort popular --limit 100
 
-# 全チャンネルを人気順50本ずつ
-python transcribe.py all --sort popular --limit 50
-```
+# 再生数取得を先頭50件に絞ってソート（大規模チャンネルの高速化）
+python transcribe.py channel "メンタリスト DaiGo" --sort popular --popular-sample 50 --limit 10 --model tiny
 
-`--sort popular` は再生数キャッシュ（`cache/`）を使ってソートする。
-
-```bash
-# 全チャンネルのキャッシュを一括構築（文字起こしなし）
-python transcribe.py all --sort popular --cache-only
-
-# 特定チャンネルのキャッシュのみ構築
+# 再生数キャッシュのみ構築（文字起こしなし）
 python transcribe.py channel "メンタリスト DaiGo" --sort popular --cache-only
 
-# キャッシュ構築済み後の通常処理: キャッシュ済みはスキップ → 即ソート開始
-python transcribe.py channel "メンタリスト DaiGo" --sort popular --limit 5 --model tiny
+# 全チャンネルを人気順20本ずつ
+python transcribe.py all --sort popular --limit 20
 
-# 取得件数を絞って動作確認（先頭10件だけ再生数取得）
-python transcribe.py channel "メンタリスト DaiGo" --sort popular --popular-sample 10 --limit 3 --model tiny
+# 全チャンネルのキャッシュのみ一括構築
+python transcribe.py all --sort popular --cache-only
 ```
 
-### AI要約（手動実行）
+### AI要約
 
 ```bash
-# 特定チャンネルのサマリー更新
-python summarize.py "メンタリスト DaiGo"
+# 特定チャンネル（未処理20本未満はスキップ）
+python summarize.py "メンタリスト DaiGo" --threshold 20
 
 # 全チャンネル一括
-python summarize.py all
+python summarize.py all --threshold 20
 
 # 処理済みを無視して全件再生成
 python summarize.py "メンタリスト DaiGo" --force
-
-# 未処理が N 本未満のチャンネルをスキップ
-python summarize.py all --threshold 20
 ```
 
-### 確認
+### Google Drive 同期
 
 ```bash
-# 登録チャンネル一覧
-python transcribe.py list
+# transcripts/ と summaries/ を両方同期
+python transcribe.py sync
 
-# 文字起こしファイル確認
-ls "transcripts/メンタリスト DaiGo/"
-cat "transcripts/メンタリスト DaiGo/動画タイトル.md"
-
-# インデックス確認（処理済み動画一覧）
-cat "transcripts/メンタリスト DaiGo/_index.json" | python -m json.tool | head -30
-
-# サマリー確認
-cat "summaries/メンタリスト DaiGo.md"
+# どちらか一方だけ
+python transcribe.py sync --only transcripts
+python transcribe.py sync --only summaries
 ```
 
-### Mac → WSL クッキー同期
+文字起こし完了ごとに該当ファイルが自動で Drive に転送される。末尾の `sync` は取りこぼし補完用。
 
-`ssh win` 経由で Mac の Chrome クッキーを WSL に転送する。WSL 側で YouTube ダウンロードに使われる。
+### Mac → WSL クッキー同期
 
 ```bash
 # 明示的に同期（YouTube に再ログイン後など）
@@ -197,6 +183,13 @@ python transcribe.py sync-cookies
 ```
 
 Mac で `transcribe.py` が yt-dlp を実行するタイミングでも自動でバックグラウンド転送される。
+
+### キャッシュ確認
+
+```bash
+# 再生数0のエントリ（エラー由来の可能性あり）を確認
+./check_cache.sh
+```
 
 ## WSL での継続実行
 
