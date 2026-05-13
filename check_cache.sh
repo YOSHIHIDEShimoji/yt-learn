@@ -3,7 +3,8 @@
 # 使い方: ./check_cache.sh
 
 cd "$(dirname "$0")"
-PYTHON=/Users/yoshihide/.pyenv/versions/yt-learn-3.11.9/bin/python
+# PYTHON=/Users/yoshihide/.pyenv/versions/yt-learn-3.11.9/bin/python
+PYTHON=/home/wsl-yoshihide/.pyenv/versions/yt-learn-3.11.9/bin/python
 
 "$PYTHON" - <<'EOF'
 import json
