@@ -497,6 +497,28 @@ def _process_channel(channel_name: str, channel_url: str, lang: str = "ja", limi
     return processed
 
 
+def _git_push_cache() -> None:
+    import subprocess
+    if not shutil.which("git"):
+        return
+    changed = subprocess.run(
+        ["git", "status", "--porcelain", "cache/", "channels.txt"],
+        capture_output=True, text=True, cwd=BASE_DIR,
+    ).stdout.strip()
+    if not changed:
+        return
+    subprocess.run(["git", "add", "cache/", "channels.txt"], cwd=BASE_DIR)
+    subprocess.run(
+        ["git", "commit", "-m", f"chore: update cache ({date.today().isoformat()})"],
+        cwd=BASE_DIR,
+    )
+    result = subprocess.run(["git", "push"], cwd=BASE_DIR, capture_output=True, text=True)
+    if result.returncode == 0:
+        _err("[git] cache/ を push しました")
+    else:
+        _err(f"[git] push 失敗: {result.stderr.strip()}")
+
+
 def _copy_file_to_drive(file_path: Path) -> None:
     import subprocess
     if not shutil.which("rclone"):
@@ -647,6 +669,7 @@ AI要約は別スクリプト:
 
     if args.cmd == "add":
         _add_channel(args.name, args.url, args.lang)
+        _git_push_cache()
 
     elif args.cmd == "list":
         _list_channels()
@@ -684,6 +707,7 @@ AI要約は別スクリプト:
         info = channels[args.name]
         _process_channel(args.name, info["url"], info["lang"], args.limit, args.sort,
                          args.popular_sample, args.model, args.cache_only)
+        _git_push_cache()
 
     elif args.cmd == "sync-cookies":
         _sync_cookies()
@@ -699,6 +723,7 @@ AI要約は別スクリプト:
             sys.exit(0)
         for name, info in channels.items():
             _process_channel(name, info["url"], info["lang"], args.limit, args.sort, args.popular_sample, args.model, args.cache_only)
+        _git_push_cache()
 
 
 if __name__ == "__main__":
