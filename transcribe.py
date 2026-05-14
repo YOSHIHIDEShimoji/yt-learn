@@ -282,23 +282,19 @@ def _sort_by_popularity(videos: list, channel_name: str, sample_size: int) -> li
 def _download_audio(url: str, out_dir: str) -> str:
     import yt_dlp
     ydl_opts = {
-        "format": "bestaudio/best",
+        "format": "bestaudio[ext=m4a]/bestaudio/best",
         "outtmpl": os.path.join(out_dir, "%(title)s.%(ext)s"),
-        "postprocessors": [{
-            "key": "FFmpegExtractAudio",
-            "preferredcodec": "wav",
-            "preferredquality": "192",
-        }],
         "quiet": True,
         "no_warnings": True,
         **_cookie_opts(),
     }
     with yt_dlp.YoutubeDL(ydl_opts) as ydl:
         ydl.download([url])
-    for f in Path(out_dir).iterdir():
-        if f.suffix == ".wav":
-            return str(f)
-    raise RuntimeError(f"WAVファイルが見つかりません: {out_dir}")
+    for ext in (".m4a", ".webm", ".opus", ".mp4"):
+        for f in Path(out_dir).iterdir():
+            if f.suffix == ext:
+                return str(f)
+    raise RuntimeError(f"音声ファイルが見つかりません: {out_dir}")
 
 
 # ── 文字起こし ─────────────────────────────────────────────────────────────────
