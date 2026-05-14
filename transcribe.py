@@ -184,6 +184,7 @@ def _get_video_title(url: str) -> str:
         "skip_download": True,
         "format": "bestaudio/best",
         "ignore_no_formats_error": True,
+        "extractor_args": {"youtube": {"lang": ["ja"]}},
         **_cookie_opts(),
     }
     with yt_dlp.YoutubeDL(opts) as ydl:
@@ -208,6 +209,7 @@ def _get_channel_videos(channel_url: str) -> list:
         "quiet": True,
         "no_warnings": True,
         "ignoreerrors": True,
+        "extractor_args": {"youtube": {"lang": ["ja"]}},
         **_cookie_opts(),
     }
     with yt_dlp.YoutubeDL(ydl_opts) as ydl:
