@@ -19,6 +19,7 @@ CHANNELS_FILE = BASE_DIR / "channels.txt"
 COOKIES_FILE = BASE_DIR / "cookies.txt"
 
 WHISPER_MODEL = "large-v3"
+GEMINI_MODEL = "gemini-2.5-flash-lite"
 WSL_HOST = "win"
 WSL_COOKIES_DEST = "/home/wsl-yoshihide/my-projects/yt-learn/cookies.txt"
 RCLONE_REMOTE = "gdrive"
@@ -368,6 +369,58 @@ def _save_transcript(channel_name: str, title: str, url: str, text: str,
     return out_path
 
 
+# ── ポイントサマリー ──────────────────────────────────────────────────────────
+
+def _generate_core_summary(title: str, text: str) -> str | None:
+    api_key = os.environ.get("GEMINI_API_KEY")
+    if not api_key:
+        return None
+    try:
+        from google import genai
+        prompt = f"""\
+以下はYouTube動画の文字起こしです。
+
+タイトル: {title}
+
+---
+{text[:4000]}
+---
+
+タイトルが約束・問いかけていることに対して、この動画が実際に答えている内容をすべて抽出してください。
+「Top 7」「〇〇選」など列挙系タイトルの場合はすべての項目をカバーしてください。
+各点は1〜2行で簡潔にまとめてください。
+
+出力形式: 「## ポイント」という見出しの後に「- 」始まりの箇条書きのみ。それ以外の文章は一切不要。"""
+        client = genai.Client(api_key=api_key)
+        response = client.models.generate_content(model=GEMINI_MODEL, contents=prompt)
+        return (response.text or "").strip()
+    except Exception as e:
+        _err(f"[summary] Gemini API エラー: {e}")
+        return None
+
+
+def _inject_core_summary(md_path: Path) -> None:
+    content = md_path.read_text(encoding="utf-8")
+    if "## ポイント" in content:
+        return
+    summary = _generate_core_summary(
+        title=re.search(r"^# (.+)", content, re.MULTILINE).group(1) if re.search(r"^# (.+)", content, re.MULTILINE) else "",
+        text=content,
+    )
+    if not summary:
+        return
+    # 「処理日時: ...」行の直後、「---」の直前に挿入
+    updated = re.sub(
+        r"(処理日時: .+\n)(\n---\n)",
+        rf"\1\n{summary}\n\2",
+        content,
+        count=1,
+    )
+    if updated != content:
+        md_path.write_text(updated, encoding="utf-8")
+        _err(f"[summary] ポイント挿入完了: {md_path.name}")
+
+
 # ── 処理エントリポイント ───────────────────────────────────────────────────────
 
 def _process_url(url: str, channel_name: str, lang: str = "ja", title: str = None,
@@ -398,6 +451,7 @@ def _process_url(url: str, channel_name: str, lang: str = "ja", title: str = Non
         }
         _save_index(channel_name, index)
         _err(f"[saved] {saved}")
+        _inject_core_summary(saved)
         _copy_file_to_drive(saved)
         return True
     finally:
