@@ -299,10 +299,36 @@ def _download_audio(url: str, out_dir: str) -> str:
 
 # ── 文字起こし ─────────────────────────────────────────────────────────────────
 
-def _transcribe(audio_path: str, lang: str = "ja", model_size: str = WHISPER_MODEL) -> str:
+_MLX_MODEL_MAP = {
+    "tiny":     "mlx-community/whisper-tiny-mlx",
+    "base":     "mlx-community/whisper-base-mlx",
+    "small":    "mlx-community/whisper-small-mlx",
+    "medium":   "mlx-community/whisper-medium-mlx",
+    "large":    "mlx-community/whisper-large-mlx",
+    "large-v2": "mlx-community/whisper-large-v2-mlx",
+    "large-v3": "mlx-community/whisper-large-v3-mlx",
+}
+
+
+def _transcribe_mlx(audio_path: str, lang: str, model_size: str) -> str:
+    import mlx_whisper
+    repo = _MLX_MODEL_MAP.get(model_size, f"mlx-community/whisper-{model_size}-mlx")
+    _err(f"[model] {model_size} (mlx / Metal) をロード中...")
+    _err(f"[transcribe] {Path(audio_path).name}")
+    result = mlx_whisper.transcribe(
+        audio_path,
+        path_or_hf_repo=repo,
+        language=lang,
+        verbose=False,
+    )
+    texts = [seg["text"].strip() for seg in result.get("segments", []) if seg["text"].strip()]
+    return "\n".join(texts)
+
+
+def _transcribe_cpu(audio_path: str, lang: str, model_size: str) -> str:
     from faster_whisper import WhisperModel
     from tqdm import tqdm
-    _err(f"[model] {model_size} をロード中...")
+    _err(f"[model] {model_size} (faster-whisper / CPU) をロード中...")
     model = WhisperModel(model_size, device="cpu", compute_type="int8", cpu_threads=8)
     _err(f"[transcribe] {Path(audio_path).name}")
     segments_iter, info = model.transcribe(
@@ -321,6 +347,12 @@ def _transcribe(audio_path: str, lang: str = "ja", model_size: str = WHISPER_MOD
                 texts.append(seg.text.strip())
             pbar.update(seg.end - pbar.n)
     return "\n".join(texts)
+
+
+def _transcribe(audio_path: str, lang: str = "ja", model_size: str = WHISPER_MODEL) -> str:
+    if sys.platform == "darwin":
+        return _transcribe_mlx(audio_path, lang, model_size)
+    return _transcribe_cpu(audio_path, lang, model_size)
 
 
 def _save_transcript(channel_name: str, title: str, url: str, text: str,
