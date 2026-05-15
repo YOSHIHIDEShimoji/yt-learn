@@ -18,7 +18,9 @@ CACHE_DIR = BASE_DIR / "cache"
 CHANNELS_FILE = BASE_DIR / "channels.txt"
 COOKIES_FILE = BASE_DIR / "cookies.txt"
 
-WHISPER_MODEL = "large-v3"
+WHISPER_MODEL = "large-v3-turbo"
+WHISPER_CLI = Path.home() / "my-projects/whisper.cpp/build/bin/whisper-cli"
+WHISPER_MODELS_DIR = Path.home() / "my-projects/whisper.cpp/models"
 GEMINI_MODEL = "gemini-2.5-flash-lite"
 WSL_HOST = "win"
 WSL_COOKIES_DEST = "/home/wsl-yoshihide/my-projects/yt-learn/cookies.txt"
@@ -300,30 +302,49 @@ def _download_audio(url: str, out_dir: str) -> str:
 
 # ── 文字起こし ─────────────────────────────────────────────────────────────────
 
-_MLX_MODEL_MAP = {
-    "tiny":     "mlx-community/whisper-tiny-mlx",
-    "base":     "mlx-community/whisper-base-mlx",
-    "small":    "mlx-community/whisper-small-mlx",
-    "medium":   "mlx-community/whisper-medium-mlx",
-    "large":    "mlx-community/whisper-large-mlx",
-    "large-v2": "mlx-community/whisper-large-v2-mlx",
-    "large-v3": "mlx-community/whisper-large-v3-mlx",
-}
+def _transcribe_whisper_cpp(audio_path: str, lang: str, model_size: str) -> str:
+    import subprocess, os
+    model_file = WHISPER_MODELS_DIR / f"ggml-{model_size}.bin"
+    if not model_file.exists():
+        raise RuntimeError(f"モデルファイルが見つかりません: {model_file}")
 
+    tmpwav = None
+    audio = audio_path
+    if not audio_path.endswith(".wav"):
+        tmpwav = tempfile.mktemp(suffix=".wav")
+        subprocess.run(
+            ["ffmpeg", "-i", audio_path, "-ar", "16000", "-ac", "1",
+             "-c:a", "pcm_s16le", tmpwav, "-y", "-loglevel", "error"],
+            check=True,
+        )
+        audio = tmpwav
 
-def _transcribe_mlx(audio_path: str, lang: str, model_size: str) -> str:
-    import mlx_whisper
-    repo = _MLX_MODEL_MAP.get(model_size, f"mlx-community/whisper-{model_size}-mlx")
-    _err(f"[model] {model_size} (mlx / Metal) をロード中...")
-    _err(f"[transcribe] {Path(audio_path).name}")
-    result = mlx_whisper.transcribe(
-        audio_path,
-        path_or_hf_repo=repo,
-        language=lang,
-        verbose=False,
-    )
-    texts = [seg["text"].strip() for seg in result.get("segments", []) if seg["text"].strip()]
-    return "\n".join(texts)
+    env = os.environ.copy()
+    build_dir = WHISPER_CLI.parent.parent
+    lib_dirs = [
+        str(build_dir / "src"),
+        str(build_dir / "ggml/src"),
+        str(build_dir / "ggml/src/ggml-metal"),
+        str(build_dir / "ggml/src/ggml-blas"),
+    ]
+    existing = env.get("DYLD_LIBRARY_PATH", "")
+    env["DYLD_LIBRARY_PATH"] = ":".join(lib_dirs + ([existing] if existing else []))
+
+    try:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            out_base = str(Path(tmpdir) / "out")
+            _err(f"[model] {model_size} (whisper.cpp / CoreML) をロード中...")
+            _err(f"[transcribe] {Path(audio_path).name}")
+            subprocess.run(
+                [str(WHISPER_CLI), "-m", str(model_file), "-f", audio,
+                 "-l", lang, "-of", out_base, "-otxt", "--no-timestamps"],
+                check=True, env=env, stderr=subprocess.DEVNULL,
+            )
+            out_file = Path(out_base + ".txt")
+            return out_file.read_text(encoding="utf-8").strip() if out_file.exists() else ""
+    finally:
+        if tmpwav:
+            Path(tmpwav).unlink(missing_ok=True)
 
 
 def _transcribe_cpu(audio_path: str, lang: str, model_size: str) -> str:
@@ -352,7 +373,7 @@ def _transcribe_cpu(audio_path: str, lang: str, model_size: str) -> str:
 
 def _transcribe(audio_path: str, lang: str = "ja", model_size: str = WHISPER_MODEL) -> str:
     if sys.platform == "darwin":
-        return _transcribe_mlx(audio_path, lang, model_size)
+        return _transcribe_whisper_cpp(audio_path, lang, model_size)
     return _transcribe_cpu(audio_path, lang, model_size)
 
 
@@ -523,7 +544,10 @@ def _copy_file_to_drive(file_path: Path) -> None:
     import subprocess
     if not shutil.which("rclone"):
         return
-    rel = file_path.relative_to(BASE_DIR)
+    try:
+        rel = file_path.relative_to(BASE_DIR)
+    except ValueError:
+        return
     dest = f"{RCLONE_DEST}/{rel.parent}"
     subprocess.run(
         ["rclone", "copy", str(file_path), dest],
@@ -634,7 +658,7 @@ AI要約は別スクリプト:
     p_proc.add_argument("--channel", default="misc", help="チャンネル名（省略時は misc）")
     p_proc.add_argument("--lang", default="ja")
     p_proc.add_argument("--model", default=WHISPER_MODEL,
-                        choices=["tiny", "base", "small", "medium", "large", "large-v2", "large-v3"],
+                        choices=["tiny", "base", "small", "medium", "large", "large-v2", "large-v3", "large-v3-turbo"],
                         help=f"Whisperモデル (default: {WHISPER_MODEL})")
     p_proc.add_argument("-f", "--file", help="URLを1行1件で記述したテキストファイル（#はコメント、'URL | en' で言語指定可）")
     p_proc.add_argument("-o", "--output", help="出力ディレクトリ（省略時は transcripts/{channel}/）")
@@ -642,7 +666,7 @@ AI要約は別スクリプト:
     p_ch = sub.add_parser("channel", help="チャンネルの全動画を処理")
     p_ch.add_argument("name", help="channels.txt のチャンネル名")
     p_ch.add_argument("--model", default=WHISPER_MODEL,
-                      choices=["tiny", "base", "small", "medium", "large", "large-v2", "large-v3"])
+                      choices=["tiny", "base", "small", "medium", "large", "large-v2", "large-v3", "large-v3-turbo"])
     p_ch.add_argument("--limit", type=int, default=0, help="最大処理動画数（0=全件）")
     p_ch.add_argument("--sort", choices=["date", "popular"], default="date",
                       help="取得順序: date=新着順(default), popular=人気順")
@@ -653,7 +677,7 @@ AI要約は別スクリプト:
 
     p_all = sub.add_parser("all", help="全チャンネルを処理")
     p_all.add_argument("--model", default=WHISPER_MODEL,
-                       choices=["tiny", "base", "small", "medium", "large", "large-v2", "large-v3"])
+                       choices=["tiny", "base", "small", "medium", "large", "large-v2", "large-v3", "large-v3-turbo"])
     p_all.add_argument("--limit", type=int, default=0)
     p_all.add_argument("--sort", choices=["date", "popular"], default="date")
     p_all.add_argument("--popular-sample", type=int, default=0)
