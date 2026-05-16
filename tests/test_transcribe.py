@@ -616,25 +616,25 @@ class TestProcessChannel:
 # ── _is_wsl ───────────────────────────────────────────────────────────────────
 
 class TestIsWsl:
-    def test_returns_true_when_microsoft_in_proc_version(self, tmp_path):
-        proc_version = tmp_path / "version"
-        proc_version.write_text("Linux version 5.15.0-microsoft-standard-WSL2", encoding="utf-8")
-        with patch("transcribe.Path") as mock_path:
-            mock_path.return_value.read_text.return_value = "Linux version 5.15.0-microsoft-standard-WSL2"
-            with patch.object(transcribe, "_is_wsl", wraps=lambda: "microsoft" in proc_version.read_text(encoding="utf-8").lower()):
-                assert transcribe._is_wsl() is True
+    def test_returns_true_when_microsoft_in_proc_version(self):
+        with patch("transcribe.Path") as mock_path_cls:
+            mock_path_cls.return_value.read_text.return_value = "Linux version 5.15.0-microsoft-standard-WSL2"
+            assert transcribe._is_wsl() is True
 
-    def test_returns_false_when_no_microsoft(self, tmp_path):
-        proc_version = tmp_path / "version"
-        proc_version.write_text("Linux version 5.15.0-generic", encoding="utf-8")
-        with patch.object(transcribe, "_is_wsl", wraps=lambda: "microsoft" in proc_version.read_text(encoding="utf-8").lower()):
+    def test_returns_false_when_no_microsoft(self):
+        with patch("transcribe.Path") as mock_path_cls:
+            mock_path_cls.return_value.read_text.return_value = "Linux version 5.15.0-generic"
             assert transcribe._is_wsl() is False
 
     def test_returns_false_on_file_not_found(self):
-        with patch("builtins.open", side_effect=FileNotFoundError):
-            # /proc/version が存在しない環境（macOS等）
-            result = transcribe._is_wsl()
-            assert result is False
+        with patch("transcribe.Path") as mock_path_cls:
+            mock_path_cls.return_value.read_text.side_effect = FileNotFoundError
+            assert transcribe._is_wsl() is False
+
+    def test_returns_false_on_any_exception(self):
+        with patch("transcribe.Path") as mock_path_cls:
+            mock_path_cls.return_value.read_text.side_effect = PermissionError
+            assert transcribe._is_wsl() is False
 
 
 # ── _call_ollama ──────────────────────────────────────────────────────────────
@@ -666,6 +666,22 @@ class TestCallOllama:
             with pytest.raises(TimeoutError):
                 transcribe._call_ollama("prompt", "http://localhost:11434", "qwen3.5:9b")
 
+    def test_sends_correct_payload(self):
+        import urllib.request as urllib_req
+        mock_resp = self._make_response({"response": "ok", "done": True})
+        captured = {}
+        def fake_urlopen(req, timeout=None):
+            captured["payload"] = json.loads(req.data.decode("utf-8"))
+            captured["url"] = req.full_url
+            return mock_resp
+        with patch("urllib.request.urlopen", fake_urlopen):
+            transcribe._call_ollama("test prompt", "http://100.85.4.93:11434", "qwen3.5:9b")
+        assert captured["payload"]["model"] == "qwen3.5:9b"
+        assert captured["payload"]["prompt"] == "test prompt"
+        assert captured["payload"]["stream"] is False
+        assert captured["payload"]["think"] is False
+        assert "100.85.4.93:11434" in captured["url"]
+
 
 # ── _generate_core_summary (Ollama統合) ──────────────────────────────────────
 
@@ -693,22 +709,36 @@ class TestGenerateCoreSummaryOllama:
             result = transcribe._generate_core_summary("タイトル", "本文")
         assert result == "## ポイント\n- Gemini結果"
 
-    def test_skips_ollama_on_wsl(self, monkeypatch):
+    def test_uses_ollama_on_wsl(self, monkeypatch):
         monkeypatch.setenv("LOCAL_LLM_URL", "http://localhost:11434")
-        monkeypatch.setenv("GEMINI_API_KEY", "dummy_key")
-        mock_gemini_resp = MagicMock()
-        mock_gemini_resp.text = "## ポイント\n- WSL経由Gemini"
-        mock_genai = MagicMock()
-        mock_genai.Client.return_value.models.generate_content.return_value = mock_gemini_resp
+        monkeypatch.setenv("LOCAL_LLM_MODEL", "qwen3.5:9b")
+        monkeypatch.delenv("GEMINI_API_KEY", raising=False)
         with patch.object(transcribe, "_is_wsl", return_value=True), \
-             patch.object(transcribe, "_call_ollama") as mock_ollama, \
-             patch.dict("sys.modules", {"google.genai": mock_genai, "google": MagicMock(genai=mock_genai)}):
+             patch.object(transcribe, "_call_ollama", return_value="## ポイント\n- WSL経由Ollama") as mock_ollama:
             result = transcribe._generate_core_summary("タイトル", "本文")
-        mock_ollama.assert_not_called()
-        assert result == "## ポイント\n- WSL経由Gemini"
+        mock_ollama.assert_called_once()
+        assert result == "## ポイント\n- WSL経由Ollama"
 
     def test_returns_none_when_both_unset(self, monkeypatch):
         monkeypatch.delenv("LOCAL_LLM_URL", raising=False)
         monkeypatch.delenv("GEMINI_API_KEY", raising=False)
         result = transcribe._generate_core_summary("タイトル", "本文")
+        assert result is None
+
+    def test_uses_custom_model_from_env(self, monkeypatch):
+        monkeypatch.setenv("LOCAL_LLM_URL", "http://100.85.4.93:11434")
+        monkeypatch.setenv("LOCAL_LLM_MODEL", "custom-model:latest")
+        monkeypatch.delenv("GEMINI_API_KEY", raising=False)
+        with patch.object(transcribe, "_is_wsl", return_value=False), \
+             patch.object(transcribe, "_call_ollama", return_value="## ポイント\n- テスト") as mock_ollama:
+            transcribe._generate_core_summary("タイトル", "本文")
+        assert mock_ollama.call_args[0][2] == "custom-model:latest"
+
+    def test_ollama_empty_response_no_gemini_returns_none(self, monkeypatch):
+        # Ollama が空返答 + GEMINI_API_KEY 未設定 → None
+        monkeypatch.setenv("LOCAL_LLM_URL", "http://100.85.4.93:11434")
+        monkeypatch.delenv("GEMINI_API_KEY", raising=False)
+        with patch.object(transcribe, "_is_wsl", return_value=False), \
+             patch.object(transcribe, "_call_ollama", return_value=None):
+            result = transcribe._generate_core_summary("タイトル", "本文")
         assert result is None

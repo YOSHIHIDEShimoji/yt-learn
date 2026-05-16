@@ -488,7 +488,7 @@ def _generate_core_summary(title: str, text: str) -> str | None:
 
 出力形式: 「## ポイント」という見出しの後に「- 」始まりの箇条書きのみ。それ以外の文章は一切不要。"""
 
-    if local_url and not _is_wsl():
+    if local_url:
         try:
             result = _call_ollama(prompt, local_url, local_model)
             if result:
