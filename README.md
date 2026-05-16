@@ -60,6 +60,25 @@ WindowsのOllamaにlocalhost経由で接続できる。トンネル不要。
 LOCAL_LLM_URL=http://localhost:11434
 ```
 
+### 処理フロー
+
+| | Mac | WSL |
+|---|---|---|
+| **文字起こし** | whisper.cpp（Metal GPU） | faster-whisper（CUDA） |
+| **要約** | Ollama → Gemini フォールバック | Ollama → Gemini フォールバック |
+
+```
+URL入力
+  └─ yt-dlp でダウンロード（m4a）
+       └─ 文字起こし
+            ├─ Mac:  whisper.cpp (whisper-cli / Metal)
+            └─ WSL:  faster-whisper (CUDA / CPU)
+       └─ .md として保存
+       └─ ポイント生成
+            ├─ Ollama（LOCAL_LLM_URLが設定済みの場合）
+            └─ Gemini（Ollama失敗 or 未設定）
+```
+
 ### Google Drive 同期（rclone）
 
 `transcripts/` と `summaries/` を Google Drive に同期するために rclone を使う。
