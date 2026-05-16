@@ -474,6 +474,7 @@ def _inject_core_summary(md_path: Path) -> None:
         text=content,
     )
     if not summary:
+        print(f"[ERROR] ポイント挿入失敗: {md_path.name}")
         return
     # 「処理日時: ...」行の直後、「---」の直前に挿入
     updated = re.sub(
