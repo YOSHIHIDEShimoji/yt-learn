@@ -122,7 +122,18 @@ python transcribe.py process -f urls.txt --channel ひろゆき
 python transcribe.py process https://youtu.be/xxx -o ~/Desktop/output --model tiny
 ```
 
-`--model` の選択肢: `tiny` / `base` / `small` / `medium` / `large` / `large-v2` / `large-v3`（default: large-v3）
+`--model` の選択肢: `tiny` / `base` / `small` / `medium` / `large` / `large-v2` / `large-v3` / `large-v3-turbo`（default: large-v3）
+
+### 処理速度の目安
+
+43分（2589秒）の動画で実測した結果（RTX 5060 Ti / CUDA）：
+
+| モデル | 処理時間 | 倍速 | 品質 |
+|---|---|---|---|
+| large-v3 | 約91秒 | 約28倍速 | 句読点あり・高精度（**推奨**） |
+| large-v3-turbo | 約76秒 | 約34倍速 | 句読点なし・やや劣る |
+
+速度差は約20%だが、large-v3 は句読点・読点が正確で可読性が大きく上回るため large-v3 をデフォルトとしている。
 
 ### チャンネル全取得
 

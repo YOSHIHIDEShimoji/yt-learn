@@ -18,7 +18,7 @@ CACHE_DIR = BASE_DIR / "cache"
 CHANNELS_FILE = BASE_DIR / "channels.txt"
 COOKIES_FILE = BASE_DIR / "cookies.txt"
 
-WHISPER_MODEL = "large-v3-turbo"
+WHISPER_MODEL = "large-v3"
 WHISPER_CLI = Path.home() / "my-projects/whisper.cpp/build/bin/whisper-cli"
 WHISPER_MODELS_DIR = Path.home() / "my-projects/whisper.cpp/models"
 GEMINI_MODEL = "gemini-2.5-flash-lite"
