@@ -359,10 +359,22 @@ def _cuda_available() -> bool:
         return False
 
 
+def _set_nvidia_lib_path() -> None:
+    """pip install した nvidia-*-cu12 パッケージのライブラリパスを LD_LIBRARY_PATH に追加"""
+    import sysconfig
+    site = Path(sysconfig.get_path("purelib"))
+    lib_dirs = [str(p) for p in (site / "nvidia").glob("*/lib") if p.is_dir()]
+    if lib_dirs:
+        existing = os.environ.get("LD_LIBRARY_PATH", "")
+        os.environ["LD_LIBRARY_PATH"] = ":".join(lib_dirs + ([existing] if existing else []))
+
+
 def _transcribe_faster_whisper(audio_path: str, lang: str, model_size: str,
                                 device: str, compute_type: str, label: str) -> str:
     from faster_whisper import WhisperModel
     from tqdm import tqdm
+    if device == "cuda":
+        _set_nvidia_lib_path()
     _err(f"[model] {model_size} (faster-whisper / {label}) をロード中...")
     kwargs = {"device": device, "compute_type": compute_type}
     if device == "cpu":
