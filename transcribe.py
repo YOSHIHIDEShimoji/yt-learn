@@ -349,11 +349,42 @@ def _transcribe_whisper_cpp(audio_path: str, lang: str, model_size: str) -> str:
             Path(tmpwav).unlink(missing_ok=True)
 
 
-def _transcribe_cpu(audio_path: str, lang: str, model_size: str) -> str:
+def _cuda_available() -> bool:
+    import shutil, subprocess
+    if not shutil.which("nvidia-smi"):
+        return False
+    try:
+        return subprocess.run(["nvidia-smi"], capture_output=True, timeout=5).returncode == 0
+    except Exception:
+        return False
+
+
+def _preload_cuda_libs() -> None:
+    """pip install した nvidia-*-cu12 の .so を ctypes で先読みして dlopen に見せる"""
+    import ctypes, sysconfig
+    site = Path(sysconfig.get_path("purelib"))
+    for pkg in ["cuda_runtime", "cublas", "cudnn"]:
+        lib_dir = site / "nvidia" / pkg / "lib"
+        if not lib_dir.exists():
+            continue
+        for so in sorted(lib_dir.glob("lib*.so.*")):
+            try:
+                ctypes.CDLL(str(so), mode=ctypes.RTLD_GLOBAL)
+            except OSError:
+                pass
+
+
+def _transcribe_faster_whisper(audio_path: str, lang: str, model_size: str,
+                                device: str, compute_type: str, label: str) -> str:
     from faster_whisper import WhisperModel
     from tqdm import tqdm
-    _err(f"[model] {model_size} (faster-whisper / CPU) をロード中...")
-    model = WhisperModel(model_size, device="cpu", compute_type="int8", cpu_threads=8)
+    if device == "cuda":
+        _preload_cuda_libs()
+    _err(f"[model] {model_size} (faster-whisper / {label}) をロード中...")
+    kwargs = {"device": device, "compute_type": compute_type}
+    if device == "cpu":
+        kwargs["cpu_threads"] = 8
+    model = WhisperModel(model_size, **kwargs)
     _err(f"[transcribe] {Path(audio_path).name}")
     segments_iter, info = model.transcribe(
         audio_path,
@@ -373,9 +404,21 @@ def _transcribe_cpu(audio_path: str, lang: str, model_size: str) -> str:
     return "\n".join(texts)
 
 
+def _transcribe_cpu(audio_path: str, lang: str, model_size: str) -> str:
+    return _transcribe_faster_whisper(audio_path, lang, model_size,
+                                      device="cpu", compute_type="int8", label="CPU")
+
+
+def _transcribe_gpu(audio_path: str, lang: str, model_size: str) -> str:
+    return _transcribe_faster_whisper(audio_path, lang, model_size,
+                                      device="cuda", compute_type="float16", label="CUDA")
+
+
 def _transcribe(audio_path: str, lang: str = "ja", model_size: str = WHISPER_MODEL) -> str:
     if sys.platform == "darwin":
         return _transcribe_whisper_cpp(audio_path, lang, model_size)
+    if _cuda_available():
+        return _transcribe_gpu(audio_path, lang, model_size)
     return _transcribe_cpu(audio_path, lang, model_size)
 
 
@@ -431,6 +474,7 @@ def _inject_core_summary(md_path: Path) -> None:
         text=content,
     )
     if not summary:
+        print(f"[ERROR] ポイント挿入失敗: {md_path.name}")
         return
     # 「処理日時: ...」行の直後、「---」の直前に挿入
     updated = re.sub(

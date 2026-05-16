@@ -1,4 +1,4 @@
-faster-whisper==1.2.1  # WSL(CPU)用
+faster-whisper==1.2.1  # WSL用（CPU/CUDA共通）
 # mlx-whisper は whisper.cpp(CoreML) に移行したため不要
 google-genai==2.0.1
 tqdm==4.67.3
