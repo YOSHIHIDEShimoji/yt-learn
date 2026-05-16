@@ -613,30 +613,6 @@ class TestProcessChannel:
         mock_sort.assert_not_called()
 
 
-# ── _is_wsl ───────────────────────────────────────────────────────────────────
-
-class TestIsWsl:
-    def test_returns_true_when_microsoft_in_proc_version(self):
-        with patch("transcribe.Path") as mock_path_cls:
-            mock_path_cls.return_value.read_text.return_value = "Linux version 5.15.0-microsoft-standard-WSL2"
-            assert transcribe._is_wsl() is True
-
-    def test_returns_false_when_no_microsoft(self):
-        with patch("transcribe.Path") as mock_path_cls:
-            mock_path_cls.return_value.read_text.return_value = "Linux version 5.15.0-generic"
-            assert transcribe._is_wsl() is False
-
-    def test_returns_false_on_file_not_found(self):
-        with patch("transcribe.Path") as mock_path_cls:
-            mock_path_cls.return_value.read_text.side_effect = FileNotFoundError
-            assert transcribe._is_wsl() is False
-
-    def test_returns_false_on_any_exception(self):
-        with patch("transcribe.Path") as mock_path_cls:
-            mock_path_cls.return_value.read_text.side_effect = PermissionError
-            assert transcribe._is_wsl() is False
-
-
 # ── _call_ollama ──────────────────────────────────────────────────────────────
 
 class TestCallOllama:
@@ -690,8 +666,7 @@ class TestGenerateCoreSummaryOllama:
         monkeypatch.setenv("LOCAL_LLM_URL", "http://localhost:11434")
         monkeypatch.setenv("LOCAL_LLM_MODEL", "qwen3.5:9b")
         monkeypatch.delenv("GEMINI_API_KEY", raising=False)
-        with patch.object(transcribe, "_is_wsl", return_value=False), \
-             patch.object(transcribe, "_call_ollama", return_value="## ポイント\n- テスト") as mock_ollama:
+        with patch.object(transcribe, "_call_ollama", return_value="## ポイント\n- テスト") as mock_ollama:
             result = transcribe._generate_core_summary("タイトル", "本文")
         assert result == "## ポイント\n- テスト"
         mock_ollama.assert_called_once()
@@ -703,21 +678,19 @@ class TestGenerateCoreSummaryOllama:
         mock_gemini_resp.text = "## ポイント\n- Gemini結果"
         mock_genai = MagicMock()
         mock_genai.Client.return_value.models.generate_content.return_value = mock_gemini_resp
-        with patch.object(transcribe, "_is_wsl", return_value=False), \
-             patch.object(transcribe, "_call_ollama", side_effect=ConnectionError("refused")), \
+        with patch.object(transcribe, "_call_ollama", side_effect=ConnectionError("refused")), \
              patch.dict("sys.modules", {"google.genai": mock_genai, "google": MagicMock(genai=mock_genai)}):
             result = transcribe._generate_core_summary("タイトル", "本文")
         assert result == "## ポイント\n- Gemini結果"
 
-    def test_uses_ollama_on_wsl(self, monkeypatch):
+    def test_uses_ollama_regardless_of_platform(self, monkeypatch):
         monkeypatch.setenv("LOCAL_LLM_URL", "http://localhost:11434")
         monkeypatch.setenv("LOCAL_LLM_MODEL", "qwen3.5:9b")
         monkeypatch.delenv("GEMINI_API_KEY", raising=False)
-        with patch.object(transcribe, "_is_wsl", return_value=True), \
-             patch.object(transcribe, "_call_ollama", return_value="## ポイント\n- WSL経由Ollama") as mock_ollama:
+        with patch.object(transcribe, "_call_ollama", return_value="## ポイント\n- Ollama結果") as mock_ollama:
             result = transcribe._generate_core_summary("タイトル", "本文")
         mock_ollama.assert_called_once()
-        assert result == "## ポイント\n- WSL経由Ollama"
+        assert result == "## ポイント\n- Ollama結果"
 
     def test_returns_none_when_both_unset(self, monkeypatch):
         monkeypatch.delenv("LOCAL_LLM_URL", raising=False)
@@ -729,8 +702,7 @@ class TestGenerateCoreSummaryOllama:
         monkeypatch.setenv("LOCAL_LLM_URL", "http://100.85.4.93:11434")
         monkeypatch.setenv("LOCAL_LLM_MODEL", "custom-model:latest")
         monkeypatch.delenv("GEMINI_API_KEY", raising=False)
-        with patch.object(transcribe, "_is_wsl", return_value=False), \
-             patch.object(transcribe, "_call_ollama", return_value="## ポイント\n- テスト") as mock_ollama:
+        with patch.object(transcribe, "_call_ollama", return_value="## ポイント\n- テスト") as mock_ollama:
             transcribe._generate_core_summary("タイトル", "本文")
         assert mock_ollama.call_args[0][2] == "custom-model:latest"
 
@@ -738,7 +710,6 @@ class TestGenerateCoreSummaryOllama:
         # Ollama が空返答 + GEMINI_API_KEY 未設定 → None
         monkeypatch.setenv("LOCAL_LLM_URL", "http://100.85.4.93:11434")
         monkeypatch.delenv("GEMINI_API_KEY", raising=False)
-        with patch.object(transcribe, "_is_wsl", return_value=False), \
-             patch.object(transcribe, "_call_ollama", return_value=None):
+        with patch.object(transcribe, "_call_ollama", return_value=None):
             result = transcribe._generate_core_summary("タイトル", "本文")
         assert result is None

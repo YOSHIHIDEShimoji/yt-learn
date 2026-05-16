@@ -438,13 +438,6 @@ def _save_transcript(channel_name: str, title: str, url: str, text: str,
 
 # ── ポイントサマリー ──────────────────────────────────────────────────────────
 
-def _is_wsl() -> bool:
-    try:
-        return "microsoft" in Path("/proc/version").read_text(encoding="utf-8").lower()
-    except Exception:
-        return False
-
-
 def _call_ollama(prompt: str, base_url: str, model: str) -> str | None:
     import urllib.request
     payload = json.dumps({

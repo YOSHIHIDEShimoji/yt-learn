@@ -90,13 +90,6 @@ def _save_processed(channel_name: str, processed: set) -> None:
 
 # ── ローカルLLM / Gemini 共通ユーティリティ ──────────────────────────────────
 
-def _is_wsl() -> bool:
-    try:
-        return "microsoft" in Path("/proc/version").read_text(encoding="utf-8").lower()
-    except Exception:
-        return False
-
-
 def _call_ollama(prompt: str, base_url: str, model: str) -> str | None:
     import urllib.request
     payload = json.dumps({
@@ -164,7 +157,7 @@ def _update_summary(channel_name: str, transcript: str, video_title: str, api_ke
 
     result = None
 
-    if local_url and not _is_wsl():
+    if local_url:
         try:
             result = _call_ollama(prompt, local_url, local_model)
             if result:
