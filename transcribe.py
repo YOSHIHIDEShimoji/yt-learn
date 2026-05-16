@@ -697,6 +697,13 @@ def main() -> None:
         description="YouTube動画の文字起こし・チャンネル管理ツール",
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""\
+ローカルLLM（Ollama）を使う場合:
+  .env に LOCAL_LLM_URL=http://localhost:11434 を設定する。
+  Mac から実行する場合は事前に SSHトンネルが必要:
+    ssh -f -N -L 11434:localhost:11434 win
+  run_transcribe.sh 経由では自動でトンネルが張られる。
+  WSL から実行する場合はトンネル不要（自動で Gemini にフォールバック）。
+
 examples:
   # チャンネル追加（言語省略時は ja）
   python transcribe.py add メンタリストDAIGO https://www.youtube.com/@mentalistdaigo

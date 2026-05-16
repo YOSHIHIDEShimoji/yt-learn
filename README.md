@@ -27,9 +27,31 @@ yt-learn/
 ## セットアップ
 
 ```bash
-# .env を作成してGemini APIキーを設定
+# .env を作成してAPIキーを設定
 echo "GEMINI_API_KEY=your_key_here" > .env
+
+# ローカルLLM（Ollama）を使う場合は追加で設定
+echo "LOCAL_LLM_URL=http://localhost:11434" >> .env
+echo "LOCAL_LLM_MODEL=qwen3.5:9b" >> .env
 ```
+
+### ローカルLLM（Ollama）の利用
+
+Gemini APIのレート制限を回避するため、Windows上のOllamaをローカルLLMとして使える。設定時はOllamaが優先され、失敗時にGeminiへフォールバックする。
+
+**Macから実行する場合（手動実行 / python *.py 直接）**
+
+事前にSSHトンネルを張る必要がある:
+
+```bash
+ssh -f -N -L 11434:localhost:11434 win
+```
+
+`run_transcribe.sh` / `run_summarize.sh` 経由（launchd）では自動でトンネルが張られるため不要。
+
+**WSLから実行する場合**
+
+トンネル不要。WSL環境を自動検出してOllamaをスキップし、Geminiにフォールバックする。
 
 ### Google Drive 同期（rclone）
 
