@@ -20,6 +20,7 @@ SUMMARIES_DIR = BASE_DIR / "summaries"
 CHANNELS_FILE = BASE_DIR / "channels.txt"
 
 GEMINI_MODEL = "gemini-2.5-flash-lite"
+OLLAMA_GENERATE_PATH = "/api/generate"
 
 
 def _err(msg: str) -> None:
@@ -87,9 +88,39 @@ def _save_processed(channel_name: str, processed: set) -> None:
     )
 
 
-# ── Gemini 要約 ───────────────────────────────────────────────────────────────
+# ── ローカルLLM / Gemini 共通ユーティリティ ──────────────────────────────────
+
+def _is_wsl() -> bool:
+    try:
+        return "microsoft" in Path("/proc/version").read_text(encoding="utf-8").lower()
+    except Exception:
+        return False
+
+
+def _call_ollama(prompt: str, base_url: str, model: str) -> str | None:
+    import urllib.request
+    payload = json.dumps({
+        "model": model,
+        "prompt": prompt,
+        "stream": False,
+        "think": False,
+    }).encode("utf-8")
+    req = urllib.request.Request(
+        f"{base_url.rstrip('/')}{OLLAMA_GENERATE_PATH}",
+        data=payload,
+        headers={"Content-Type": "application/json"},
+        method="POST",
+    )
+    with urllib.request.urlopen(req, timeout=120) as resp:
+        data = json.loads(resp.read().decode("utf-8"))
+    return (data.get("response") or "").strip() or None
+
+
+# ── チャンネルサマリー生成 ────────────────────────────────────────────────────
 
 def _update_summary(channel_name: str, transcript: str, video_title: str, api_key: str, video_count: int) -> None:
+    local_url = os.environ.get("LOCAL_LLM_URL")
+    local_model = os.environ.get("LOCAL_LLM_MODEL", "qwen3.5:9b")
     from google import genai
 
     SUMMARIES_DIR.mkdir(parents=True, exist_ok=True)
@@ -131,9 +162,26 @@ def _update_summary(channel_name: str, transcript: str, video_title: str, api_ke
 動画数: {video_count}
 """
 
-    client = genai.Client(api_key=api_key)
-    response = client.models.generate_content(model=GEMINI_MODEL, contents=prompt)
-    summary_path.write_text(response.text.strip() + "\n", encoding="utf-8")
+    result = None
+
+    if local_url and not _is_wsl():
+        try:
+            result = _call_ollama(prompt, local_url, local_model)
+            if result:
+                _err(f"  → Ollama({local_model}) でサマリー生成")
+            else:
+                _err("  → Ollama レスポンスが空 → Geminiにフォールバック")
+        except Exception as e:
+            _err(f"  → Ollama接続失敗 ({e}) → Geminiにフォールバック")
+
+    if not result:
+        if not api_key:
+            raise RuntimeError("GEMINI_API_KEY が未設定でOllamaも利用できません")
+        client = genai.Client(api_key=api_key)
+        response = client.models.generate_content(model=GEMINI_MODEL, contents=prompt)
+        result = response.text.strip()
+
+    summary_path.write_text(result + "\n", encoding="utf-8")
     _err(f"  → サマリー更新: {summary_path.name}")
 
 
@@ -192,9 +240,10 @@ def main() -> None:
     _load_env()
 
     api_key = os.environ.get("GEMINI_API_KEY")
-    if not api_key:
-        _err("[error] GEMINI_API_KEY が設定されていません")
-        _err("  .env ファイルに GEMINI_API_KEY=your_key を記述するか、環境変数を設定してください")
+    local_url = os.environ.get("LOCAL_LLM_URL")
+    if not api_key and not local_url:
+        _err("[error] GEMINI_API_KEY または LOCAL_LLM_URL が設定されていません")
+        _err("  .env ファイルに GEMINI_API_KEY または LOCAL_LLM_URL を設定してください")
         sys.exit(1)
 
     parser = argparse.ArgumentParser(

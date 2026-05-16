@@ -232,6 +232,7 @@ class TestCLI:
     def test_exits_without_api_key(self, tmp_path, monkeypatch):
         monkeypatch.setattr(summarize, "BASE_DIR", tmp_path)
         monkeypatch.delenv("GEMINI_API_KEY", raising=False)
+        monkeypatch.delenv("LOCAL_LLM_URL", raising=False)
         with patch("sys.argv", ["summarize.py", "DAIGO"]):
             with pytest.raises(SystemExit) as exc_info:
                 summarize.main()
