@@ -31,27 +31,34 @@ yt-learn/
 echo "GEMINI_API_KEY=your_key_here" > .env
 
 # ローカルLLM（Ollama）を使う場合は追加で設定
+# Mac: TailscaleでWindowsのOllamaに直接接続
+echo "LOCAL_LLM_URL=http://<Windows-TailscaleIP>:11434" >> .env
+# WSL: localhostでWindowsのOllamaに接続
 echo "LOCAL_LLM_URL=http://localhost:11434" >> .env
 echo "LOCAL_LLM_MODEL=qwen3.5:9b" >> .env
 ```
 
 ### ローカルLLM（Ollama）の利用
 
-Gemini APIのレート制限を回避するため、Windows上のOllamaをローカルLLMとして使える。設定時はOllamaが優先され、失敗時にGeminiへフォールバックする。
+Gemini APIのレート制限を回避するため、Windows上のOllamaをローカルLLMとして使える。`LOCAL_LLM_URL` が設定されていればOllama優先、失敗時はGeminiにフォールバックする。
 
-**Macから実行する場合（手動実行 / python *.py 直接）**
+**Macから実行する場合**
 
-事前にSSHトンネルを張る必要がある:
+WindowsのOllamaをTailscale経由で直接参照する。SSHトンネル不要。
 
 ```bash
-ssh -f -N -L 11434:localhost:11434 win
+# .env
+LOCAL_LLM_URL=http://<Windows-TailscaleIP>:11434
 ```
-
-`run_transcribe.sh` / `run_summarize.sh` 経由（launchd）では自動でトンネルが張られるため不要。
 
 **WSLから実行する場合**
 
-トンネル不要。WSL環境を自動検出してOllamaをスキップし、Geminiにフォールバックする。
+WindowsのOllamaにlocalhost経由で接続できる。トンネル不要。
+
+```bash
+# .env
+LOCAL_LLM_URL=http://localhost:11434
+```
 
 ### Google Drive 同期（rclone）
 

@@ -691,11 +691,9 @@ def main() -> None:
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""\
 ローカルLLM（Ollama）を使う場合:
-  .env に LOCAL_LLM_URL=http://localhost:11434 を設定する。
-  Mac から実行する場合は事前に SSHトンネルが必要:
-    ssh -f -N -L 11434:localhost:11434 win
-  run_transcribe.sh 経由では自動でトンネルが張られる。
-  WSL から実行する場合はトンネル不要（自動で Gemini にフォールバック）。
+  LOCAL_LLM_URL が設定されていれば Ollama 優先、失敗時は Gemini にフォールバック。
+  Mac: .env に LOCAL_LLM_URL=http://<Windows-TailscaleIP>:11434 を設定（トンネル不要）
+  WSL: .env に LOCAL_LLM_URL=http://localhost:11434 を設定（トンネル不要）
 
 examples:
   # チャンネル追加（言語省略時は ja）
