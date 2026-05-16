@@ -359,14 +359,19 @@ def _cuda_available() -> bool:
         return False
 
 
-def _set_nvidia_lib_path() -> None:
-    """pip install した nvidia-*-cu12 パッケージのライブラリパスを LD_LIBRARY_PATH に追加"""
-    import sysconfig
+def _preload_cuda_libs() -> None:
+    """pip install した nvidia-*-cu12 の .so を ctypes で先読みして dlopen に見せる"""
+    import ctypes, sysconfig
     site = Path(sysconfig.get_path("purelib"))
-    lib_dirs = [str(p) for p in (site / "nvidia").glob("*/lib") if p.is_dir()]
-    if lib_dirs:
-        existing = os.environ.get("LD_LIBRARY_PATH", "")
-        os.environ["LD_LIBRARY_PATH"] = ":".join(lib_dirs + ([existing] if existing else []))
+    for pkg in ["cuda_runtime", "cublas", "cudnn"]:
+        lib_dir = site / "nvidia" / pkg / "lib"
+        if not lib_dir.exists():
+            continue
+        for so in sorted(lib_dir.glob("lib*.so.*")):
+            try:
+                ctypes.CDLL(str(so), mode=ctypes.RTLD_GLOBAL)
+            except OSError:
+                pass
 
 
 def _transcribe_faster_whisper(audio_path: str, lang: str, model_size: str,
@@ -374,7 +379,7 @@ def _transcribe_faster_whisper(audio_path: str, lang: str, model_size: str,
     from faster_whisper import WhisperModel
     from tqdm import tqdm
     if device == "cuda":
-        _set_nvidia_lib_path()
+        _preload_cuda_libs()
     _err(f"[model] {model_size} (faster-whisper / {label}) をロード中...")
     kwargs = {"device": device, "compute_type": compute_type}
     if device == "cpu":
