@@ -574,6 +574,9 @@ def _process_url(url: str, channel_name: str, lang: str = "ja", title: str = Non
         text = _transcribe(audio_path, lang, model_size=model_size)
         saved = _save_transcript(channel_name, title, url, text, output_dir=output_dir, model_size=model_size)
 
+        _err(f"[saved] {saved}")
+        _inject_core_summary(saved)
+        _copy_file_to_drive(saved)
         index[vid_id] = {
             "title": title,
             "url": url,
@@ -581,9 +584,6 @@ def _process_url(url: str, channel_name: str, lang: str = "ja", title: str = Non
             "transcribed_at": date.today().isoformat(),
         }
         _save_index(channel_name, index)
-        _err(f"[saved] {saved}")
-        _inject_core_summary(saved)
-        _copy_file_to_drive(saved)
         return True
     finally:
         shutil.rmtree(tmpdir, ignore_errors=True)
