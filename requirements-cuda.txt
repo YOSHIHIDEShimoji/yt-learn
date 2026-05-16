@@ -1,0 +1,5 @@
+-r requirements.txt
+ctranslate2
+nvidia-cuda-runtime-cu12
+nvidia-cublas-cu12
+nvidia-cudnn-cu12
