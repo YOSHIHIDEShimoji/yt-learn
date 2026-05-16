@@ -611,3 +611,104 @@ class TestProcessChannel:
              patch.object(transcribe, "_process_url", return_value=True):
             transcribe._process_channel("CH", "https://youtube.com/@ch", sort="date", popular_sample=0)
         mock_sort.assert_not_called()
+
+
+# ── _is_wsl ───────────────────────────────────────────────────────────────────
+
+class TestIsWsl:
+    def test_returns_true_when_microsoft_in_proc_version(self, tmp_path):
+        proc_version = tmp_path / "version"
+        proc_version.write_text("Linux version 5.15.0-microsoft-standard-WSL2", encoding="utf-8")
+        with patch("transcribe.Path") as mock_path:
+            mock_path.return_value.read_text.return_value = "Linux version 5.15.0-microsoft-standard-WSL2"
+            with patch.object(transcribe, "_is_wsl", wraps=lambda: "microsoft" in proc_version.read_text(encoding="utf-8").lower()):
+                assert transcribe._is_wsl() is True
+
+    def test_returns_false_when_no_microsoft(self, tmp_path):
+        proc_version = tmp_path / "version"
+        proc_version.write_text("Linux version 5.15.0-generic", encoding="utf-8")
+        with patch.object(transcribe, "_is_wsl", wraps=lambda: "microsoft" in proc_version.read_text(encoding="utf-8").lower()):
+            assert transcribe._is_wsl() is False
+
+    def test_returns_false_on_file_not_found(self):
+        with patch("builtins.open", side_effect=FileNotFoundError):
+            # /proc/version が存在しない環境（macOS等）
+            result = transcribe._is_wsl()
+            assert result is False
+
+
+# ── _call_ollama ──────────────────────────────────────────────────────────────
+
+class TestCallOllama:
+    def _make_response(self, body: dict):
+        import io
+        raw = json.dumps(body).encode("utf-8")
+        mock_resp = MagicMock()
+        mock_resp.read.return_value = raw
+        mock_resp.__enter__ = lambda s: s
+        mock_resp.__exit__ = MagicMock(return_value=False)
+        return mock_resp
+
+    def test_returns_response_text(self):
+        mock_resp = self._make_response({"response": "## ポイント\n- 内容A", "done": True})
+        with patch("urllib.request.urlopen", return_value=mock_resp):
+            result = transcribe._call_ollama("prompt", "http://localhost:11434", "qwen3.5:9b")
+        assert result == "## ポイント\n- 内容A"
+
+    def test_returns_none_when_response_empty(self):
+        mock_resp = self._make_response({"response": "", "done": True})
+        with patch("urllib.request.urlopen", return_value=mock_resp):
+            result = transcribe._call_ollama("prompt", "http://localhost:11434", "qwen3.5:9b")
+        assert result is None
+
+    def test_propagates_exception_on_timeout(self):
+        with patch("urllib.request.urlopen", side_effect=TimeoutError("timed out")):
+            with pytest.raises(TimeoutError):
+                transcribe._call_ollama("prompt", "http://localhost:11434", "qwen3.5:9b")
+
+
+# ── _generate_core_summary (Ollama統合) ──────────────────────────────────────
+
+class TestGenerateCoreSummaryOllama:
+    def test_uses_ollama_when_local_url_set(self, monkeypatch):
+        monkeypatch.setenv("LOCAL_LLM_URL", "http://localhost:11434")
+        monkeypatch.setenv("LOCAL_LLM_MODEL", "qwen3.5:9b")
+        monkeypatch.delenv("GEMINI_API_KEY", raising=False)
+        with patch.object(transcribe, "_is_wsl", return_value=False), \
+             patch.object(transcribe, "_call_ollama", return_value="## ポイント\n- テスト") as mock_ollama:
+            result = transcribe._generate_core_summary("タイトル", "本文")
+        assert result == "## ポイント\n- テスト"
+        mock_ollama.assert_called_once()
+
+    def test_falls_back_to_gemini_on_ollama_failure(self, monkeypatch):
+        monkeypatch.setenv("LOCAL_LLM_URL", "http://localhost:11434")
+        monkeypatch.setenv("GEMINI_API_KEY", "dummy_key")
+        mock_gemini_resp = MagicMock()
+        mock_gemini_resp.text = "## ポイント\n- Gemini結果"
+        mock_genai = MagicMock()
+        mock_genai.Client.return_value.models.generate_content.return_value = mock_gemini_resp
+        with patch.object(transcribe, "_is_wsl", return_value=False), \
+             patch.object(transcribe, "_call_ollama", side_effect=ConnectionError("refused")), \
+             patch.dict("sys.modules", {"google.genai": mock_genai, "google": MagicMock(genai=mock_genai)}):
+            result = transcribe._generate_core_summary("タイトル", "本文")
+        assert result == "## ポイント\n- Gemini結果"
+
+    def test_skips_ollama_on_wsl(self, monkeypatch):
+        monkeypatch.setenv("LOCAL_LLM_URL", "http://localhost:11434")
+        monkeypatch.setenv("GEMINI_API_KEY", "dummy_key")
+        mock_gemini_resp = MagicMock()
+        mock_gemini_resp.text = "## ポイント\n- WSL経由Gemini"
+        mock_genai = MagicMock()
+        mock_genai.Client.return_value.models.generate_content.return_value = mock_gemini_resp
+        with patch.object(transcribe, "_is_wsl", return_value=True), \
+             patch.object(transcribe, "_call_ollama") as mock_ollama, \
+             patch.dict("sys.modules", {"google.genai": mock_genai, "google": MagicMock(genai=mock_genai)}):
+            result = transcribe._generate_core_summary("タイトル", "本文")
+        mock_ollama.assert_not_called()
+        assert result == "## ポイント\n- WSL経由Gemini"
+
+    def test_returns_none_when_both_unset(self, monkeypatch):
+        monkeypatch.delenv("LOCAL_LLM_URL", raising=False)
+        monkeypatch.delenv("GEMINI_API_KEY", raising=False)
+        result = transcribe._generate_core_summary("タイトル", "本文")
+        assert result is None

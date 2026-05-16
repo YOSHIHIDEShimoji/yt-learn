@@ -22,6 +22,7 @@ WHISPER_MODEL = "large-v3"
 WHISPER_CLI = Path.home() / "my-projects/whisper.cpp/build/bin/whisper-cli"
 WHISPER_MODELS_DIR = Path.home() / "my-projects/whisper.cpp/models"
 GEMINI_MODEL = "gemini-2.5-flash-lite"
+OLLAMA_GENERATE_PATH = "/api/generate"
 WSL_HOST = "win"
 WSL_COOKIES_DEST = "/home/wsl-yoshihide/my-projects/yt-learn/cookies.txt"
 RCLONE_REMOTE = "gdrive"
@@ -437,13 +438,41 @@ def _save_transcript(channel_name: str, title: str, url: str, text: str,
 
 # ── ポイントサマリー ──────────────────────────────────────────────────────────
 
-def _generate_core_summary(title: str, text: str) -> str | None:
-    api_key = os.environ.get("GEMINI_API_KEY")
-    if not api_key:
-        return None
+def _is_wsl() -> bool:
     try:
-        from google import genai
-        prompt = f"""\
+        return "microsoft" in Path("/proc/version").read_text(encoding="utf-8").lower()
+    except Exception:
+        return False
+
+
+def _call_ollama(prompt: str, base_url: str, model: str) -> str | None:
+    import urllib.request
+    payload = json.dumps({
+        "model": model,
+        "prompt": prompt,
+        "stream": False,
+        "think": False,
+    }).encode("utf-8")
+    req = urllib.request.Request(
+        f"{base_url.rstrip('/')}{OLLAMA_GENERATE_PATH}",
+        data=payload,
+        headers={"Content-Type": "application/json"},
+        method="POST",
+    )
+    with urllib.request.urlopen(req, timeout=120) as resp:
+        data = json.loads(resp.read().decode("utf-8"))
+    return (data.get("response") or "").strip() or None
+
+
+def _generate_core_summary(title: str, text: str) -> str | None:
+    local_url = os.environ.get("LOCAL_LLM_URL")
+    local_model = os.environ.get("LOCAL_LLM_MODEL", "qwen3.5:9b")
+    api_key = os.environ.get("GEMINI_API_KEY")
+
+    if not local_url and not api_key:
+        return None
+
+    prompt = f"""\
 以下はYouTube動画の文字起こしです。
 
 タイトル: {title}
@@ -455,8 +484,24 @@ def _generate_core_summary(title: str, text: str) -> str | None:
 タイトルが約束・問いかけていることに対して、この動画が実際に答えている内容をすべて抽出してください。
 「Top 7」「〇〇選」など列挙系タイトルの場合はすべての項目をカバーしてください。
 各点は1〜2行で簡潔にまとめてください。
+マークダウンの装飾（**など）は使わないこと。
 
 出力形式: 「## ポイント」という見出しの後に「- 」始まりの箇条書きのみ。それ以外の文章は一切不要。"""
+
+    if local_url and not _is_wsl():
+        try:
+            result = _call_ollama(prompt, local_url, local_model)
+            if result:
+                _err(f"[summary] Ollama({local_model}) でポイント生成完了")
+                return result
+            _err("[summary] Ollama レスポンスが空 → Geminiにフォールバック")
+        except Exception as e:
+            _err(f"[summary] Ollama接続失敗 ({e}) → Geminiにフォールバック")
+
+    if not api_key:
+        return None
+    try:
+        from google import genai
         client = genai.Client(api_key=api_key)
         response = client.models.generate_content(model=GEMINI_MODEL, contents=prompt)
         return (response.text or "").strip()
