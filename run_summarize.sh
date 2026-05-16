@@ -12,6 +12,19 @@ if [ -f .env ]; then
     set +a
 fi
 
+# LOCAL_LLM_URL が localhost を指している場合、SSHトンネルを起動
+TUNNEL_PID=""
+if [[ "${LOCAL_LLM_URL}" == http://localhost:* ]]; then
+    PORT="${LOCAL_LLM_URL#http://localhost:}"
+    PORT="${PORT%%/*}"
+    if ! nc -z localhost "$PORT" 2>/dev/null; then
+        ssh -N -L "${PORT}:localhost:${PORT}" win &
+        TUNNEL_PID=$!
+        sleep 1
+    fi
+fi
+trap '[ -n "$TUNNEL_PID" ] && kill "$TUNNEL_PID" 2>/dev/null' EXIT
+
 if ! nc -zw3 google.com 443 2>/dev/null; then
     echo "[$(date '+%Y-%m-%d %H:%M:%S')] ネットワーク未接続のためスキップ" >> "$LOG"
     exit 0
