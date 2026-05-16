@@ -667,8 +667,9 @@ class TestGenerateCoreSummaryOllama:
         monkeypatch.setenv("LOCAL_LLM_MODEL", "qwen3.5:9b")
         monkeypatch.delenv("GEMINI_API_KEY", raising=False)
         with patch.object(transcribe, "_call_ollama", return_value="## ポイント\n- テスト") as mock_ollama:
-            result = transcribe._generate_core_summary("タイトル", "本文")
-        assert result == "## ポイント\n- テスト"
+            text, backend = transcribe._generate_core_summary("タイトル", "本文")
+        assert text == "## ポイント\n- テスト"
+        assert "Ollama" in backend
         mock_ollama.assert_called_once()
 
     def test_falls_back_to_gemini_on_ollama_failure(self, monkeypatch):
@@ -680,23 +681,25 @@ class TestGenerateCoreSummaryOllama:
         mock_genai.Client.return_value.models.generate_content.return_value = mock_gemini_resp
         with patch.object(transcribe, "_call_ollama", side_effect=ConnectionError("refused")), \
              patch.dict("sys.modules", {"google.genai": mock_genai, "google": MagicMock(genai=mock_genai)}):
-            result = transcribe._generate_core_summary("タイトル", "本文")
-        assert result == "## ポイント\n- Gemini結果"
+            text, backend = transcribe._generate_core_summary("タイトル", "本文")
+        assert text == "## ポイント\n- Gemini結果"
+        assert backend == "Gemini"
 
     def test_uses_ollama_regardless_of_platform(self, monkeypatch):
         monkeypatch.setenv("LOCAL_LLM_URL", "http://localhost:11434")
         monkeypatch.setenv("LOCAL_LLM_MODEL", "qwen3.5:9b")
         monkeypatch.delenv("GEMINI_API_KEY", raising=False)
         with patch.object(transcribe, "_call_ollama", return_value="## ポイント\n- Ollama結果") as mock_ollama:
-            result = transcribe._generate_core_summary("タイトル", "本文")
+            text, backend = transcribe._generate_core_summary("タイトル", "本文")
         mock_ollama.assert_called_once()
-        assert result == "## ポイント\n- Ollama結果"
+        assert text == "## ポイント\n- Ollama結果"
 
     def test_returns_none_when_both_unset(self, monkeypatch):
         monkeypatch.delenv("LOCAL_LLM_URL", raising=False)
         monkeypatch.delenv("GEMINI_API_KEY", raising=False)
-        result = transcribe._generate_core_summary("タイトル", "本文")
-        assert result is None
+        text, backend = transcribe._generate_core_summary("タイトル", "本文")
+        assert text is None
+        assert backend is None
 
     def test_uses_custom_model_from_env(self, monkeypatch):
         monkeypatch.setenv("LOCAL_LLM_URL", "http://100.85.4.93:11434")
@@ -707,9 +710,8 @@ class TestGenerateCoreSummaryOllama:
         assert mock_ollama.call_args[0][2] == "custom-model:latest"
 
     def test_ollama_empty_response_no_gemini_returns_none(self, monkeypatch):
-        # Ollama が空返答 + GEMINI_API_KEY 未設定 → None
         monkeypatch.setenv("LOCAL_LLM_URL", "http://100.85.4.93:11434")
         monkeypatch.delenv("GEMINI_API_KEY", raising=False)
         with patch.object(transcribe, "_call_ollama", return_value=None):
-            result = transcribe._generate_core_summary("タイトル", "本文")
-        assert result is None
+            text, backend = transcribe._generate_core_summary("タイトル", "本文")
+        assert text is None

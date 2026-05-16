@@ -336,13 +336,41 @@ def _transcribe_whisper_cpp(audio_path: str, lang: str, model_size: str) -> str:
     try:
         with tempfile.TemporaryDirectory() as tmpdir:
             out_base = str(Path(tmpdir) / "out")
-            _err(f"[model] {model_size} (whisper.cpp / CoreML) をロード中...")
+            _err(f"[model] {model_size} (whisper.cpp / Metal) をロード中...")
             _err(f"[transcribe] {Path(audio_path).name}")
-            subprocess.run(
-                [str(WHISPER_CLI), "-m", str(model_file), "-f", audio,
-                 "-l", lang, "-of", out_base, "-otxt", "--no-timestamps"],
-                check=True, env=env, stderr=subprocess.DEVNULL,
+
+            dur_result = subprocess.run(
+                ["ffprobe", "-v", "error", "-show_entries", "format=duration",
+                 "-of", "default=noprint_wrappers=1:nokey=1", audio],
+                capture_output=True, text=True,
             )
+            duration = float(dur_result.stdout.strip()) if dur_result.stdout.strip() else 0
+
+            import re as _re
+            from tqdm import tqdm as _tqdm
+            proc = subprocess.Popen(
+                [str(WHISPER_CLI), "-m", str(model_file), "-f", audio,
+                 "-l", lang, "-of", out_base, "-otxt"],
+                stdout=subprocess.PIPE, stderr=subprocess.DEVNULL,
+                text=True, env=env,
+            )
+            with _tqdm(total=int(duration), unit="s", dynamic_ncols=True) as pbar:
+                last = 0
+                for line in proc.stdout:
+                    m = _re.match(r'\[(\d+):(\d+):(\d+\.\d+)', line)
+                    if m:
+                        h, mn, s = m.groups()
+                        current = int(h) * 3600 + int(mn) * 60 + float(s)
+                        inc = int(current) - last
+                        if inc > 0:
+                            pbar.update(inc)
+                            last = int(current)
+                pbar.n = pbar.total or last
+                pbar.refresh()
+            proc.wait()
+            if proc.returncode != 0:
+                raise subprocess.CalledProcessError(proc.returncode, proc.args)
+
             out_file = Path(out_base + ".txt")
             return out_file.read_text(encoding="utf-8").strip() if out_file.exists() else ""
     finally:
@@ -457,13 +485,13 @@ def _call_ollama(prompt: str, base_url: str, model: str) -> str | None:
     return (data.get("response") or "").strip() or None
 
 
-def _generate_core_summary(title: str, text: str) -> str | None:
+def _generate_core_summary(title: str, text: str) -> tuple[str, str] | tuple[None, None]:
     local_url = os.environ.get("LOCAL_LLM_URL")
     local_model = os.environ.get("LOCAL_LLM_MODEL", "qwen3.5:9b")
     api_key = os.environ.get("GEMINI_API_KEY")
 
     if not local_url and not api_key:
-        return None
+        return None, None
 
     prompt = f"""\
 以下はYouTube動画の文字起こしです。
@@ -485,29 +513,28 @@ def _generate_core_summary(title: str, text: str) -> str | None:
         try:
             result = _call_ollama(prompt, local_url, local_model)
             if result:
-                _err(f"[summary] Ollama({local_model}) でポイント生成完了")
-                return result
+                return result, f"Ollama({local_model})"
             _err("[summary] Ollama レスポンスが空 → Geminiにフォールバック")
         except Exception as e:
             _err(f"[summary] Ollama接続失敗 ({e}) → Geminiにフォールバック")
 
     if not api_key:
-        return None
+        return None, None
     try:
         from google import genai
         client = genai.Client(api_key=api_key)
         response = client.models.generate_content(model=GEMINI_MODEL, contents=prompt)
-        return (response.text or "").strip()
+        return (response.text or "").strip(), "Gemini"
     except Exception:
         _err("[summary] ポイント挿入失敗")
-        return None
+        return None, None
 
 
 def _inject_core_summary(md_path: Path) -> None:
     content = md_path.read_text(encoding="utf-8")
     if "## ポイント" in content:
         return
-    summary = _generate_core_summary(
+    summary, backend = _generate_core_summary(
         title=re.search(r"^# (.+)", content, re.MULTILINE).group(1) if re.search(r"^# (.+)", content, re.MULTILINE) else "",
         text=content,
     )
@@ -522,7 +549,7 @@ def _inject_core_summary(md_path: Path) -> None:
     )
     if updated != content:
         md_path.write_text(updated, encoding="utf-8")
-        _err(f"[summary] ポイント挿入完了: {md_path.name}")
+        _err(f"[summary] ポイント挿入完了 (by {backend}): {md_path.name}")
 
 
 # ── 処理エントリポイント ───────────────────────────────────────────────────────
