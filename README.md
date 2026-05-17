@@ -268,6 +268,10 @@ WSL 側のログは `/home/wsl-yoshihide/my-projects/yt-learn/log/` に出力さ
 ./check_cache.sh
 ```
 
+### メンバー限定動画
+
+人気順ソート（`--sort popular`）で再生数取得時にメンバー限定動画に当たると、`cache/*_view_cache.json` に `-1` を sentinel として保存する。次回以降は再取得せず、ソートでも最下位に回るため `--limit N` の上位 N 件には含まれない。`[error]` / `ERROR:` のログにも出ない。
+
 ## WSL での継続実行
 
 Windows の WSL で回し続ける場合のコマンド。キャッシュ取得・ソート・文字起こし・即時 Drive 転送・要約・最終同期まで一括で行う。

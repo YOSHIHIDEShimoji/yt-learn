@@ -76,11 +76,22 @@ def _err(msg: str) -> None:
     _log_write(f"[{datetime.now().strftime('%H:%M:%S')}] {msg}")
 
 
+_MEMBERS_ERR_MARKERS = ("members-only", "members on level", "Join this channel")
+
+
+def _is_members_only_error(msg: str) -> bool:
+    return any(marker in msg for marker in _MEMBERS_ERR_MARKERS)
+
+
 class _TqdmLogger:
     def debug(self, msg): pass
     def info(self, msg): pass
     def warning(self, msg): pass
-    def error(self, msg): _err(msg)
+    def error(self, msg):
+        # メンバー限定動画はsentinelキャッシュ側で扱うのでERRORログから除外
+        if _is_members_only_error(msg):
+            return
+        _err(msg)
 
 
 def _sanitize(name: str) -> str:
@@ -213,8 +224,23 @@ def _cookie_opts() -> dict:
         opts["cookiesfrombrowser"] = ("chrome",)
     return opts
 
-def _get_video_title(url: str) -> str:
+def _yt_extract_with_retry(opts: dict, url: str, download: bool = False) -> dict:
+    """yt-dlp の extract_info を実行。bot検知エラーで1度だけ3秒待ってリトライ。"""
     import yt_dlp
+    import time
+    for attempt in range(2):
+        try:
+            with yt_dlp.YoutubeDL(opts) as ydl:
+                return ydl.extract_info(url, download=download) or {}
+        except yt_dlp.utils.DownloadError as e:
+            if attempt == 0 and "Sign in to confirm" in str(e):
+                _err("[retry] bot検知 → 3秒待って再試行")
+                time.sleep(3)
+                continue
+            raise
+
+
+def _get_video_title(url: str) -> str:
     opts = {
         "quiet": True,
         "no_warnings": True,
@@ -225,10 +251,9 @@ def _get_video_title(url: str) -> str:
         "http_headers": {"Accept-Language": "ja,ja-JP;q=0.9"},
         **_cookie_opts(),
     }
-    with yt_dlp.YoutubeDL(opts) as ydl:
-        info = ydl.extract_info(url, download=False)
+    info = _yt_extract_with_retry(opts, url, download=False)
     _push_cookies_to_wsl()
-    return (info or {}).get("title", "untitled")
+    return info.get("title", "untitled")
 
 
 def _normalize_channel_url(channel_url: str) -> str:
@@ -271,14 +296,19 @@ def _get_channel_videos(channel_url: str) -> list:
 
 
 def _fetch_view_count(video_id: str) -> int:
+    """再生数を取得。メンバー限定動画は -1（sentinel）を返し、次回スキップ対象とする。"""
     import yt_dlp
     url = f"https://www.youtube.com/watch?v={video_id}"
     ydl_opts = {"quiet": True, "no_warnings": True, "skip_download": True, "logger": _TqdmLogger(),
                 "sleep_interval_requests": 1.0,
                 "extractor_args": {"youtube": {"player_client": ["web"]}},
                 **_cookie_opts()}
-    with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-        info = ydl.extract_info(url, download=False) or {}
+    try:
+        info = _yt_extract_with_retry(ydl_opts, url, download=False)
+    except yt_dlp.utils.DownloadError as e:
+        if _is_members_only_error(str(e)):
+            return -1
+        raise
     return info.get("view_count") or 0
 
 
@@ -302,6 +332,7 @@ def _save_view_cache(channel_name: str, cache: dict) -> None:
 def _sort_by_popularity(videos: list, channel_name: str, sample_size: int) -> list:
     from tqdm import tqdm
     cache = _load_view_cache(channel_name)
+    # -1（メンバー限定）も「キャッシュ済み」として再取得しない
     to_fetch = [v for v in videos if _extract_video_id(v["url"]) not in cache]
     sample = to_fetch if sample_size == 0 else to_fetch[:sample_size]
 
@@ -323,7 +354,8 @@ def _sort_by_popularity(videos: list, channel_name: str, sample_size: int) -> li
         _save_view_cache(channel_name, cache)
 
     def _key(v):
-        return cache.get(_extract_video_id(v["url"]), 0)
+        # -1（メンバー限定）は人気度0として最後尾に
+        return max(cache.get(_extract_video_id(v["url"]), 0), 0)
 
     return sorted(videos, key=_key, reverse=True)
 
@@ -331,7 +363,8 @@ def _sort_by_popularity(videos: list, channel_name: str, sample_size: int) -> li
 def _download_audio(url: str, out_dir: str) -> str:
     import yt_dlp
     ydl_opts = {
-        "format": "bestaudio[ext=m4a]/bestaudio/best",
+        # 音声を優先（m4a→webm→任意のbestaudio）。最後の保険でlow-resのvideo付きも許容
+        "format": "bestaudio[ext=m4a]/bestaudio[ext=webm]/bestaudio/best[height<=480]",
         "outtmpl": os.path.join(out_dir, "%(id)s.%(ext)s"),
         "quiet": True,
         "no_warnings": True,
@@ -359,11 +392,15 @@ def _transcribe_whisper_cpp(audio_path: str, lang: str, model_size: str) -> str:
     audio = audio_path
     if not audio_path.endswith(".wav"):
         tmpwav = tempfile.mktemp(suffix=".wav")
-        subprocess.run(
+        result = subprocess.run(
             ["ffmpeg", "-i", audio_path, "-ar", "16000", "-ac", "1",
              "-c:a", "pcm_s16le", tmpwav, "-y", "-loglevel", "error"],
-            check=True,
+            capture_output=True, text=True,
         )
+        if result.returncode != 0:
+            _err(f"[ffmpeg-stderr] {result.stderr.strip()[-1000:]}")
+            raise subprocess.CalledProcessError(result.returncode, result.args,
+                                                 output=result.stdout, stderr=result.stderr)
         audio = tmpwav
 
     env = os.environ.copy()
@@ -392,29 +429,37 @@ def _transcribe_whisper_cpp(audio_path: str, lang: str, model_size: str) -> str:
 
             import re as _re
             from tqdm import tqdm as _tqdm
-            proc = subprocess.Popen(
-                [str(WHISPER_CLI), "-m", str(model_file), "-f", audio,
-                 "-l", lang, "-of", out_base, "-otxt"],
-                stdout=subprocess.PIPE, stderr=subprocess.DEVNULL,
-                text=True, env=env,
-            )
-            with _tqdm(total=int(duration), unit="s", file=sys.stderr, dynamic_ncols=True,
-                       disable=not sys.stderr.isatty()) as pbar:
-                last = 0
-                for line in proc.stdout:
-                    m = _re.match(r'\[(\d+):(\d+):(\d+\.\d+)', line)
-                    if m:
-                        h, mn, s = m.groups()
-                        current = int(h) * 3600 + int(mn) * 60 + float(s)
-                        inc = int(current) - last
-                        if inc > 0:
-                            pbar.update(inc)
-                            last = int(current)
-                pbar.n = pbar.total or last
-                pbar.refresh()
-            proc.wait()
-            if proc.returncode != 0:
-                raise subprocess.CalledProcessError(proc.returncode, proc.args)
+            stderr_file = tempfile.TemporaryFile(mode="w+", encoding="utf-8")
+            try:
+                proc = subprocess.Popen(
+                    [str(WHISPER_CLI), "-m", str(model_file), "-f", audio,
+                     "-l", lang, "-of", out_base, "-otxt"],
+                    stdout=subprocess.PIPE, stderr=stderr_file,
+                    text=True, env=env,
+                )
+                with _tqdm(total=int(duration), unit="s", file=sys.stderr, dynamic_ncols=True,
+                           disable=not sys.stderr.isatty()) as pbar:
+                    last = 0
+                    for line in proc.stdout:
+                        m = _re.match(r'\[(\d+):(\d+):(\d+\.\d+)', line)
+                        if m:
+                            h, mn, s = m.groups()
+                            current = int(h) * 3600 + int(mn) * 60 + float(s)
+                            inc = int(current) - last
+                            if inc > 0:
+                                pbar.update(inc)
+                                last = int(current)
+                    pbar.n = pbar.total or last
+                    pbar.refresh()
+                proc.wait()
+                if proc.returncode != 0:
+                    stderr_file.seek(0)
+                    stderr_text = stderr_file.read().strip()
+                    if stderr_text:
+                        _err(f"[whisper-stderr] {stderr_text[-1500:]}")
+                    raise subprocess.CalledProcessError(proc.returncode, proc.args)
+            finally:
+                stderr_file.close()
 
             out_file = Path(out_base + ".txt")
             return out_file.read_text(encoding="utf-8").strip() if out_file.exists() else ""
@@ -653,7 +698,12 @@ def _process_channel(channel_name: str, channel_url: str, lang: str = "ja", limi
         return 0
 
     index = _load_index(channel_name)
-    videos = [v for v in videos if _extract_video_id(v["url"]) not in index]
+    cache = _load_view_cache(channel_name)
+    videos = [
+        v for v in videos
+        if _extract_video_id(v["url"]) not in index
+        and cache.get(_extract_video_id(v["url"]), 0) != -1  # メンバー限定をスキップ
+    ]
     if limit > 0:
         videos = videos[:limit]
 
@@ -835,7 +885,8 @@ AI要約は別スクリプト:
     p_ch.add_argument("--sort", choices=["date", "popular"], default="date",
                       help="取得順序: date=新着順(default), popular=人気順")
     p_ch.add_argument("--popular-sample", type=int, default=200,
-                      help="人気順ソート時に再生数を取得する動画数（0=上限なし、default: 200）")
+                      help="人気順ソート時に再生数を取得する動画数（0=上限なし、default: 200）"
+                           "。メンバー限定動画は自動でキャッシュ＆次回スキップされる")
     p_ch.add_argument("--cache-only", action="store_true",
                       help="再生数キャッシュの構築のみ行い、文字起こしはしない（--sort popular と併用）")
 
