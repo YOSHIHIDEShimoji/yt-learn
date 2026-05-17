@@ -734,7 +734,10 @@ def _sync_cookies() -> None:
     _err("[info] Chrome からクッキーを取得中...")
     import yt_dlp
     with yt_dlp.YoutubeDL({"quiet": True, "no_warnings": True, **_cookie_opts()}) as ydl:
-        ydl.extract_info("https://www.youtube.com/", download=False)
+        try:
+            ydl.extract_info("https://www.youtube.com/watch?v=dQw4w9WgXcQ", download=False)
+        except Exception:
+            pass  # クッキーの書き出しは __exit__ で行われるためエラーは無視
     _err(f"[info] {WSL_HOST} に転送中...")
     wsl_cmd = f"wsl -- bash -c 'mkdir -p {Path(WSL_COOKIES_DEST).parent} && cat > {WSL_COOKIES_DEST}'"
     with open(COOKIES_FILE, "rb") as f:
