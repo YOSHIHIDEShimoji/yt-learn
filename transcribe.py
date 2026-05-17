@@ -301,6 +301,7 @@ def _fetch_view_count(video_id: str) -> int:
     url = f"https://www.youtube.com/watch?v={video_id}"
     ydl_opts = {"quiet": True, "no_warnings": True, "skip_download": True, "logger": _TqdmLogger(),
                 "sleep_interval_requests": 1.0,
+                "ignore_no_formats_error": True,  # 再生数取得時はformat不要
                 "extractor_args": {"youtube": {"player_client": ["web"]}},
                 **_cookie_opts()}
     try:
