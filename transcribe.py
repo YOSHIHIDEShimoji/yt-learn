@@ -29,6 +29,32 @@ RCLONE_REMOTE = "gdrive"
 RCLONE_DEST = f"{RCLONE_REMOTE}:yt-learn"
 
 _cookies_pushed = False
+_log_file = None
+
+
+def _setup_log() -> None:
+    import atexit
+    global _log_file
+    log_dir = BASE_DIR / "log"
+    log_dir.mkdir(exist_ok=True)
+    log_path = log_dir / f"transcribe_{date.today().strftime('%Y%m%d')}.log"
+    _log_file = open(log_path, "a", encoding="utf-8", buffering=1)
+    atexit.register(_teardown_log)
+    _log_write(f"=== 開始 {datetime.now().strftime('%Y-%m-%d %H:%M:%S')} {'=' * 30}")
+
+
+def _teardown_log() -> None:
+    global _log_file
+    if _log_file:
+        _log_write(f"=== 終了 {datetime.now().strftime('%Y-%m-%d %H:%M:%S')} {'=' * 30}\n")
+        _log_file.close()
+        _log_file = None
+
+
+def _log_write(msg: str) -> None:
+    if _log_file:
+        print(msg, file=_log_file)
+
 
 def _push_cookies_to_wsl() -> None:
     global _cookies_pushed
@@ -46,6 +72,7 @@ def _push_cookies_to_wsl() -> None:
 def _err(msg: str) -> None:
     from tqdm import tqdm
     tqdm.write(msg, file=sys.stderr)
+    _log_write(f"[{datetime.now().strftime('%H:%M:%S')}] {msg}")
 
 
 class _TqdmLogger:
@@ -722,6 +749,7 @@ def _sync_cookies() -> None:
 
 def main() -> None:
     _load_env()
+    _setup_log()
 
     parser = argparse.ArgumentParser(
         description="YouTube動画の文字起こし・チャンネル管理ツール",
