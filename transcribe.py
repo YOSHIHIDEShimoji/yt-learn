@@ -29,6 +29,7 @@ RCLONE_REMOTE = "gdrive"
 RCLONE_DEST = f"{RCLONE_REMOTE}:yt-learn"
 
 _cookies_pushed = False
+_cookies_refreshed = False  # Mac: 古いcookies.txtを初回起動時に削除するフラグ
 _log_file = None
 
 
@@ -198,12 +199,17 @@ def _list_channels() -> None:
 
 def _cookie_opts() -> dict:
     """Mac: Chromeから読んでcookies.txtに書き出す。それ以外: cookies.txtを使う。"""
+    global _cookies_refreshed
     import sys
     opts = {
         "cookiefile": str(COOKIES_FILE),
         "remote_components": ["ejs:github"],
     }
     if sys.platform == "darwin":
+        if not _cookies_refreshed:
+            # 古いcookies.txtがChrome由来の新しいクッキーに干渉するため初回のみ削除
+            COOKIES_FILE.unlink(missing_ok=True)
+            _cookies_refreshed = True
         opts["cookiesfrombrowser"] = ("chrome",)
     return opts
 
