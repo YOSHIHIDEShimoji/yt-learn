@@ -271,7 +271,8 @@ def _sort_by_popularity(videos: list, channel_name: str, sample_size: int) -> li
 
     if sample:
         _err(f"[popular] {len(sample)} 件の再生数を取得中...")
-        for v in tqdm(sample, desc="view count", file=sys.stderr, dynamic_ncols=True):
+        for v in tqdm(sample, desc="view count", file=sys.stderr, dynamic_ncols=True,
+                      disable=not sys.stderr.isatty()):
             vid_id = _extract_video_id(v["url"])
             try:
                 cache[vid_id] = _fetch_view_count(vid_id)
@@ -289,7 +290,7 @@ def _download_audio(url: str, out_dir: str) -> str:
     import yt_dlp
     ydl_opts = {
         "format": "bestaudio[ext=m4a]/bestaudio/best",
-        "outtmpl": os.path.join(out_dir, "%(title)s.%(ext)s"),
+        "outtmpl": os.path.join(out_dir, "%(id)s.%(ext)s"),
         "quiet": True,
         "no_warnings": True,
         **_cookie_opts(),
@@ -354,7 +355,8 @@ def _transcribe_whisper_cpp(audio_path: str, lang: str, model_size: str) -> str:
                 stdout=subprocess.PIPE, stderr=subprocess.DEVNULL,
                 text=True, env=env,
             )
-            with _tqdm(total=int(duration), unit="s", dynamic_ncols=True) as pbar:
+            with _tqdm(total=int(duration), unit="s", file=sys.stderr, dynamic_ncols=True,
+                       disable=not sys.stderr.isatty()) as pbar:
                 last = 0
                 for line in proc.stdout:
                     m = _re.match(r'\[(\d+):(\d+):(\d+\.\d+)', line)
@@ -425,7 +427,10 @@ def _transcribe_faster_whisper(audio_path: str, lang: str, model_size: str,
     duration = info.duration or 0.0
     bar_fmt = "{l_bar}{bar}| {n:.0f}/{total:.0f}s [{elapsed}<{remaining}]"
     texts = []
-    with tqdm(total=duration, unit="s", bar_format=bar_fmt, file=sys.stderr, dynamic_ncols=True) as pbar:
+    with tqdm(total=duration or None, unit="s",
+              bar_format=bar_fmt if duration > 0 else None,
+              file=sys.stderr, dynamic_ncols=True,
+              disable=not sys.stderr.isatty()) as pbar:
         for seg in segments_iter:
             if seg.text.strip():
                 texts.append(seg.text.strip())
