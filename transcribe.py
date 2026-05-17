@@ -215,7 +215,7 @@ def _get_video_title(url: str) -> str:
         "skip_download": True,
         "format": "bestaudio/best",
         "ignore_no_formats_error": True,
-        "extractor_args": {"youtube": {"lang": ["ja"]}},
+        "extractor_args": {"youtube": {"lang": ["ja"], "player_client": ["mweb"]}},
         "http_headers": {"Accept-Language": "ja,ja-JP;q=0.9"},
         **_cookie_opts(),
     }
@@ -268,7 +268,9 @@ def _fetch_view_count(video_id: str) -> int:
     import yt_dlp
     url = f"https://www.youtube.com/watch?v={video_id}"
     ydl_opts = {"quiet": True, "no_warnings": True, "skip_download": True, "logger": _TqdmLogger(),
-                "sleep_interval_requests": 1.0, **_cookie_opts()}
+                "sleep_interval_requests": 1.0,
+                "extractor_args": {"youtube": {"player_client": ["mweb"]}},
+                **_cookie_opts()}
     with yt_dlp.YoutubeDL(ydl_opts) as ydl:
         info = ydl.extract_info(url, download=False) or {}
     return info.get("view_count") or 0
@@ -325,6 +327,7 @@ def _download_audio(url: str, out_dir: str) -> str:
         "outtmpl": os.path.join(out_dir, "%(id)s.%(ext)s"),
         "quiet": True,
         "no_warnings": True,
+        "extractor_args": {"youtube": {"player_client": ["mweb"]}},
         **_cookie_opts(),
     }
     with yt_dlp.YoutubeDL(ydl_opts) as ydl:
