@@ -278,8 +278,10 @@ def _sort_by_popularity(videos: list, channel_name: str, sample_size: int) -> li
             vid_id = _extract_video_id(v["url"])
             try:
                 cache[vid_id] = _fetch_view_count(vid_id)
-            except Exception:
-                pass
+            except Exception as e:
+                if "rate-limited" in str(e):
+                    _err("[popular] レートリミット検知。キャッシュ済みデータで続行します")
+                    break
             time.sleep(2)
         _save_view_cache(channel_name, cache)
 
