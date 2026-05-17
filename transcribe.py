@@ -396,7 +396,7 @@ def _transcribe_whisper_cpp(audio_path: str, lang: str, model_size: str) -> str:
         result = subprocess.run(
             ["ffmpeg", "-i", audio_path, "-ar", "16000", "-ac", "1",
              "-c:a", "pcm_s16le", tmpwav, "-y", "-loglevel", "error"],
-            capture_output=True, text=True,
+            capture_output=True, text=True, errors="replace",
         )
         if result.returncode != 0:
             _err(f"[ffmpeg-stderr] {result.stderr.strip()[-1000:]}")
@@ -430,7 +430,8 @@ def _transcribe_whisper_cpp(audio_path: str, lang: str, model_size: str) -> str:
 
             import re as _re
             from tqdm import tqdm as _tqdm
-            stderr_file = tempfile.TemporaryFile(mode="w+", encoding="utf-8")
+            # subprocess.Popen の stderr= には binary file を渡す（OSレベルの fd 書き込み）
+            stderr_file = tempfile.TemporaryFile(mode="w+b")
             try:
                 proc = subprocess.Popen(
                     [str(WHISPER_CLI), "-m", str(model_file), "-f", audio,
@@ -455,7 +456,7 @@ def _transcribe_whisper_cpp(audio_path: str, lang: str, model_size: str) -> str:
                 proc.wait()
                 if proc.returncode != 0:
                     stderr_file.seek(0)
-                    stderr_text = stderr_file.read().strip()
+                    stderr_text = stderr_file.read().decode("utf-8", errors="replace").strip()
                     if stderr_text:
                         _err(f"[whisper-stderr] {stderr_text[-1500:]}")
                     raise subprocess.CalledProcessError(proc.returncode, proc.args)
