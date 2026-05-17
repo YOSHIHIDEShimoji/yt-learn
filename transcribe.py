@@ -688,6 +688,7 @@ def _process_channel(channel_name: str, channel_url: str, lang: str = "ja", limi
                      model_size: str = WHISPER_MODEL, cache_only: bool = False) -> int:
     _err(f"[channel] {channel_name}: 動画リスト取得中... (sort={sort})")
     videos = _get_channel_videos(channel_url)
+    _push_cookies_to_wsl()  # Mac: チャンネル取得後の新鮮なcookiesをWSLへ転送（1回のみ）
     _err(f"[channel] {len(videos)} 件の動画を発見")
 
     if sort == "popular":
