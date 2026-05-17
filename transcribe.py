@@ -641,16 +641,13 @@ def _process_channel(channel_name: str, channel_url: str, lang: str = "ja", limi
         _err(f"[cache-only] {channel_name}: キャッシュ構築のみ完了\n")
         return 0
 
+    index = _load_index(channel_name)
+    videos = [v for v in videos if _extract_video_id(v["url"]) not in index]
     if limit > 0:
         videos = videos[:limit]
 
-    index = _load_index(channel_name)
     processed = 0
     for i, v in enumerate(videos, 1):
-        vid_id = _extract_video_id(v["url"])
-        if vid_id in index:
-            _err(f"[{i}/{len(videos)}] [skip] 処理済み: {v['title']}")
-            continue
         _err(f"\n[{i}/{len(videos)}] {v['title']}")
         try:
             if _process_url(v["url"], channel_name, lang, title=v["title"], model_size=model_size):
