@@ -363,8 +363,8 @@ def _sort_by_popularity(videos: list, channel_name: str, sample_size: int) -> li
 def _download_audio(url: str, out_dir: str) -> str:
     import yt_dlp
     ydl_opts = {
-        # 音声を優先（m4a→webm→任意のbestaudio）。最後の保険でlow-resのvideo付きも許容
-        "format": "bestaudio[ext=m4a]/bestaudio[ext=webm]/bestaudio/best[height<=480]",
+        # 音声を優先（m4a→webm→任意のbestaudio）。最後の保険で best も許容
+        "format": "bestaudio[ext=m4a]/bestaudio[ext=webm]/bestaudio/best",
         "outtmpl": os.path.join(out_dir, "%(id)s.%(ext)s"),
         "quiet": True,
         "no_warnings": True,
