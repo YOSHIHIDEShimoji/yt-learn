@@ -221,7 +221,7 @@ def _get_video_title(url: str) -> str:
         "skip_download": True,
         "format": "bestaudio/best",
         "ignore_no_formats_error": True,
-        "extractor_args": {"youtube": {"lang": ["ja"], "player_client": ["mweb"]}},
+        "extractor_args": {"youtube": {"lang": ["ja"], "player_client": ["web"]}},
         "http_headers": {"Accept-Language": "ja,ja-JP;q=0.9"},
         **_cookie_opts(),
     }
@@ -275,7 +275,7 @@ def _fetch_view_count(video_id: str) -> int:
     url = f"https://www.youtube.com/watch?v={video_id}"
     ydl_opts = {"quiet": True, "no_warnings": True, "skip_download": True, "logger": _TqdmLogger(),
                 "sleep_interval_requests": 1.0,
-                "extractor_args": {"youtube": {"player_client": ["mweb"]}},
+                "extractor_args": {"youtube": {"player_client": ["web"]}},
                 **_cookie_opts()}
     with yt_dlp.YoutubeDL(ydl_opts) as ydl:
         info = ydl.extract_info(url, download=False) or {}
@@ -308,8 +308,8 @@ def _sort_by_popularity(videos: list, channel_name: str, sample_size: int) -> li
     if sample:
         import time
         _err(f"[popular] {len(sample)} 件の再生数を取得中...")
-        for v in tqdm(sample, desc="view count", file=sys.stderr, dynamic_ncols=True,
-                      disable=not sys.stderr.isatty()):
+        for i, v in enumerate(tqdm(sample, desc="view count", file=sys.stderr, dynamic_ncols=True,
+                      disable=not sys.stderr.isatty())):
             vid_id = _extract_video_id(v["url"])
             try:
                 cache[vid_id] = _fetch_view_count(vid_id)
@@ -317,6 +317,8 @@ def _sort_by_popularity(videos: list, channel_name: str, sample_size: int) -> li
                 if "rate-limited" in str(e):
                     _err("[popular] レートリミット検知。キャッシュ済みデータで続行します")
                     break
+            if i % 10 == 0:
+                _save_view_cache(channel_name, cache)
             time.sleep(2)
         _save_view_cache(channel_name, cache)
 
@@ -333,7 +335,7 @@ def _download_audio(url: str, out_dir: str) -> str:
         "outtmpl": os.path.join(out_dir, "%(id)s.%(ext)s"),
         "quiet": True,
         "no_warnings": True,
-        "extractor_args": {"youtube": {"player_client": ["mweb"]}},
+        "extractor_args": {"youtube": {"player_client": ["web"]}},
         **_cookie_opts(),
     }
     with yt_dlp.YoutubeDL(ydl_opts) as ydl:
@@ -832,8 +834,8 @@ AI要約は別スクリプト:
     p_ch.add_argument("--limit", type=int, default=0, help="最大処理動画数（0=全件）")
     p_ch.add_argument("--sort", choices=["date", "popular"], default="date",
                       help="取得順序: date=新着順(default), popular=人気順")
-    p_ch.add_argument("--popular-sample", type=int, default=0,
-                      help="人気順ソート時に再生数を取得する動画数（0=上限なし、default: 0）")
+    p_ch.add_argument("--popular-sample", type=int, default=200,
+                      help="人気順ソート時に再生数を取得する動画数（0=上限なし、default: 200）")
     p_ch.add_argument("--cache-only", action="store_true",
                       help="再生数キャッシュの構築のみ行い、文字起こしはしない（--sort popular と併用）")
 
@@ -842,7 +844,7 @@ AI要約は別スクリプト:
                        choices=["tiny", "base", "small", "medium", "large", "large-v2", "large-v3", "large-v3-turbo"])
     p_all.add_argument("--limit", type=int, default=0)
     p_all.add_argument("--sort", choices=["date", "popular"], default="date")
-    p_all.add_argument("--popular-sample", type=int, default=0)
+    p_all.add_argument("--popular-sample", type=int, default=200)
     p_all.add_argument("--cache-only", action="store_true")
 
     sub.add_parser("sync-cookies", help="Mac の Chrome クッキーを WSL に転送")
