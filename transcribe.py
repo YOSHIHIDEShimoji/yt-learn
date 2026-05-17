@@ -240,7 +240,8 @@ def _get_channel_videos(channel_url: str) -> list:
 def _fetch_view_count(video_id: str) -> int:
     import yt_dlp
     url = f"https://www.youtube.com/watch?v={video_id}"
-    ydl_opts = {"quiet": True, "no_warnings": True, "skip_download": True, "logger": _TqdmLogger(), **_cookie_opts()}
+    ydl_opts = {"quiet": True, "no_warnings": True, "skip_download": True, "logger": _TqdmLogger(),
+                "sleep_interval": 1, "max_sleep_interval": 3, **_cookie_opts()}
     with yt_dlp.YoutubeDL(ydl_opts) as ydl:
         info = ydl.extract_info(url, download=False) or {}
     return info.get("view_count") or 0
