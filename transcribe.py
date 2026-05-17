@@ -241,7 +241,7 @@ def _fetch_view_count(video_id: str) -> int:
     import yt_dlp
     url = f"https://www.youtube.com/watch?v={video_id}"
     ydl_opts = {"quiet": True, "no_warnings": True, "skip_download": True, "logger": _TqdmLogger(),
-                "sleep_interval": 1, "max_sleep_interval": 3, **_cookie_opts()}
+                "sleep_interval_requests": 1.0, **_cookie_opts()}
     with yt_dlp.YoutubeDL(ydl_opts) as ydl:
         info = ydl.extract_info(url, download=False) or {}
     return info.get("view_count") or 0
@@ -271,6 +271,7 @@ def _sort_by_popularity(videos: list, channel_name: str, sample_size: int) -> li
     sample = to_fetch if sample_size == 0 else to_fetch[:sample_size]
 
     if sample:
+        import time
         _err(f"[popular] {len(sample)} 件の再生数を取得中...")
         for v in tqdm(sample, desc="view count", file=sys.stderr, dynamic_ncols=True,
                       disable=not sys.stderr.isatty()):
@@ -279,6 +280,7 @@ def _sort_by_popularity(videos: list, channel_name: str, sample_size: int) -> li
                 cache[vid_id] = _fetch_view_count(vid_id)
             except Exception:
                 pass
+            time.sleep(2)
         _save_view_cache(channel_name, cache)
 
     def _key(v):
