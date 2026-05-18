@@ -224,6 +224,14 @@ def _cookie_opts() -> dict:
         opts["cookiesfrombrowser"] = ("chrome",)
     return opts
 
+
+def _web_client_args() -> dict:
+    """Mac のみ player_client=web を使う。WSL は JS ランタイム不在で n-challenge 解決不可。"""
+    import sys
+    if sys.platform == "darwin":
+        return {"player_client": ["web"]}
+    return {}
+
 def _yt_extract_with_retry(opts: dict, url: str, download: bool = False) -> dict:
     """yt-dlp の extract_info を実行。bot検知エラーで1度だけ3秒待ってリトライ。"""
     import yt_dlp
@@ -247,7 +255,7 @@ def _get_video_title(url: str) -> str:
         "skip_download": True,
         "format": "bestaudio/best",
         "ignore_no_formats_error": True,
-        "extractor_args": {"youtube": {"lang": ["ja"], "player_client": ["web"]}},
+        "extractor_args": {"youtube": {"lang": ["ja"], **_web_client_args()}},
         "http_headers": {"Accept-Language": "ja,ja-JP;q=0.9"},
         **_cookie_opts(),
     }
@@ -302,7 +310,7 @@ def _fetch_view_count(video_id: str) -> int:
     ydl_opts = {"quiet": True, "no_warnings": True, "skip_download": True, "logger": _TqdmLogger(),
                 "sleep_interval_requests": 1.0,
                 "ignore_no_formats_error": True,  # 再生数取得時はformat不要
-                "extractor_args": {"youtube": {"player_client": ["web"]}},
+                "extractor_args": {"youtube": {**_web_client_args()}},
                 **_cookie_opts()}
     try:
         info = _yt_extract_with_retry(ydl_opts, url, download=False)
@@ -369,7 +377,7 @@ def _download_audio(url: str, out_dir: str) -> str:
         "outtmpl": os.path.join(out_dir, "%(id)s.%(ext)s"),
         "quiet": True,
         "no_warnings": True,
-        "extractor_args": {"youtube": {"player_client": ["web"]}},
+        "extractor_args": {"youtube": {**_web_client_args()}},
         **_cookie_opts(),
     }
     with yt_dlp.YoutubeDL(ydl_opts) as ydl:
