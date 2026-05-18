@@ -96,7 +96,13 @@ class _TqdmLogger:
 
 def _sanitize(name: str) -> str:
     name = re.sub(r'[\\/:*?"<>|]', "_", name)
-    return name.strip()[:200]
+    name = name.strip()
+    # Linux ext4 limit: 255 bytes/filename; Japanese chars are 3 bytes each in UTF-8
+    # Truncate to 200 bytes (leaves room for ".md" and safety margin)
+    encoded = name.encode("utf-8")
+    if len(encoded) > 200:
+        name = encoded[:200].decode("utf-8", errors="ignore")
+    return name
 
 
 def _extract_video_id(url: str) -> str:
