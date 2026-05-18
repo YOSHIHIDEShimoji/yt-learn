@@ -77,6 +77,14 @@ def _err(msg: str) -> None:
 
 
 _MEMBERS_ERR_MARKERS = ("members-only", "members on level", "Join this channel")
+# yt-dlp が ERROR: として出力するが _process_channel 側で [warn] 扱いにするメッセージ
+_SUPPRESSED_ERR_MARKERS = (
+    *_MEMBERS_ERR_MARKERS,
+    "confirm your age",   # 年齢制限動画（cookies不足で恒久的に失敗）
+    "age-restricted",
+    "rate-limited",       # レートリミット（_process_channel で break する）
+    "Sign in to confirm you're not a bot",  # bot検知（retry後もERROR:が出ないよう抑制）
+)
 
 
 def _is_members_only_error(msg: str) -> bool:
@@ -88,8 +96,8 @@ class _TqdmLogger:
     def info(self, msg): pass
     def warning(self, msg): pass
     def error(self, msg):
-        # メンバー限定動画はsentinelキャッシュ側で扱うのでERRORログから除外
-        if _is_members_only_error(msg):
+        # 既知のハンドル済みエラーは [error] ログから除外（上位で [warn] として扱う）
+        if any(m in msg for m in _SUPPRESSED_ERR_MARKERS):
             return
         _err(msg)
 
@@ -383,6 +391,7 @@ def _download_audio(url: str, out_dir: str) -> str:
         "outtmpl": os.path.join(out_dir, "%(id)s.%(ext)s"),
         "quiet": True,
         "no_warnings": True,
+        "logger": _TqdmLogger(),       # ERROR: を _SUPPRESSED_ERR_MARKERS でフィルタ
         "sleep_interval": 2,           # リクエスト間スリープ（レートリミット緩和）
         "sleep_interval_requests": 2,
         "extractor_args": {"youtube": {**_web_client_args()}},
@@ -394,7 +403,8 @@ def _download_audio(url: str, out_dir: str) -> str:
                 ydl.download([url])
             break
         except yt_dlp.utils.DownloadError as e:
-            if attempt == 0 and "Sign in to confirm" in str(e):
+            # 年齢制限は retry しても解決しないのでそのまま raise
+            if attempt == 0 and "not a bot" in str(e):
                 _err("[retry] bot検知 → 5秒待って再試行")
                 time.sleep(5)
                 continue
@@ -743,9 +753,13 @@ def _process_channel(channel_name: str, channel_url: str, lang: str = "ja", limi
                 processed += 1
                 index = _load_index(channel_name)
         except Exception as e:
-            if "rate-limited" in str(e):
+            msg = str(e)
+            if "rate-limited" in msg:
                 _err(f"[warn] {channel_name}: レートリミット → このチャンネルの処理を中断")
                 break
+            if "confirm your age" in msg or "age-restricted" in msg:
+                _err(f"[warn] {v['title']}: 年齢制限 → スキップ")
+                continue
             _err(f"[error] {v['title']}: {e}")
 
     if sort == "popular" and processed > 0:
