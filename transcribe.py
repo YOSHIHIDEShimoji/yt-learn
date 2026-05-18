@@ -376,18 +376,29 @@ def _sort_by_popularity(videos: list, channel_name: str, sample_size: int) -> li
 
 
 def _download_audio(url: str, out_dir: str) -> str:
-    import yt_dlp
+    import yt_dlp, time
     ydl_opts = {
         # 音声を優先（m4a→webm→任意のbestaudio）。最後の保険で best も許容
         "format": "bestaudio[ext=m4a]/bestaudio[ext=webm]/bestaudio/best",
         "outtmpl": os.path.join(out_dir, "%(id)s.%(ext)s"),
         "quiet": True,
         "no_warnings": True,
+        "sleep_interval": 2,           # リクエスト間スリープ（レートリミット緩和）
+        "sleep_interval_requests": 2,
         "extractor_args": {"youtube": {**_web_client_args()}},
         **_cookie_opts(),
     }
-    with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-        ydl.download([url])
+    for attempt in range(2):
+        try:
+            with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+                ydl.download([url])
+            break
+        except yt_dlp.utils.DownloadError as e:
+            if attempt == 0 and "Sign in to confirm" in str(e):
+                _err("[retry] bot検知 → 5秒待って再試行")
+                time.sleep(5)
+                continue
+            raise
     for ext in (".m4a", ".webm", ".opus", ".mp4"):
         for f in Path(out_dir).iterdir():
             if f.suffix == ext:
@@ -732,6 +743,9 @@ def _process_channel(channel_name: str, channel_url: str, lang: str = "ja", limi
                 processed += 1
                 index = _load_index(channel_name)
         except Exception as e:
+            if "rate-limited" in str(e):
+                _err(f"[warn] {channel_name}: レートリミット → このチャンネルの処理を中断")
+                break
             _err(f"[error] {v['title']}: {e}")
 
     if sort == "popular" and processed > 0:
