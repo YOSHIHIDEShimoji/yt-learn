@@ -265,11 +265,11 @@ def _cookie_opts() -> dict:
 
 
 def _web_client_args() -> dict:
-    """Mac のみ player_client=web を使う。WSL は JS ランタイム不在で n-challenge 解決不可。"""
+    """Mac: web クライアント（deno必要）。それ以外: android クライアント（JS不要）。"""
     import sys
     if sys.platform == "darwin":
         return {"player_client": ["web"]}
-    return {}
+    return {"player_client": ["android"]}
 
 def _yt_extract_with_retry(opts: dict, url: str, download: bool = False) -> dict:
     """yt-dlp の extract_info を実行。bot検知エラーで1度だけ3秒待ってリトライ。"""
