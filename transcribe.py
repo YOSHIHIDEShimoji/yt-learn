@@ -89,7 +89,9 @@ _SUPPRESSED_ERR_MARKERS = (
     "confirm your age",   # 年齢制限動画（cookies不足で恒久的に失敗）
     "age-restricted",
     "rate-limited",       # レートリミット（_process_channel で break する）
-    "Sign in to confirm you're not a bot",  # bot検知（retry後もERROR:が出ないよう抑制）
+    "Sign in to confirm you’re not a bot",  # U+2019（yt-dlpが使う右シングルクォート）
+    "Sign in to confirm you're not a bot",   # ASCII apostrophe フォールバック
+    "not a bot",                              # 両方をカバーする短縮マーカー
 )
 
 
