@@ -1,20 +1,25 @@
 # yt-learn 設計メモ（WSL引き継ぎドキュメント）
 
-> **WSL Claude Code向け**: このファイルを読んで `/goal` を設定し、「WSLで `python transcribe.py all --sort popular --limit 10` を実行して `[error]` と `ERROR:` 行がログに出ない状態にする」を達成してください。
+> **WSL Claude Code 向け**: このファイルを読んで `/goal` を設定し、
+> `python transcribe.py all --sort popular --limit 10` を WSL で実行して
+> `[error]` と `ERROR:` 行がログに出ない状態にしてください。
 
 ---
 
-## やりたいこと
+## 目標
 
-channels.txt に登録した YouTube チャンネルの動画を、**人気順で上位から**自動的に文字起こし・要約して Google Drive に蓄積する。
+channels.txt に登録した YouTube チャンネルの動画を、**人気順で上位から**自動的に
+文字起こし・要約して Google Drive に蓄積する。
 
 Mac（Metal GPU）と WSL（CUDA GPU）の両方で同じコマンドが動く構成。
+
+**ゴール（WSL 側）**:
 
 ```bash
 python transcribe.py all --sort popular --limit 10
 ```
 
-**ゴール**: 上記コマンドが Mac・WSL 両環境で `[error]` / `ERROR:` 行なしで完走すること。
+このコマンドが `[error]` / `ERROR:` 行ゼロで完走すること。
 
 ---
 
@@ -35,9 +40,8 @@ WSL（Windows上）
 
 ### Python 環境
 
-- Mac: `/Users/yoshihide/.pyenv/versions/yt-learn-3.11.9/bin/python`
 - WSL: `/home/wsl-yoshihide/.pyenv/versions/yt-learn-3.11.9/bin/python`
-- コマンド実行: `python transcribe.py ...`（`.python-version` が virtualenv を指定）
+- `.python-version` が virtualenv を指定しているので `python` コマンドで OK
 
 ### 主要ファイル
 
@@ -46,231 +50,174 @@ WSL（Windows上）
 | `transcribe.py` | メインスクリプト。全ロジックここに集約 |
 | `channels.txt` | チャンネル一覧（名前\|URL\|言語） |
 | `cache/*.json` | 再生数キャッシュ（git管理・Mac↔WSL共有） |
-| `transcripts/` | 文字起こし結果（.md形式） |
-| `cookies.txt` | YouTubeクッキー（gitignore対象） |
+| `cookies.txt` | YouTubeクッキー（gitignore対象・Macからscp転送） |
 | `.env` | LOCAL_LLM_URL等（gitignore対象） |
 
 ---
 
-## cache/ をgit管理している理由
+## これまでに Mac 側 Claude Code が実装・修正した内容
 
-`cache/*.json`（チャンネル別の再生数キャッシュ）はgit管理対象。
+### 1. メンバーシップ動画を sentinel キャッシュ
 
-- YouTube は 1 動画あたり数秒かかり、レートリミットもある
-- 一度取得した再生数は半永久的に有効（人気順ランキングの判断に使う）
-- Mac↔WSL の両環境で共有することで、片方で取得した再生数をもう片方でも使い回せる
+`view_cache.json` に `-1` を保存 → 次回以降スキップ。198件ループ問題を解消。
 
----
+### 2. whisper.cpp 失敗の堅牢化
 
-## --sort popular の動作フロー
-
-```
-1. チャンネルの全動画リストを取得（yt-dlp extract_flat）
-2. キャッシュ済みでない動画の再生数を取得（_sort_by_popularity）
-3. 再生数降順にソート
-4. 未処理の動画のうち上位 --limit 件を処理
-```
-
----
-
-## cookies.txt の扱い
-
-| 環境 | 取得方法 | 保存先 |
-|------|----------|--------|
-| Mac | `cookiesfrombrowser=chrome`（実行時にChromeから直接読む） | `cookies.txt`（次回WSL同期用） |
-| WSL | `cookiefile=cookies.txt`（Macからscpで転送されたファイル） | そのまま使用 |
-
-`cookies.txt` は git 管理外（`.gitignore`）。Mac で `python transcribe.py sync-cookies` を実行することで WSL に転送される。
-
----
-
-## これまでに実装・修正済みの内容
-
-### 1. メンバーシップ動画の sentinel キャッシュ（`_fetch_view_count`）
-
-- `view_cache.json` に `-1` を保存 → 次回以降スキップ（198件ループ問題を解消）
-- `-1` はソートキーで `max(..., 0)` → 人気度ゼロ扱いで最後尾へ
-
-### 2. whisper.cpp 失敗の堅牢化（`_transcribe_whisper_cpp`）
-
-- ffmpeg の `stderr` を `capture_output=True` でキャプチャ → 失敗時に `_err` 出力
-- whisper-cli の `stderr` を binary mode (`mode="w+b"`) で読む → `decode("utf-8", errors="replace")`
+- ffmpeg stderr を `capture_output=True` でキャプチャ → 失敗時に `_err` 出力
+- whisper-cli stderr を binary mode (`mode="w+b"`) + `decode(errors="replace")`
 - whisper.cpp を `WHISPER_COREML_ALLOW_FALLBACK=ON` でビルド（`.mlmodelc` 不在でも exit 3 にならない）
 
-### 3. bot 検知の 1 回リトライ（`_yt_extract_with_retry`）
+### 3. `_TqdmLogger` と `_FilteredStderr` で ERROR: 行を抑制
 
-- `skip_download=True` の extraction でのみ 3 秒待ってリトライ
-- `_download_audio` 内では 3 回リトライ（5 秒インターバル）
+```python
+_SUPPRESSED_ERR_MARKERS = (
+    "members-only", "members on level", "Join this channel",
+    "confirm your age", "age-restricted", "rate-limited",
+    "Sign in to confirm you're not a bot",
+)
+```
 
-### 4. `_FilteredStderr` で ERROR: 行を抑制
+- `_TqdmLogger.error()` → 上記パターンを含む場合はサイレント
+- `_FilteredStderr` → yt-dlp が `sys.stderr` に直接書く `ERROR:` 行を抑制
+  - **重要**: `buffer` 属性を `AttributeError` で隠す。yt-dlp の `write_string` が
+    `hasattr(out, 'buffer')` で True になると `out.buffer` に直接書いて
+    Python レベルの `write()` を迂回するため
 
-- yt-dlp が logger を経由せず直接 stderr に書く `ERROR:` 行を抑制するフィルター
-- **重要**: `buffer` 属性を `AttributeError` で隠す → yt-dlp の `write_string` が `out.buffer` に直接書こうとするのを防ぎ、必ず `write()` 経由にする
-- 抑制対象: `_SUPPRESSED_ERR_MARKERS` に登録されたパターン（members-only, age-restricted, bot 検知など）
-
-### 5. `_process_channel` 例外ハンドラの整備
+### 4. `_process_channel` 例外ハンドラの整備
 
 - `members-only` → `[warn]` + continue
-- `rate-limited` → `[warn]` + break（チャンネルを中断、次チャンネルへ）
+- `rate-limited` → `[warn]` + break（チャンネル中断、次チャンネルへ）
 - `age-restricted` → `[warn]` + continue
 - `bot 検知` → `[warn]` + continue
 - それ以外 → `[error]`（本物のエラー）
 
-### 6. `_sanitize()` のバイト長制限（Linux 255 バイト制限対応）
+### 5. `_sanitize()` のバイト長制限
 
-- `encoded[:200].decode("utf-8", errors="ignore")` → 日本語 3 bytes/char を考慮
+Linux ext4 は 255 バイト制限。日本語 3 bytes/char のため文字数でなくバイト数で切る。
 
-### 7. `_web_client_args()` - Mac のみ web クライアント
+```python
+encoded = name.encode("utf-8")
+if len(encoded) > 200:
+    name = encoded[:200].decode("utf-8", errors="ignore")
+```
+
+### 6. deno PATH 自動追加（WSL 向け）
+
+`run_transcribe.sh` 経由でない直接 `python` 実行では `~/.deno/bin` が PATH に入らず、
+yt-dlp の web クライアントが n-challenge 解決に失敗する。
+transcribe.py 起動時に自動追加するよう修正済み（コミット `963a7db`）。
+
+```python
+_deno_bin = str(Path.home() / ".deno" / "bin")
+if Path(_deno_bin).is_dir() and _deno_bin not in os.environ.get("PATH", ""):
+    os.environ["PATH"] = _deno_bin + os.pathsep + os.environ.get("PATH", "")
+```
+
+### 7. `_web_client_args()` を全環境 web クライアントに統一
+
+deno が PATH に入れば WSL でも web クライアントが使える。
 
 ```python
 def _web_client_args() -> dict:
-    if sys.platform == "darwin":
-        return {"player_client": ["web"]}
-    return {}
+    return {"player_client": ["web"]}
 ```
 
 ---
 
-## 現在の問題点と未解決事項
+## WSL でのテスト手順
 
-### ⚠️ WSL: 「Requested format is not available」（最優先）
-
-**症状**: v5 テストで全 DaiGo 動画が `[error]` になる
-
-```
-WARNING: [youtube] ewLmP32aTQg: n challenge solving failed: Some formats may be missing.
-WARNING: Only images are available for download.
-[error] 注意！カップルが最も分かれやすい時期とは？: ERROR: ...Requested format is not available
-```
-
-**根本原因**:
-- `_web_client_args()` が WSL では `{}` を返す → yt-dlp のデフォルトクライアント（web_creator を含む）を使用
-- `web_creator` クライアントは n-challenge（JS runtime）が必要
-- deno は `~/.deno/bin/deno` にインストール済みだが、`run_transcribe.sh` 経由でないと PATH に入らない
-- `python transcribe.py all` を直接実行すると deno が PATH にない → n-challenge 失敗 → フォーマット取得不可
-
-**対処方針（2択）**:
-
-**Option A（推奨）**: `_web_client_args()` を修正して WSL でも明示的に player_client を指定する
-
-```python
-def _web_client_args() -> dict:
-    if sys.platform == "darwin":
-        return {"player_client": ["web"]}
-    # WSL: android クライアントは n-challenge 不要・フォーマット安定
-    return {"player_client": ["android"]}
-```
-
-**Option B**: Python 起動時に deno を PATH に追加
-
-```python
-# transcribe.py 冒頭または _web_client_args() 内で
-import os
-deno_path = os.path.expanduser("~/.deno/bin")
-if os.path.isdir(deno_path) and deno_path not in os.environ.get("PATH", ""):
-    os.environ["PATH"] = deno_path + os.pathsep + os.environ.get("PATH", "")
-```
-
-Option A のほうがシンプルで依存が少ない。android クライアントは JS 不要で安定している。
-
-### ⚠️ Mac: `all` コマンドの全チャンネル完走が未確認
-
-- DaiGo（10件処理）は確認済み
-- 残り 15 チャンネルは未テスト（ユーザーが外出したため中断）
-- Mac 側はユーザーが手動で確認予定
-
-### ✅ `_FilteredStderr` の buffer fix（コミット済み、WSL 未テスト）
-
-`b6cdf62` でコミット済み。WSL v5 は fix 前に起動したため未検証。
-
----
-
-## WSL での実装手順
-
-### Step 1: コードを最新にする
+### Step 1: 最新コードに更新
 
 ```bash
 cd /home/wsl-yoshihide/my-projects/yt-learn
 git pull
 ```
 
-### Step 2: `_web_client_args()` を修正（Option A）
+最新コミットは `963a7db`（deno PATH 自動追加）。
 
-`transcribe.py` の `_web_client_args()` を以下に変更:
-
-```python
-def _web_client_args() -> dict:
-    """Mac: web クライアント（deno必要）。WSL: android クライアント（JS不要）。"""
-    import sys
-    if sys.platform == "darwin":
-        return {"player_client": ["web"]}
-    return {"player_client": ["android"]}
-```
-
-### Step 3: テスト実行
+### Step 2: cookies.txt を確認
 
 ```bash
-# pytest で回帰確認
-/home/wsl-yoshihide/.pyenv/versions/yt-learn-3.11.9/bin/python -m pytest tests/test_transcribe.py -x
-
-# 実機テスト（全チャンネル・上位10件）
-python transcribe.py all --sort popular --limit 10 2>&1 | tee /tmp/yt-wsl-v6.log
+ls -la cookies.txt
 ```
 
-### Step 4: 合格確認
+古い場合は Mac 側で `python transcribe.py sync-cookies` を実行して転送してもらう。
+（あるいは WSL から: `ssh <mac> "python transcribe.py sync-cookies"` 等）
+
+### Step 3: yt-dlp が動くか確認（任意）
 
 ```bash
-# [error] と ERROR: がゼロであること（pytest ノイズは除外）
-grep -E '\[error\]|^ERROR' /tmp/yt-wsl-v6.log
-
-# 全チャンネルが [done] で終わること
-grep '\[done\]' /tmp/yt-wsl-v6.log
+python -c "
+import yt_dlp, os
+print('deno in PATH:', 'deno' in os.environ.get('PATH',''))
+url = 'https://www.youtube.com/watch?v=ewLmP32aTQg'
+opts = dict(quiet=True, cookiefile='cookies.txt', skip_download=True,
+            extractor_args={'youtube': {'player_client': ['web']}})
+with yt_dlp.YoutubeDL(opts) as ydl:
+    info = ydl.extract_info(url, download=False)
+    print('formats:', len(info.get('formats', [])))
+"
 ```
 
-**合格基準**:
-- `[error]` 行: ゼロ（本物のエラーなし）
-- `ERROR:` 行: ゼロ（`_FilteredStderr` が抑制）
-- 各チャンネルが `[done] チャンネル名: N 件処理` で終了
-- 少なくとも 1 チャンネルで N > 0 であること
+期待結果: `formats: 数字`（1以上）
+
+### Step 4: 実機テスト
+
+```bash
+python transcribe.py all --sort popular --limit 10 2>&1 | tee /tmp/yt-wsl-test.log
+```
+
+### Step 5: 合格確認
+
+```bash
+grep -E '^\[error\]|^ERROR:' /tmp/yt-wsl-test.log
+# → 出力ゼロが合格
+
+grep '\[done\]' /tmp/yt-wsl-test.log
+# → 各チャンネルが "[done] チャンネル名: N 件処理" で終わること
+```
 
 ---
 
-## 既知の無害なパターン（合格として扱う）
+## 合格基準
 
-- `[warn] xxx: bot検知 → スキップ` — 一時的な YouTube 制限、処理継続
-- `[warn] xxx: 年齢制限 → スキップ` — 認証不足、スキップして続行
-- `[warn] xxx: レートリミット → このチャンネルの処理を中断` — 次チャンネルへ移行
-- `[retry] bot検知 → 3秒待って再試行` — リトライログ、正常動作
+| 確認項目 | 合格条件 |
+|----------|----------|
+| `[error]` 行 | ゼロ |
+| `ERROR:` 行 | ゼロ（`_FilteredStderr` が抑制） |
+| 各チャンネル | `[done] チャンネル名: N 件処理` で終了 |
+| 少なくとも1チャンネル | N > 0 |
 
 ---
 
-## 運用フロー
+## 既知の無害パターン（合格として扱う）
 
-### 通常実行（Mac）
+| パターン | 意味 |
+|----------|------|
+| `[warn] xxx: bot検知 → スキップ` | 一時的な YouTube 制限。処理継続 |
+| `[warn] xxx: 年齢制限 → スキップ` | 認証不足。スキップして続行 |
+| `[warn] xxx: レートリミット → 中断` | 次チャンネルへ移行 |
+| `[retry] bot検知 → 3秒待って再試行` | リトライログ。正常動作 |
 
-```bash
-python transcribe.py all --sort popular --limit 100
-```
+---
 
-### 通常実行（WSL）
+## cookies.txt の扱い
 
-```bash
-python transcribe.py all --sort popular --limit 10
-# または launchd から呼ばれる:
-bash run_transcribe.sh
-```
+| 環境 | 取得方法 |
+|------|----------|
+| Mac | `cookiesfrombrowser=chrome`（実行時に Chrome から直接読む） |
+| WSL | `cookiefile=cookies.txt`（Mac からの転送ファイル） |
 
-### クッキー同期（Mac→WSL）
+`cookies.txt` は `.gitignore` 対象。`sync-cookies` コマンドで手動同期。
 
-```bash
-# Mac 側で実行:
-python transcribe.py sync-cookies
-```
+---
 
-Mac の Chrome クッキーを WSL の `cookies.txt` に転送する。WSL は yt-dlp が Chrome に直接アクセスできないため。
+## 過去の WSL エラー履歴（参考）
 
-### キャッシュのみ構築（新チャンネル追加時）
-
-```bash
-python transcribe.py channel "チャンネル名" --sort popular --cache-only
-```
+| エラー | 原因 | 対処（済み） |
+|--------|------|-------------|
+| `Requested format is not available` | deno が PATH にない → web_creator クライアントが n-challenge 失敗 | 起動時に `~/.deno/bin` を PATH 追加 |
+| `Only images are available for download` | 同上 | 同上 |
+| `Sign in to confirm you're not a bot` | cookies 期限切れ / YouTube の一時的な制限 | `[warn]` + スキップで継続 |
+| `[Errno 36] File name too long` | Linux 255 バイト制限を文字数で計算していた | バイト数で切るよう修正 |
+| `ERROR:` 行がログに残る | `_FilteredStderr.__getattr__` が `buffer` を委譲 → raw buffer 直接書き込み | `buffer` を `AttributeError` で隠す |
