@@ -110,6 +110,10 @@ class _FilteredStderr:
     def __init__(self, real):
         self._real = real
 
+    def __getattr__(self, name):
+        # 未定義の属性は実 stderr に委譲（fileno, encoding 等を yt-dlp が参照した場合に対応）
+        return getattr(self._real, name)
+
     def write(self, data: str):
         if _is_suppressed_error(data):
             return 0
@@ -117,9 +121,6 @@ class _FilteredStderr:
 
     def flush(self):
         self._real.flush()
-
-    def isatty(self):
-        return getattr(self._real, "isatty", lambda: False)()
 
 
 def _sanitize(name: str) -> str:
@@ -248,7 +249,6 @@ def _cookie_opts() -> dict:
     import sys
     opts = {
         "cookiefile": str(COOKIES_FILE),
-        "remote_components": ["ejs:github"],
     }
     if sys.platform == "darwin":
         if not _cookies_refreshed:
@@ -412,8 +412,6 @@ def _download_audio(url: str, out_dir: str) -> str:
         "quiet": True,
         "no_warnings": True,
         "logger": _TqdmLogger(),       # ERROR: を _SUPPRESSED_ERR_MARKERS でフィルタ
-        "sleep_interval": 2,           # リクエスト間スリープ（レートリミット緩和）
-        "sleep_interval_requests": 2,
         "extractor_args": {"youtube": {**_web_client_args()}},
         **_cookie_opts(),
     }
