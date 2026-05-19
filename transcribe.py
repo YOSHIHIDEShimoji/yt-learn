@@ -91,15 +91,35 @@ def _is_members_only_error(msg: str) -> bool:
     return any(marker in msg for marker in _MEMBERS_ERR_MARKERS)
 
 
+def _is_suppressed_error(msg: str) -> bool:
+    return any(m in msg for m in _SUPPRESSED_ERR_MARKERS)
+
+
 class _TqdmLogger:
     def debug(self, msg): pass
     def info(self, msg): pass
     def warning(self, msg): pass
     def error(self, msg):
-        # 既知のハンドル済みエラーは [error] ログから除外（上位で [warn] として扱う）
-        if any(m in msg for m in _SUPPRESSED_ERR_MARKERS):
+        if _is_suppressed_error(msg):
             return
         _err(msg)
+
+
+class _FilteredStderr:
+    """yt-dlp が logger を経由せず直接 stderr に書く ERROR: 行を抑制するフィルター。"""
+    def __init__(self, real):
+        self._real = real
+
+    def write(self, data: str):
+        if _is_suppressed_error(data):
+            return 0
+        return self._real.write(data)
+
+    def flush(self):
+        self._real.flush()
+
+    def isatty(self):
+        return getattr(self._real, "isatty", lambda: False)()
 
 
 def _sanitize(name: str) -> str:
@@ -397,18 +417,22 @@ def _download_audio(url: str, out_dir: str) -> str:
         "extractor_args": {"youtube": {**_web_client_args()}},
         **_cookie_opts(),
     }
-    for attempt in range(2):
-        try:
-            with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-                ydl.download([url])
-            break
-        except yt_dlp.utils.DownloadError as e:
-            # 年齢制限は retry しても解決しないのでそのまま raise
-            if attempt == 0 and "not a bot" in str(e):
-                _err("[retry] bot検知 → 5秒待って再試行")
-                time.sleep(5)
-                continue
-            raise
+    _orig_stderr = sys.stderr
+    sys.stderr = _FilteredStderr(sys.stderr)
+    try:
+        for attempt in range(2):
+            try:
+                with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+                    ydl.download([url])
+                break
+            except yt_dlp.utils.DownloadError as e:
+                # 年齢制限は retry しても解決しないのでそのまま raise
+                if attempt == 0 and "not a bot" in str(e):
+                    time.sleep(5)
+                    continue
+                raise
+    finally:
+        sys.stderr = _orig_stderr
     for ext in (".m4a", ".webm", ".opus", ".mp4"):
         for f in Path(out_dir).iterdir():
             if f.suffix == ext:
@@ -759,6 +783,9 @@ def _process_channel(channel_name: str, channel_url: str, lang: str = "ja", limi
                 break
             if "confirm your age" in msg or "age-restricted" in msg:
                 _err(f"[warn] {v['title']}: 年齢制限 → スキップ")
+                continue
+            if "not a bot" in msg or "Sign in to confirm" in msg:
+                _err(f"[warn] {v['title']}: bot検知 → スキップ（cookies期限切れの可能性）")
                 continue
             _err(f"[error] {v['title']}: {e}")
 
