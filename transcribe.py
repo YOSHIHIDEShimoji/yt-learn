@@ -32,6 +32,12 @@ _cookies_pushed = False
 _cookies_refreshed = False  # Mac: 古いcookies.txtを初回起動時に削除するフラグ
 _log_file = None
 
+# WSL: deno は ~/.deno/bin にあるが run_transcribe.sh 経由以外は PATH に入らない
+# yt-dlp の web クライアントが n-challenge 解決に deno を使うため起動時に追加
+_deno_bin = str(Path.home() / ".deno" / "bin")
+if Path(_deno_bin).is_dir() and _deno_bin not in os.environ.get("PATH", ""):
+    os.environ["PATH"] = _deno_bin + os.pathsep + os.environ.get("PATH", "")
+
 
 def _setup_log() -> None:
     import atexit
@@ -265,11 +271,8 @@ def _cookie_opts() -> dict:
 
 
 def _web_client_args() -> dict:
-    """Mac: web クライアント（deno必要）。それ以外: android クライアント（JS不要）。"""
-    import sys
-    if sys.platform == "darwin":
-        return {"player_client": ["web"]}
-    return {"player_client": ["android"]}
+    """web クライアント。deno が PATH に入っていれば n-challenge も解決できる。"""
+    return {"player_client": ["web"]}
 
 def _yt_extract_with_retry(opts: dict, url: str, download: bool = False) -> dict:
     """yt-dlp の extract_info を実行。bot検知エラーで1度だけ3秒待ってリトライ。"""
