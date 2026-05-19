@@ -23,12 +23,9 @@ WHISPER_CLI = Path.home() / "my-projects/whisper.cpp/build/bin/whisper-cli"
 WHISPER_MODELS_DIR = Path.home() / "my-projects/whisper.cpp/models"
 GEMINI_MODEL = "gemini-2.5-flash-lite"
 OLLAMA_GENERATE_PATH = "/api/generate"
-WSL_HOST = "win"
-WSL_COOKIES_DEST = "/home/wsl-yoshihide/my-projects/yt-learn/cookies.txt"
 RCLONE_REMOTE = "gdrive"
 RCLONE_DEST = f"{RCLONE_REMOTE}:yt-learn"
 
-_cookies_pushed = False
 _cookies_refreshed = False  # Mac: 古いcookies.txtを初回起動時に削除するフラグ
 _log_file = None
 
@@ -62,18 +59,6 @@ def _log_write(msg: str) -> None:
     if _log_file:
         print(msg, file=_log_file)
 
-
-def _push_cookies_to_wsl() -> None:
-    global _cookies_pushed
-    import sys, subprocess
-    if sys.platform != "darwin" or _cookies_pushed or not COOKIES_FILE.exists():
-        return
-    subprocess.Popen(
-        ["scp", str(COOKIES_FILE), f"{WSL_HOST}:{WSL_COOKIES_DEST}"],
-        stdout=subprocess.DEVNULL,
-        stderr=subprocess.DEVNULL,
-    )
-    _cookies_pushed = True
 
 
 def _err(msg: str) -> None:
@@ -334,7 +319,6 @@ def _get_video_title(url: str) -> str:
         **_cookie_opts(),
     }
     info = _yt_extract_with_retry(opts, url, download=False)
-    _push_cookies_to_wsl()
     return info.get("title", "untitled")
 
 
@@ -791,7 +775,6 @@ def _process_channel(channel_name: str, channel_url: str, lang: str = "ja", limi
                      model_size: str = WHISPER_MODEL, cache_only: bool = False) -> int:
     _err(f"[channel] {channel_name}: 動画リスト取得中... (sort={sort})")
     videos = _get_channel_videos(channel_url)
-    _push_cookies_to_wsl()  # Mac: チャンネル取得後の新鮮なcookiesをWSLへ転送（1回のみ）
     _err(f"[channel] {len(videos)} 件の動画を発見")
 
     if sort == "popular":
@@ -901,28 +884,6 @@ def _sync_drive(dirs: list[str] | None = None) -> None:
     _err("[done] Google Drive への同期が完了しました")
 
 
-def _sync_cookies() -> None:
-    import subprocess
-    import sys
-    if sys.platform != "darwin":
-        _err("[error] sync-cookies は Mac からのみ実行できます")
-        sys.exit(1)
-    _err("[info] Chrome からクッキーを取得中...")
-    import yt_dlp
-    with yt_dlp.YoutubeDL({"quiet": True, "no_warnings": True, **_cookie_opts()}) as ydl:
-        try:
-            ydl.extract_info("https://www.youtube.com/watch?v=dQw4w9WgXcQ", download=False)
-        except Exception:
-            pass  # クッキーの書き出しは __exit__ で行われるためエラーは無視
-    _err(f"[info] {WSL_HOST} に転送中...")
-    wsl_cmd = f"wsl -- bash -c 'mkdir -p {Path(WSL_COOKIES_DEST).parent} && cat > {WSL_COOKIES_DEST}'"
-    with open(COOKIES_FILE, "rb") as f:
-        result = subprocess.run(["ssh", WSL_HOST, wsl_cmd], stdin=f, capture_output=True)
-    if result.returncode != 0:
-        _err(f"[error] 転送失敗:\n{result.stderr.decode()}")
-        sys.exit(1)
-    _err(f"[done] cookies.txt を {WSL_HOST}:{WSL_COOKIES_DEST} に送信しました")
-
 
 # ── CLI ────────────────────────────────────────────────────────────────────────
 
@@ -969,9 +930,6 @@ examples:
   python transcribe.py sync --only summaries
   python transcribe.py sync
 
-  # クッキー同期（Mac → WSL）
-  python transcribe.py sync-cookies
-
 AI要約は別スクリプト:
   python summarize.py "メンタリストDAIGO" --threshold 20
   python summarize.py all --force
@@ -1016,8 +974,6 @@ AI要約は別スクリプト:
     p_all.add_argument("--sort", choices=["date", "popular"], default="date")
     p_all.add_argument("--popular-sample", type=int, default=200)
     p_all.add_argument("--cache-only", action="store_true")
-
-    sub.add_parser("sync-cookies", help="Mac の Chrome クッキーを WSL に転送")
 
     p_sync = sub.add_parser("sync", help="transcripts/ と summaries/ を Google Drive に同期")
     p_sync.add_argument("--only", choices=["transcripts", "summaries"],
@@ -1066,9 +1022,6 @@ AI要約は別スクリプト:
         _process_channel(args.name, info["url"], info["lang"], args.limit, args.sort,
                          args.popular_sample, args.model, args.cache_only)
         _git_push_cache()
-
-    elif args.cmd == "sync-cookies":
-        _sync_cookies()
 
     elif args.cmd == "sync":
         dirs = [args.only] if args.only else None
