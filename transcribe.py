@@ -418,15 +418,19 @@ def _download_audio(url: str, out_dir: str) -> str:
     _orig_stderr = sys.stderr
     sys.stderr = _FilteredStderr(sys.stderr)
     try:
-        for attempt in range(2):
+        for attempt in range(3):
             try:
                 with yt_dlp.YoutubeDL(ydl_opts) as ydl:
                     ydl.download([url])
                 break
             except yt_dlp.utils.DownloadError as e:
-                # 年齢制限は retry しても解決しないのでそのまま raise
-                if attempt == 0 and "not a bot" in str(e):
+                err = str(e)
+                if attempt < 2 and "not a bot" in err:
                     time.sleep(5)
+                    continue
+                if attempt < 2 and "Requested format is not available" in err:
+                    # セッション状態の一時的な不整合→少し待ってリトライ
+                    time.sleep(10)
                     continue
                 raise
     finally:
