@@ -508,7 +508,7 @@ def _transcribe_whisper_cpp(audio_path: str, lang: str, model_size: str) -> str:
                     [str(WHISPER_CLI), "-m", str(model_file), "-f", audio,
                      "-l", lang, "-of", out_base, "-otxt"],
                     stdout=subprocess.PIPE, stderr=stderr_file,
-                    text=True, env=env,
+                    text=True, encoding="utf-8", errors="replace", env=env,
                 )
                 with _tqdm(total=int(duration), unit="s", file=sys.stderr, dynamic_ncols=True,
                            disable=not sys.stderr.isatty()) as pbar:
@@ -535,7 +535,7 @@ def _transcribe_whisper_cpp(audio_path: str, lang: str, model_size: str) -> str:
                 stderr_file.close()
 
             out_file = Path(out_base + ".txt")
-            return out_file.read_text(encoding="utf-8").strip() if out_file.exists() else ""
+            return out_file.read_text(encoding="utf-8", errors="replace").strip() if out_file.exists() else ""
     finally:
         if tmpwav:
             Path(tmpwav).unlink(missing_ok=True)
