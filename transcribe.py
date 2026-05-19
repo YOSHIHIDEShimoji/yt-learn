@@ -445,17 +445,23 @@ def _sort_by_popularity(videos: list, channel_name: str, sample_size: int) -> li
 
 def _download_audio(url: str, out_dir: str) -> str:
     import yt_dlp, time
-    ydl_opts = {
-        # 音声を優先（m4a→webm→任意のbestaudio）。最後の保険で best も許容
-        "format": "bestaudio[ext=m4a]/bestaudio[ext=webm]/bestaudio/best",
-        "outtmpl": os.path.join(out_dir, "%(id)s.%(ext)s"),
-        "quiet": True,
-        "no_warnings": True,
-        "logger": _TqdmLogger(),       # ERROR: を _SUPPRESSED_ERR_MARKERS でフィルタ
-        "extractor_args": {"youtube": {**_web_client_args()}},
-        **_cookie_opts(),
-    }
+    # ios クライアントを優先（bot検知が緩い）。失敗時は web → mweb に自動フォールバック
+    _CLIENT_SEQUENCES = [
+        ["ios", "web", "mweb"],   # attempt 0: ios 優先
+        ["web", "mweb"],          # attempt 1: web（deno が PATH に必要）
+        ["mweb"],                 # attempt 2: mweb のみ
+    ]
     for attempt in range(3):
+        ydl_opts = {
+            # 音声を優先（m4a→webm→任意のbestaudio）。最後の保険で best も許容
+            "format": "bestaudio[ext=m4a]/bestaudio[ext=webm]/bestaudio/best",
+            "outtmpl": os.path.join(out_dir, "%(id)s.%(ext)s"),
+            "quiet": True,
+            "no_warnings": True,
+            "logger": _TqdmLogger(),
+            "extractor_args": {"youtube": {"player_client": _CLIENT_SEQUENCES[attempt]}},
+            **_cookie_opts(),
+        }
         try:
             with yt_dlp.YoutubeDL(ydl_opts) as ydl:
                 ydl.download([url])
@@ -463,7 +469,7 @@ def _download_audio(url: str, out_dir: str) -> str:
         except yt_dlp.utils.DownloadError as e:
             err = str(e)
             if attempt < 2 and "not a bot" in err:
-                time.sleep(5)
+                time.sleep(3)
                 continue
             if attempt < 2 and "Requested format is not available" in err:
                 # セッション状態の一時的な不整合→少し待ってリトライ
