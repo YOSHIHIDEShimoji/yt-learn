@@ -668,7 +668,7 @@ def _call_ollama(prompt: str, base_url: str, model: str) -> str | None:
 
 def _generate_core_summary(title: str, text: str) -> tuple[str, str] | tuple[None, None]:
     local_url = os.environ.get("LOCAL_LLM_URL")
-    local_model = os.environ.get("LOCAL_LLM_MODEL", "qwen3.5:9b")
+    local_model = os.environ.get("LOCAL_LLM_MODEL", "qwen2.5:14b")
     api_key = os.environ.get("GEMINI_API_KEY")
 
     if not local_url and not api_key:
