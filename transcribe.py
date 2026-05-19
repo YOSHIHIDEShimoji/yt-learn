@@ -106,17 +106,22 @@ class _TqdmLogger:
 
 
 class _FilteredStderr:
-    """yt-dlp が logger を経由せず直接 stderr に書く ERROR: 行を抑制するフィルター。"""
+    """yt-dlp が logger を経由せず直接 stderr に書く ERROR: 行を抑制するフィルター。
+
+    buffer 属性を意図的に隠す: yt-dlp の write_string が hasattr(out, 'buffer') を
+    チェックして buffer に直接書こうとするのを防ぎ、必ず write() 経由にする。
+    """
     def __init__(self, real):
         self._real = real
 
     def __getattr__(self, name):
-        # 未定義の属性は実 stderr に委譲（fileno, encoding 等を yt-dlp が参照した場合に対応）
+        if name == 'buffer':
+            raise AttributeError('buffer')
         return getattr(self._real, name)
 
     def write(self, data: str):
         if _is_suppressed_error(data):
-            return 0
+            return len(data)
         return self._real.write(data)
 
     def flush(self):
