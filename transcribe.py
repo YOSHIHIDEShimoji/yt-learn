@@ -92,6 +92,9 @@ _SUPPRESSED_ERR_MARKERS = (
     "Sign in to confirm you’re not a bot",  # U+2019（yt-dlpが使う右シングルクォート）
     "Sign in to confirm you're not a bot",   # ASCII apostrophe フォールバック
     "not a bot",                              # 両方をカバーする短縮マーカー
+    "Got error",          # ネットワーク切断（一時的）
+    "Read timed out",     # ソケットタイムアウト（一時的）
+    "Connection reset",   # 接続リセット（一時的）
 )
 
 
@@ -798,6 +801,9 @@ def _process_channel(channel_name: str, channel_url: str, lang: str = "ja", limi
                 continue
             if "not a bot" in msg or "Sign in to confirm" in msg:
                 _err(f"[warn] {v['title']}: bot検知 → スキップ（cookies期限切れの可能性）")
+                continue
+            if "Got error" in msg or "Read timed out" in msg or "Connection reset" in msg:
+                _err(f"[warn] {v['title']}: ネットワークエラー → スキップ")
                 continue
             _err(f"[error] {v['title']}: {e}")
 
