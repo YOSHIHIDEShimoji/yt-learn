@@ -139,6 +139,33 @@ class _FilteredStderr:
         self._real.flush()
 
 
+def _install_stderr_pipe_filter() -> None:
+    """fd 2 (stderr) をパイプ経由にして _is_suppressed_error 行を OS レベルで除去する。
+
+    yt-dlp が Python の sys.stderr を迂回して fd 2 に直接書き込む場合もフィルタできる。
+    バックグラウンドスレッドがパイプを読んでフィルタし、元の stderr に転送する。
+    """
+    import threading
+
+    read_fd, write_fd = os.pipe()
+    original_fd2 = os.dup(2)
+    os.dup2(write_fd, 2)
+    os.close(write_fd)
+
+    original_out = os.fdopen(original_fd2, 'w', buffering=1, errors='replace')
+    sys.stderr = os.fdopen(2, 'w', buffering=1, errors='replace')
+
+    def _filter_thread():
+        with os.fdopen(read_fd, 'r', buffering=1, errors='replace') as pipe_in:
+            for line in pipe_in:
+                if not _is_suppressed_error(line):
+                    original_out.write(line)
+                    original_out.flush()
+
+    t = threading.Thread(target=_filter_thread, daemon=True)
+    t.start()
+
+
 def _sanitize(name: str) -> str:
     name = re.sub(r'[\\/:*?"<>|]', "_", name)
     name = name.strip()
@@ -428,26 +455,21 @@ def _download_audio(url: str, out_dir: str) -> str:
         "extractor_args": {"youtube": {**_web_client_args()}},
         **_cookie_opts(),
     }
-    _orig_stderr = sys.stderr
-    sys.stderr = _FilteredStderr(sys.stderr)
-    try:
-        for attempt in range(3):
-            try:
-                with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-                    ydl.download([url])
-                break
-            except yt_dlp.utils.DownloadError as e:
-                err = str(e)
-                if attempt < 2 and "not a bot" in err:
-                    time.sleep(5)
-                    continue
-                if attempt < 2 and "Requested format is not available" in err:
-                    # セッション状態の一時的な不整合→少し待ってリトライ
-                    time.sleep(10)
-                    continue
-                raise
-    finally:
-        sys.stderr = _orig_stderr
+    for attempt in range(3):
+        try:
+            with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+                ydl.download([url])
+            break
+        except yt_dlp.utils.DownloadError as e:
+            err = str(e)
+            if attempt < 2 and "not a bot" in err:
+                time.sleep(5)
+                continue
+            if attempt < 2 and "Requested format is not available" in err:
+                # セッション状態の一時的な不整合→少し待ってリトライ
+                time.sleep(10)
+                continue
+            raise
     for ext in (".m4a", ".webm", ".opus", ".mp4"):
         for f in Path(out_dir).iterdir():
             if f.suffix == ext:
@@ -901,6 +923,7 @@ def _sync_cookies() -> None:
 def main() -> None:
     _load_env()
     _setup_log()
+    _install_stderr_pipe_filter()
 
     parser = argparse.ArgumentParser(
         description="YouTube動画の文字起こし・チャンネル管理ツール",
