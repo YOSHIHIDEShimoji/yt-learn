@@ -30,7 +30,7 @@ Mac
   ├─ yt-dlp（音声ダウンロード）← Chromeクッキー直接読み取り
   ├─ whisper.cpp（Metal GPU 文字起こし）
   ├─ Ollama（Windows Tailscale IP経由） → Geminiフォールバック
-  └─ cookies.txt を WSL に scp で同期
+  └─ autonomous.sh 起動時に refresh-cookies で自動更新
 
 WSL（Windows上）
   ├─ yt-dlp（音声ダウンロード）← cookies.txt を使用
@@ -55,7 +55,7 @@ WSL（Windows上）
 | `channels.txt` | チャンネル一覧（名前\|URL\|言語） |
 | `cache/*.json` | 再生数キャッシュ（git管理・Mac↔WSL共有） |
 | `queue/` | DL済み音声の一時置き場（gitignore対象） |
-| `cookies.txt` | YouTubeクッキー（gitignore対象・Macからscp転送） |
+| `cookies.txt` | YouTubeクッキー（gitignore対象・Windows Firefox から自動取得） |
 | `.env` | LOCAL_LLM_URL等（gitignore対象） |
 
 ---
@@ -146,8 +146,11 @@ git pull
 ls -la cookies.txt
 ```
 
-古い場合は Mac 側で `python transcribe.py sync-cookies` を実行して転送してもらう。
-（あるいは WSL から: `ssh <mac> "python transcribe.py sync-cookies"` 等）
+古い場合は手動で更新:
+```bash
+python transcribe.py refresh-cookies
+```
+autonomous.sh 起動時は自動実行される。
 
 ### Step 3: yt-dlp が動くか確認（任意）
 
@@ -283,12 +286,15 @@ grep '\[session-end\]' logs/autonomous/*.log
 
 ## cookies.txt の扱い
 
-| 環境 | 取得方法 |
-|------|----------|
-| Mac | `cookiesfrombrowser=chrome`（実行時に Chrome から直接読む） |
-| WSL | `cookiefile=cookies.txt`（Mac からの転送ファイル） |
+| 項目 | 内容 |
+|------|------|
+| 取得方法 | Windows Firefox の `cookies.sqlite` を直接読んで Netscape 形式に変換 |
+| 自動更新 | `autonomous.sh` 起動時に `refresh-cookies` を自動実行 |
+| 手動更新 | `python transcribe.py refresh-cookies` |
+| git 管理 | `.gitignore` 対象（認証情報のため）|
 
-`cookies.txt` は `.gitignore` 対象。`sync-cookies` コマンドで手動同期。
+Chrome 127+ の App-Bound Encryption で Chrome/Edge は外部復号不可のため Firefox を採用。
+Firefox 起動中・停止中どちらでも動作する。
 
 ---
 
