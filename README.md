@@ -9,17 +9,12 @@ yt-learn/
 ├── autonomous.sh        # ★ 常時稼働エントリポイント（DL/文字起こし並列・rate-limit自動回復）
 ├── transcribe.py        # 文字起こしコアエンジン
 ├── summarize.py         # AI要約スクリプト
-├── loop_transcribe.sh   # 直列ループ（旧方式）
-├── benchmark.sh         # パラメータ最適化ツール（channel_sleep × limit の18通り総当たり）
 ├── channels.txt         # 追跡するチャンネルのリスト
-├── run_transcribe.sh    # 文字起こし自動実行ラッパー（launchd 用）
-├── run_summarize.sh     # 要約自動実行ラッパー（launchd 用）
 ├── youtube.png          # 通知アイコン
 ├── .env                 # 環境変数（GEMINI_API_KEY など）※ git管理外
 ├── cookies.txt          # YouTube クッキー（yt-dlp が書き出し）※ git管理外
 ├── cache/               # 再生数キャッシュ（チャンネル別）
 ├── queue/               # DL済み音声の一時置き場（autonomous.sh 用）※ git管理外
-├── log/                 # 実行ログ（transcribe_YYYYMMDD.log, summarize.log）
 ├── logs/autonomous/     # autonomous.sh のセッションログ ※ git管理外
 ├── transcripts/         # チャンネル別の文字起こしファイル ※ git管理外
 │   └── {チャンネル名}/
@@ -241,27 +236,6 @@ python transcribe.py sync --only summaries
 
 文字起こし完了ごとに該当ファイルが自動で Drive に転送される。末尾の `sync` は取りこぼし補完用。
 
-### ログ確認
-
-実行のたびに `log/transcribe_YYYYMMDD.log` にリアルタイムで書き出される（日次ローテーション）。
-
-```bash
-# 当日のログを確認
-cat log/transcribe_$(date +%Y%m%d).log
-
-# エラーのみ抽出
-grep '\[error\]' log/transcribe_$(date +%Y%m%d).log
-```
-
-WSL 側のログは `/home/wsl-yoshihide/my-projects/yt-learn/log/` に出力される。
-
-### キャッシュ確認
-
-```bash
-# 再生数0のエントリ（エラー由来の可能性あり）を確認
-./check_cache.sh
-```
-
 ### メンバー限定動画
 
 人気順ソート（`--sort popular`）で再生数取得時にメンバー限定動画に当たると、`cache/*_view_cache.json` に `-1` を sentinel として保存する。次回以降は再取得せず、ソートでも最下位に回るため `--limit N` の上位 N 件には含まれない。`[error]` / `ERROR:` のログにも出ない。
@@ -289,40 +263,6 @@ DL（バックグラウンド）と文字起こし（フォアグラウンド）
 ```bash
 tail -f logs/autonomous/*.log
 grep '\[session-end\]' logs/autonomous/*.log
-```
-
-## 自動実行（launchd）
-
-| ラベル | スクリプト | スケジュール | 実行内容 |
-|---|---|---|---|
-| `com.yoshihide.run_yt-learn` | `run_transcribe.sh` | 毎日 0:00 | `transcribe.py all --sort popular --limit 20` |
-| `com.yoshihide.run_yt-summarize` | `run_summarize.sh` | 毎日 1:00 | `summarize.py all --threshold 20` |
-
-plist は `~/dotfiles-mac/LaunchAgents/` で管理し、`~/Library/LaunchAgents/` にシンボリックリンクを張る。
-
-### 通知内容
-
-通知アイコンは `~/Applications/Notifiers/yt-learn.app`（[notifier](../notifier) プロジェクトでビルド）。
-
-```
-# ネットワーク未接続でスキップしたとき
-[yt-learn]
-  ネットワーク未接続のためスキップしました
-
-# 要約ファイルを新規作成したとき
-[yt-learn]
-  メンタリスト DaiGo の要約を作成しました（20件）
-
-# 要約ファイルを更新したとき
-[yt-learn]
-  メンタリスト DaiGo の要約を更新しました（20件）
-
-# エラーのとき
-[yt-learn]
-  文字起こしでエラーが発生しました。log/ を確認してください
-
-[yt-learn]
-  要約でエラーが発生しました。log/ を確認してください
 ```
 
 ## 要約の仕組み
