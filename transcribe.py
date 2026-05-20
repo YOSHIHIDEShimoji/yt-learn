@@ -15,6 +15,7 @@ from urllib.parse import parse_qs, urlparse
 BASE_DIR = Path(__file__).parent.resolve()
 TRANSCRIPTS_DIR = BASE_DIR / "transcripts"
 CACHE_DIR = BASE_DIR / "cache"
+QUEUE_DIR = BASE_DIR / "queue"
 CHANNELS_FILE = BASE_DIR / "channels.txt"
 COOKIES_FILE = BASE_DIR / "cookies.txt"
 
@@ -191,6 +192,18 @@ def _save_index(channel_name: str, index: dict) -> None:
     p = _index_path(channel_name)
     p.parent.mkdir(parents=True, exist_ok=True)
     p.write_text(json.dumps(index, ensure_ascii=False, indent=2), encoding="utf-8")
+
+
+def _queue_dir(channel_name: str) -> Path:
+    return QUEUE_DIR / _sanitize(channel_name)
+
+
+def _queued_video_ids(channel_name: str) -> set[str]:
+    d = _queue_dir(channel_name)
+    if not d.exists():
+        return set()
+    audio_exts = {".m4a", ".webm", ".opus", ".mp4"}
+    return {f.stem for f in d.iterdir() if f.suffix in audio_exts}
 
 
 def _ranking_path(channel_name: str) -> Path:
@@ -824,6 +837,159 @@ def _process_channel(channel_name: str, channel_url: str, lang: str = "ja", limi
     return processed
 
 
+def _download_channel_to_queue(
+    channel_name: str, channel_url: str, lang: str = "ja",
+    limit: int = 0, sort: str = "popular", popular_sample: int = 200,
+) -> tuple[int, bool]:
+    """音声を queue/ にダウンロードのみ行い文字起こしはしない。戻り値: (added, rate_limited)"""
+    _err(f"[dl-queue] {channel_name}: 動画リスト取得中... (sort={sort})")
+    try:
+        videos = _get_channel_videos(channel_url)
+    except Exception as e:
+        if "rate-limited" in str(e):
+            _err(f"[rate-limit] {channel_name}: 動画リスト取得でレートリミット")
+            return 0, True
+        raise
+    _err(f"[dl-queue] {len(videos)} 件の動画を発見")
+
+    if sort == "popular":
+        try:
+            videos = _sort_by_popularity(videos, channel_name, popular_sample)
+            _update_ranking(channel_name, videos)
+        except Exception as e:
+            if "rate-limited" in str(e):
+                _err(f"[rate-limit] {channel_name}: 人気順ソートでレートリミット")
+                return 0, True
+            raise
+
+    index = _load_index(channel_name)
+    cache = _load_view_cache(channel_name)
+    queued = _queued_video_ids(channel_name)
+    videos = [
+        v for v in videos
+        if _extract_video_id(v["url"]) not in index
+        and cache.get(_extract_video_id(v["url"]), 0) != -1
+        and _extract_video_id(v["url"]) not in queued
+    ]
+    if limit > 0:
+        videos = videos[:limit]
+
+    q_dir = _queue_dir(channel_name)
+    q_dir.mkdir(parents=True, exist_ok=True)
+
+    added = 0
+    for v in videos:
+        vid_id = _extract_video_id(v["url"])
+        _err(f"\n[dl-queue] {v['title']}")
+        try:
+            audio_path = _download_audio(v["url"], str(q_dir))
+            meta = {
+                "title": v["title"],
+                "url": v["url"],
+                "channel": channel_name,
+                "lang": lang,
+                "queued_at": datetime.now().isoformat(timespec="seconds"),
+            }
+            (q_dir / f"{vid_id}.meta.json").write_text(
+                json.dumps(meta, ensure_ascii=False, indent=2), encoding="utf-8"
+            )
+            added += 1
+            _err(f"[queued] {v['title']}")
+        except Exception as e:
+            msg = str(e)
+            if "rate-limited" in msg:
+                _err(f"[rate-limit] {channel_name}: レートリミット → DL中断")
+                return added, True
+            if "confirm your age" in msg or "age-restricted" in msg:
+                _err(f"[warn] {v['title']}: 年齢制限 → スキップ")
+                continue
+            if "not a bot" in msg or "Sign in to confirm" in msg:
+                _err(f"[warn] {v['title']}: bot検知 → スキップ")
+                continue
+            if "Got error" in msg or "Read timed out" in msg or "Connection reset" in msg:
+                _err(f"[warn] {v['title']}: ネットワークエラー → スキップ")
+                continue
+            _err(f"[error] {v['title']}: {e}")
+
+    _err(f"[queue-added] {channel_name}: {added} 件をキューに追加\n")
+    return added, False
+
+
+def _drain_queue_all(model_size: str = WHISPER_MODEL,
+                     idle_polls: int = 3, idle_sleep: int = 10) -> int:
+    """queue/ の音声ファイルを文字起こしし続ける。キューが idle_polls 回連続空なら終了。"""
+    import time
+    audio_exts = {".m4a", ".webm", ".opus", ".mp4"}
+    consecutive_empty = 0
+    processed = 0
+
+    while True:
+        candidates = []
+        if QUEUE_DIR.exists():
+            for ch_dir in QUEUE_DIR.iterdir():
+                if not ch_dir.is_dir():
+                    continue
+                for audio_file in ch_dir.iterdir():
+                    if audio_file.suffix not in audio_exts:
+                        continue
+                    meta_file = audio_file.with_suffix(".meta.json")
+                    if not meta_file.exists():
+                        _err(f"[warn] [queue-skip] meta なし: {audio_file.name}")
+                        continue
+                    candidates.append((audio_file.stat().st_mtime, audio_file))
+
+        if not candidates:
+            consecutive_empty += 1
+            if consecutive_empty >= idle_polls:
+                _err("[queue-empty] キューが空です")
+                break
+            time.sleep(idle_sleep)
+            continue
+
+        consecutive_empty = 0
+        candidates.sort()
+        _, audio_path = candidates[0]
+        meta_path = audio_path.with_suffix(".meta.json")
+
+        try:
+            meta = json.loads(meta_path.read_text(encoding="utf-8"))
+        except Exception:
+            _err(f"[warn] [queue-skip] meta 読み込み失敗: {meta_path.name}")
+            meta_path.unlink(missing_ok=True)
+            continue
+
+        vid_id = _extract_video_id(meta["url"])
+        index = _load_index(meta["channel"])
+        if vid_id in index:
+            _err(f"[skip] 処理済み（重複）: {meta['title']}")
+            audio_path.unlink(missing_ok=True)
+            meta_path.unlink(missing_ok=True)
+            continue
+
+        _err(f"\n[drain] {meta['title']}")
+        try:
+            text = _transcribe(str(audio_path), meta["lang"], model_size=model_size)
+            saved = _save_transcript(meta["channel"], meta["title"], meta["url"], text,
+                                     model_size=model_size)
+            _err(f"[saved] {saved}")
+            _inject_core_summary(saved)
+            _copy_file_to_drive(saved)
+            index[vid_id] = {
+                "title": meta["title"],
+                "url": meta["url"],
+                "file": str(saved),
+                "transcribed_at": date.today().isoformat(),
+            }
+            _save_index(meta["channel"], index)
+            audio_path.unlink(missing_ok=True)
+            meta_path.unlink(missing_ok=True)
+            processed += 1
+        except Exception as e:
+            _err(f"[error] drain-queue: {e}")
+
+    return processed
+
+
 def _git_push_cache() -> None:
     import subprocess
     if not shutil.which("git"):
@@ -966,6 +1132,8 @@ AI要約は別スクリプト:
                            "。メンバー限定動画は自動でキャッシュ＆次回スキップされる")
     p_ch.add_argument("--cache-only", action="store_true",
                       help="再生数キャッシュの構築のみ行い、文字起こしはしない（--sort popular と併用）")
+    p_ch.add_argument("--download-only", action="store_true",
+                      help="音声を queue/ にDLのみ行い文字起こしはしない（autonomous.sh 用）")
 
     p_all = sub.add_parser("all", help="全チャンネルを処理")
     p_all.add_argument("--model", default=WHISPER_MODEL,
@@ -974,6 +1142,14 @@ AI要約は別スクリプト:
     p_all.add_argument("--sort", choices=["date", "popular"], default="date")
     p_all.add_argument("--popular-sample", type=int, default=200)
     p_all.add_argument("--cache-only", action="store_true")
+
+    p_drain = sub.add_parser("drain-queue", help="queue/ の音声を文字起こし（autonomous.sh 用）")
+    p_drain.add_argument("--model", default=WHISPER_MODEL,
+                         choices=["tiny", "base", "small", "medium", "large", "large-v2", "large-v3", "large-v3-turbo"])
+    p_drain.add_argument("--idle-polls", type=int, default=3,
+                         help="キュー空を何回検知したら終了するか (default: 3)")
+    p_drain.add_argument("--idle-sleep", type=int, default=10,
+                         help="キュー空時の待機秒数 (default: 10)")
 
     p_sync = sub.add_parser("sync", help="transcripts/ と summaries/ を Google Drive に同期")
     p_sync.add_argument("--only", choices=["transcripts", "summaries"],
@@ -1019,9 +1195,19 @@ AI要約は別スクリプト:
             _err(f"[error] '{args.name}' が channels.txt に見つかりません")
             sys.exit(1)
         info = channels[args.name]
-        _process_channel(args.name, info["url"], info["lang"], args.limit, args.sort,
-                         args.popular_sample, args.model, args.cache_only)
-        _git_push_cache()
+        if args.download_only:
+            _download_channel_to_queue(
+                args.name, info["url"], info["lang"], args.limit, args.sort, args.popular_sample
+            )
+        else:
+            _process_channel(args.name, info["url"], info["lang"], args.limit, args.sort,
+                             args.popular_sample, args.model, args.cache_only)
+            _git_push_cache()
+
+    elif args.cmd == "drain-queue":
+        count = _drain_queue_all(args.model, args.idle_polls, args.idle_sleep)
+        if count == 0:
+            sys.exit(2)
 
     elif args.cmd == "sync":
         dirs = [args.only] if args.only else None

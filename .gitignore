@@ -3,6 +3,8 @@ summaries/
 log/
 logs/loop/
 logs/benchmark/
+logs/autonomous/
+queue/
 __pycache__/
 *.wav
 *.tmp

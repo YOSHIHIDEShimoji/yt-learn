@@ -48,8 +48,13 @@ WSL（Windows上）
 | ファイル | 役割 |
 |----------|------|
 | `transcribe.py` | メインスクリプト。全ロジックここに集約 |
+| `autonomous.sh` | **自律ループ（推奨）** DL/文字起こし並列、rate-limit自動回復 |
+| `loop_transcribe.sh` | 直列ループ（旧方式） |
+| `benchmark.sh` | パラメータ最適化ツール（18通り総当たり） |
+| `summarize.py` | AI要約エンジン（Ollama / Gemini） |
 | `channels.txt` | チャンネル一覧（名前\|URL\|言語） |
 | `cache/*.json` | 再生数キャッシュ（git管理・Mac↔WSL共有） |
+| `queue/` | DL済み音声の一時置き場（gitignore対象） |
 | `cookies.txt` | YouTubeクッキー（gitignore対象・Macからscp転送） |
 | `.env` | LOCAL_LLM_URL等（gitignore対象） |
 
@@ -206,7 +211,30 @@ grep -v '^#\|^$\|^##\|^ ' logs/benchmark/*.log | sort -t$'\t' -k7 -rn | head -5
 
 → `optimal` プリセット（sleep=300s, limit=10）を推奨パラメータとして採用。
 
-### 本番稼働
+### 本番稼働（自律型・推奨）
+
+```bash
+./autonomous.sh                   # デフォルト設定（limit=20, model=large-v3）
+./autonomous.sh --limit 10 --model large-v3
+./autonomous.sh --probe-interval 120  # rate-limit復帰チェック間隔を調整
+# Ctrl+C で安全停止 → [session-end] 行を logs/autonomous/*.log に追記
+```
+
+**動作**: DL（バックグラウンド）と文字起こし（フォアグラウンド）を並列実行。
+rate-limit 検知 → `--probe-interval` 秒ごとに YouTube に疎通チェック → 解除を検知したら DL 自動再開。
+その間も文字起こしワーカーは queue/ をドレインし続けるため GPU はアイドルにならない。
+
+```
+./autonomous.sh を叩くだけ。あとは全自動。
+```
+
+**ログ確認**:
+```bash
+tail -f logs/autonomous/*.log
+grep '\[session-end\]' logs/autonomous/*.log
+```
+
+### 本番稼働（直列ループ・旧方式）
 
 ```bash
 ./loop_transcribe.sh              # optimal プリセット（推奨・デフォルト）
@@ -217,10 +245,14 @@ grep -v '^#\|^$\|^##\|^ ' logs/benchmark/*.log | sort -t$'\t' -k7 -rn | head -5
 # Ctrl+C で即座に安全停止 → [session-end] 行をログに追記して終了
 ```
 
+DL と文字起こしが直列のため、rate-limit 中は GPU がアイドルになる。
+→ 新規稼働は `autonomous.sh` を推奨。
+
 ### 効率比較（複数セッション後）
 
 ```bash
 grep '\[session-end\]' logs/loop/*.log
+grep '\[session-end\]' logs/autonomous/*.log
 ```
 
 `total件数 / elapsed時間` が最大で rate-limited が少ないセッションのパラメータが最適。
