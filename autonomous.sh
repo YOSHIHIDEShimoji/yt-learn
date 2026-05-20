@@ -73,9 +73,13 @@ SESSION_START=$(date +%s)
 DL_PID=""
 
 log() {
-  local msg="[$(date '+%Y-%m-%d %H:%M:%S')] $1"
+  local msg="[$(date '+%Y-%m-%d %H:%M:%S')] ${WORKER:+$WORKER }$1"
   echo "$msg"
   echo "$msg" >> "$LOG_FILE"
+}
+
+stamp() {
+  awk -v w="${WORKER:-[??]}" '{ printf "[%s] %s %s\n", strftime("%Y-%m-%d %H:%M:%S"), w, $0; fflush() }'
 }
 
 cleanup() {
@@ -109,6 +113,7 @@ fi
 # rate-limit 検知 → プローブループで解除を能動検知 → 自動再開
 # ──────────────────────────────────────────────────────────────
 dl_worker() {
+  WORKER="[DL]"
   while true; do
     rate_limited=false
 
@@ -116,7 +121,7 @@ dl_worker() {
       tmpout=$(mktemp)
       python "$SCRIPT_DIR/transcribe.py" channel "$name" \
         --download-only --sort popular --limit "$LIMIT" 2>&1 \
-        | tee -a "$LOG_FILE" | tee "$tmpout"
+        | stamp | tee -a "$LOG_FILE" | tee "$tmpout"
 
       if grep -q '\[rate-limit\]' "$tmpout"; then
         rate_limited=true
@@ -141,7 +146,7 @@ dl_worker() {
         probe_out=$(mktemp)
         python "$SCRIPT_DIR/transcribe.py" channel "${CHANNELS[0]}" \
           --download-only --limit 1 2>&1 \
-          | tee -a "$LOG_FILE" | tee "$probe_out"
+          | stamp | tee -a "$LOG_FILE" | tee "$probe_out"
 
         if ! grep -q '\[rate-limit\]' "$probe_out"; then
           log "[dl] rate-limit 解除を検知！DL 再開"
@@ -160,10 +165,11 @@ dl_worker() {
 # queue/ を常時ドレイン。GPU を常時稼働させる。
 # ──────────────────────────────────────────────────────────────
 transcribe_worker() {
+  WORKER="[TX]"
   while true; do
     python "$SCRIPT_DIR/transcribe.py" drain-queue \
       --model "$MODEL" --idle-polls 3 --idle-sleep 10 2>&1 \
-      | tee -a "$LOG_FILE"
+      | stamp | tee -a "$LOG_FILE"
     exit_code=${PIPESTATUS[0]}
 
     if [[ "$exit_code" -ne 0 && "$exit_code" -ne 2 ]]; then
