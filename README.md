@@ -159,6 +159,9 @@ python transcribe.py list
 # 単発URL（--model で軽量モデルを指定して高速化）
 python transcribe.py process https://youtu.be/xxx --model tiny
 
+# 処理済みでも強制的に再文字起こし
+python transcribe.py process https://youtu.be/xxx --force
+
 # チャンネル指定あり → transcripts/メンタリスト DaiGo/ に保存
 python transcribe.py process https://youtu.be/xxx --channel "メンタリスト DaiGo" --model tiny
 
@@ -208,6 +211,10 @@ python transcribe.py all --sort popular --limit 20
 
 # 全チャンネルのキャッシュのみ一括構築
 python transcribe.py all --sort popular --cache-only
+
+# 処理済みでも強制的に再文字起こし（channel / all 両方対応）
+python transcribe.py channel "メンタリスト DaiGo" --sort popular --limit 5 --force
+python transcribe.py all --sort popular --limit 5 --force
 ```
 
 ### AI要約

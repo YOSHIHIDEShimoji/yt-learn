@@ -765,18 +765,20 @@ def _inject_core_summary(md_path: Path) -> None:
 # ── 処理エントリポイント ───────────────────────────────────────────────────────
 
 def _process_url(url: str, channel_name: str, lang: str = "ja", title: str = None,
-                 output_dir: Path = None, model_size: str = WHISPER_MODEL) -> bool:
+                 output_dir: Path = None, model_size: str = WHISPER_MODEL,
+                 force: bool = False) -> bool:
     vid_id = _extract_video_id(url)
     index = _load_index(channel_name)
 
-    if vid_id in index:
-        _err(f"[skip] 処理済み: {index[vid_id]['title']}")
-        return False
+    if not force:
+        if vid_id in index:
+            _err(f"[skip] 処理済み: {index[vid_id]['title']}")
+            return False
 
-    found, other_channel, other_title = _is_globally_processed(vid_id)
-    if found:
-        _err(f"[skip] 処理済み (チャンネル: {other_channel}): {other_title}")
-        return False
+        found, other_channel, other_title = _is_globally_processed(vid_id)
+        if found:
+            _err(f"[skip] 処理済み (チャンネル: {other_channel}): {other_title}")
+            return False
 
     if title is None:
         _err(f"[info] タイトル取得中: {url}")
@@ -806,7 +808,8 @@ def _process_url(url: str, channel_name: str, lang: str = "ja", title: str = Non
 
 def _process_channel(channel_name: str, channel_url: str, lang: str = "ja", limit: int = 0,
                      sort: str = "date", popular_sample: int = 0,
-                     model_size: str = WHISPER_MODEL, cache_only: bool = False) -> int:
+                     model_size: str = WHISPER_MODEL, cache_only: bool = False,
+                     force: bool = False) -> int:
     _err(f"[channel] {channel_name}: 動画リスト取得中... (sort={sort})")
     videos = _get_channel_videos(channel_url)
     _err(f"[channel] {len(videos)} 件の動画を発見")
@@ -823,7 +826,7 @@ def _process_channel(channel_name: str, channel_url: str, lang: str = "ja", limi
     cache = _load_view_cache(channel_name)
     videos = [
         v for v in videos
-        if _extract_video_id(v["url"]) not in index
+        if (force or _extract_video_id(v["url"]) not in index)
         and cache.get(_extract_video_id(v["url"]), 0) != -1  # メンバー限定をスキップ
     ]
     if limit > 0:
@@ -833,7 +836,7 @@ def _process_channel(channel_name: str, channel_url: str, lang: str = "ja", limi
     for i, v in enumerate(videos, 1):
         _err(f"\n[{i}/{len(videos)}] {v['title']}")
         try:
-            if _process_url(v["url"], channel_name, lang, title=v["title"], model_size=model_size):
+            if _process_url(v["url"], channel_name, lang, title=v["title"], model_size=model_size, force=force):
                 processed += 1
                 index = _load_index(channel_name)
         except Exception as e:
@@ -1157,6 +1160,7 @@ AI要約は別スクリプト:
                         help=f"Whisperモデル (default: {WHISPER_MODEL})")
     p_proc.add_argument("-f", "--file", help="URLを1行1件で記述したテキストファイル（#はコメント、'URL | en' で言語指定可）")
     p_proc.add_argument("-o", "--output", help="出力ディレクトリ（省略時は transcripts/{channel}/）")
+    p_proc.add_argument("--force", action="store_true", help="処理済みでも再度文字起こしする")
 
     p_ch = sub.add_parser("channel", help="チャンネルの全動画を処理")
     p_ch.add_argument("name", help="channels.txt のチャンネル名")
@@ -1172,6 +1176,7 @@ AI要約は別スクリプト:
                       help="再生数キャッシュの構築のみ行い、文字起こしはしない（--sort popular と併用）")
     p_ch.add_argument("--download-only", action="store_true",
                       help="音声を queue/ にDLのみ行い文字起こしはしない（autonomous.sh 用）")
+    p_ch.add_argument("--force", action="store_true", help="処理済みでも再度文字起こしする")
 
     p_all = sub.add_parser("all", help="全チャンネルを処理")
     p_all.add_argument("--model", default=WHISPER_MODEL,
@@ -1180,6 +1185,7 @@ AI要約は別スクリプト:
     p_all.add_argument("--sort", choices=["date", "popular"], default="date")
     p_all.add_argument("--popular-sample", type=int, default=200)
     p_all.add_argument("--cache-only", action="store_true")
+    p_all.add_argument("--force", action="store_true", help="処理済みでも再度文字起こしする")
 
     p_drain = sub.add_parser("drain-queue", help="queue/ の音声を文字起こし（autonomous.sh 用）")
     p_drain.add_argument("--model", default=WHISPER_MODEL,
@@ -1226,7 +1232,7 @@ AI要約は別スクリプト:
         for i, (url, lang) in enumerate(url_langs):
             if i > 0:
                 _err("")
-            _process_url(url, args.channel, lang, output_dir=output_dir, model_size=args.model)
+            _process_url(url, args.channel, lang, output_dir=output_dir, model_size=args.model, force=args.force)
 
     elif args.cmd == "channel":
         channels = _load_channels()
@@ -1240,7 +1246,7 @@ AI要約は別スクリプト:
             )
         else:
             _process_channel(args.name, info["url"], info["lang"], args.limit, args.sort,
-                             args.popular_sample, args.model, args.cache_only)
+                             args.popular_sample, args.model, args.cache_only, args.force)
             _git_push_cache()
 
     elif args.cmd == "drain-queue":
@@ -1258,7 +1264,7 @@ AI要約は別スクリプト:
             _err("[warn] channels.txt にチャンネルが登録されていません")
             sys.exit(0)
         for name, info in channels.items():
-            _process_channel(name, info["url"], info["lang"], args.limit, args.sort, args.popular_sample, args.model, args.cache_only)
+            _process_channel(name, info["url"], info["lang"], args.limit, args.sort, args.popular_sample, args.model, args.cache_only, args.force)
         _git_push_cache()
 
 
