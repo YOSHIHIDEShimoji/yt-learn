@@ -179,6 +179,54 @@ grep '\[done\]' /tmp/yt-wsl-test.log
 
 ---
 
+## ループスクリプト運用
+
+### ベンチマーク（初回・パラメータ最適化時）
+
+channel_sleep × limit の18通りを自動実行して `videos/hour` を比較する。
+
+```bash
+./benchmark.sh                        # デフォルト: model=tiny, 先頭5チャンネル
+./benchmark.sh --channels 17          # 全チャンネル（精度高・時間長）
+```
+
+結果確認:
+
+```bash
+grep -v '^#\|^$\|^##\|^ ' logs/benchmark/*.log | sort -t$'\t' -k7 -rn | head -5
+```
+
+**実測結果（2026-05-20, 17チャンネル）**:
+
+| sleep | limit | ok/17 | rl | 件数 | v/hour |
+|---|---|---|---|---|---|
+| **300s** | **10** | **10** | **7** | **96件** | **22.2** ← 採用 |
+| 180s | 10 | 7 | 10 | 51件 | 21.6 |
+| 300s | 3 | 8 | 9 | 24件 | 12.1 |
+
+→ `optimal` プリセット（sleep=300s, limit=10）を推奨パラメータとして採用。
+
+### 本番稼働
+
+```bash
+./loop_transcribe.sh              # optimal プリセット（推奨・デフォルト）
+./loop_transcribe.sh optimal      # sleep=300s, limit=10, model=large-v3
+./loop_transcribe.sh conservative # sleep=300s, limit=3（安全優先）
+./loop_transcribe.sh moderate     # sleep=120s, limit=5
+./loop_transcribe.sh aggressive   # sleep=60s, limit=10
+# Ctrl+C で即座に安全停止 → [session-end] 行をログに追記して終了
+```
+
+### 効率比較（複数セッション後）
+
+```bash
+grep '\[session-end\]' logs/loop/*.log
+```
+
+`total件数 / elapsed時間` が最大で rate-limited が少ないセッションのパラメータが最適。
+
+---
+
 ## 合格基準
 
 | 確認項目 | 合格条件 |
