@@ -317,8 +317,42 @@ def _list_channels() -> None:
 
 # ── yt-dlp ヘルパー ────────────────────────────────────────────────────────────
 
+PWSH = Path("/mnt/c/Windows/System32/WindowsPowerShell/v1.0/powershell.exe")
+_YTDLP_WIN_PATH = "C:\\Users\\gyshi\\AppData\\Local\\Microsoft\\WinGet\\Packages\\yt-dlp.yt-dlp_Microsoft.Winget.Source_8wekyb3d8bbwe\\yt-dlp.exe"
+_YTDLP_WIN_WSL = Path("/mnt/c/Users/gyshi/AppData/Local/Microsoft/WinGet/Packages"
+                       "/yt-dlp.yt-dlp_Microsoft.Winget.Source_8wekyb3d8bbwe/yt-dlp.exe")
+
+
+def _refresh_cookies_from_windows_chrome() -> bool:
+    """WSL から powershell 経由で Windows Chrome のクッキーを取得して cookies.txt を更新する。"""
+    import subprocess
+    if not PWSH.exists() or not _YTDLP_WIN_WSL.exists():
+        _err("[cookies] powershell.exe または Windows yt-dlp が見つかりません → スキップ")
+        return False
+
+    win_out = "C:\\Users\\gyshi\\AppData\\Local\\Temp\\yt-learn-cookies.txt"
+    wsl_tmp = Path("/mnt/c/Users/gyshi/AppData/Local/Temp/yt-learn-cookies.txt")
+
+    # Chrome 127+ の App-Bound Encryption で Chrome/Edge は外部復号不可のため Firefox を使用
+    ps_script = (
+        f"& '{_YTDLP_WIN_PATH}' --cookies-from-browser firefox"
+        f" --cookies '{win_out}' --skip-download 'https://www.youtube.com/' --quiet"
+    )
+
+    _err("[cookies] Windows Firefox からクッキーを取得中...")
+    result = subprocess.run([str(PWSH), "-Command", ps_script], capture_output=True)
+    if result.returncode != 0 or not wsl_tmp.exists():
+        _err(f"[cookies] クッキー取得失敗 (exit={result.returncode})")
+        return False
+
+    shutil.copy2(wsl_tmp, COOKIES_FILE)
+    wsl_tmp.unlink(missing_ok=True)
+    _err(f"[cookies] cookies.txt を更新しました ({COOKIES_FILE})")
+    return True
+
+
 def _cookie_opts() -> dict:
-    """Mac: Chromeから読んでcookies.txtに書き出す。それ以外: cookies.txtを使う。"""
+    """Mac: Chromeから読んでcookies.txtに書き出す。WSL/Linux: cookies.txtを使う。"""
     global _cookies_refreshed
     import sys
     opts = {
@@ -1215,6 +1249,8 @@ AI要約は別スクリプト:
     p_drain.add_argument("--idle-sleep", type=int, default=10,
                          help="キュー空時の待機秒数 (default: 10)")
 
+    sub.add_parser("refresh-cookies", help="Windows Chrome からクッキーを取得して cookies.txt を更新")
+
     p_sync = sub.add_parser("sync", help="transcripts/ と summaries/ を Google Drive に同期")
     p_sync.add_argument("--only", choices=["transcripts", "summaries"],
                         help="同期対象を絞る（省略時は両方）")
@@ -1277,6 +1313,10 @@ AI要約は別スクリプト:
         count = _drain_queue_all(args.model, args.idle_polls, args.idle_sleep)
         if count == 0:
             sys.exit(2)
+
+    elif args.cmd == "refresh-cookies":
+        ok = _refresh_cookies_from_windows_chrome()
+        sys.exit(0 if ok else 1)
 
     elif args.cmd == "sync":
         dirs = [args.only] if args.only else None

@@ -187,6 +187,9 @@ transcribe_worker() {
 log "Starting autonomous: channels=${#CHANNELS[@]}, limit=${LIMIT}, model=${MODEL}, dl_sleep=${DL_SLEEP}s, probe=${PROBE_INTERVAL}s"
 log "Log: $LOG_FILE"
 
+log "[cookies] 起動時クッキー更新..."
+python "$SCRIPT_DIR/transcribe.py" refresh-cookies 2>&1 | tee -a "$LOG_FILE"
+
 dl_worker &
 DL_PID=$!
 
