@@ -116,7 +116,7 @@ dl_worker() {
       tmpout=$(mktemp)
       python "$SCRIPT_DIR/transcribe.py" channel "$name" \
         --download-only --sort popular --limit "$LIMIT" 2>&1 \
-        | tee -a "$LOG_FILE" > "$tmpout"
+        | tee -a "$LOG_FILE" | tee "$tmpout"
 
       if grep -q '\[rate-limit\]' "$tmpout"; then
         rate_limited=true
@@ -140,7 +140,8 @@ dl_worker() {
 
         probe_out=$(mktemp)
         python "$SCRIPT_DIR/transcribe.py" channel "${CHANNELS[0]}" \
-          --download-only --limit 1 > "$probe_out" 2>&1
+          --download-only --limit 1 2>&1 \
+          | tee -a "$LOG_FILE" | tee "$probe_out"
 
         if ! grep -q '\[rate-limit\]' "$probe_out"; then
           log "[dl] rate-limit 解除を検知！DL 再開"
@@ -162,7 +163,7 @@ transcribe_worker() {
   while true; do
     python "$SCRIPT_DIR/transcribe.py" drain-queue \
       --model "$MODEL" --idle-polls 3 --idle-sleep 10 2>&1 \
-      | tee -a "$LOG_FILE" > /dev/null
+      | tee -a "$LOG_FILE"
     exit_code=${PIPESTATUS[0]}
 
     if [[ "$exit_code" -ne 0 && "$exit_code" -ne 2 ]]; then
