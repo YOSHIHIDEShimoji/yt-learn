@@ -113,7 +113,7 @@ def _call_ollama(prompt: str, base_url: str, model: str) -> str | None:
 
 def _update_summary(channel_name: str, transcript: str, video_title: str, api_key: str, video_count: int) -> None:
     local_url = os.environ.get("LOCAL_LLM_URL")
-    local_model = os.environ.get("LOCAL_LLM_MODEL", "qwen3.5:9b")
+    local_model = os.environ.get("LOCAL_LLM_MODEL", "qwen2.5:14b")
     from google import genai
 
     SUMMARIES_DIR.mkdir(parents=True, exist_ok=True)

@@ -236,17 +236,6 @@ python transcribe.py sync --only summaries
 
 文字起こし完了ごとに該当ファイルが自動で Drive に転送される。末尾の `sync` は取りこぼし補完用。
 
-### Mac → WSL クッキー同期
-
-WSL はブラウザにアクセスできないため、Mac の Chrome クッキーを手動で同期する必要がある。
-
-```bash
-# Mac で実行（Chrome からクッキーを取得して WSL に転送）
-python transcribe.py sync-cookies
-```
-
-WSL 側でクッキー切れ（`Sign in to confirm you're not a bot`）が出たら Mac でこのコマンドを実行する。
-
 ### ログ確認
 
 実行のたびに `log/transcribe_YYYYMMDD.log` にリアルタイムで書き出される（日次ローテーション）。
