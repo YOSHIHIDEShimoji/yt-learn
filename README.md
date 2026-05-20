@@ -149,9 +149,14 @@ Mac・WSL どちらから実行しても同じ Drive フォルダに集約され
 python transcribe.py add "メンタリスト DaiGo" https://www.youtube.com/@mentalistdaigo
 python transcribe.py add 3Blue1Brown https://www.youtube.com/@3blue1brown en
 
+# チャンネル削除
+python transcribe.py remove "メンタリスト DaiGo"
+
 # 登録チャンネル一覧
 python transcribe.py list
 ```
+
+`add` / `remove` はいずれも実行後に channels.txt を自動で git push します。
 
 ### 単発処理（特定URLを文字起こし）
 

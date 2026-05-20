@@ -289,6 +289,23 @@ def _add_channel(name: str, url: str, lang: str = "ja") -> None:
     _err(f"[added] {name} | {url} | {lang}")
 
 
+def _remove_channel(name: str) -> None:
+    lines = CHANNELS_FILE.read_text(encoding="utf-8").splitlines(keepends=True)
+    new_lines = []
+    found = False
+    for line in lines:
+        entry = line.split("|")[0].strip()
+        if entry == name:
+            found = True
+        else:
+            new_lines.append(line)
+    if not found:
+        _err(f"[error] '{name}' が channels.txt に見つかりません")
+        sys.exit(1)
+    CHANNELS_FILE.write_text("".join(new_lines), encoding="utf-8")
+    _err(f"[removed] {name}")
+
+
 def _list_channels() -> None:
     channels = _load_channels()
     if not channels:
@@ -1149,6 +1166,9 @@ AI要約は別スクリプト:
     p_add.add_argument("url", help="チャンネルURL")
     p_add.add_argument("lang", nargs="?", default="ja", help="文字起こし言語 (default: ja)")
 
+    p_remove = sub.add_parser("remove", help="チャンネルを channels.txt から削除")
+    p_remove.add_argument("name", help="削除するチャンネル名")
+
     sub.add_parser("list", help="登録チャンネル一覧を表示")
 
     p_proc = sub.add_parser("process", help="特定URLを文字起こし（複数可）")
@@ -1203,6 +1223,10 @@ AI要約は別スクリプト:
 
     if args.cmd == "add":
         _add_channel(args.name, args.url, args.lang)
+        _git_push_cache()
+
+    elif args.cmd == "remove":
+        _remove_channel(args.name)
         _git_push_cache()
 
     elif args.cmd == "list":
