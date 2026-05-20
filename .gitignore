@@ -1,4 +1,5 @@
 transcripts/
+!transcripts/*/_index.json
 summaries/
 log/
 logs/loop/
@@ -13,3 +14,4 @@ __pycache__/
 .DS_Store
 cookies.txt
 yt-learn-drive
+Archive/
