@@ -20,8 +20,42 @@ MODEL=large-v3
 PROBE_INTERVAL=60    # rate-limit中の復帰チェック間隔(s)
 DRAIN_POLL=10        # drain-queue終了後の待機(s)
 
+usage() {
+  cat <<EOF
+使い方:
+  $0 [OPTIONS]
+
+説明:
+  DLワーカー（バックグラウンド）と文字起こしワーカー（フォアグラウンド）を並列起動し、
+  channels.txt に登録したチャンネルを自律的に処理し続けます。
+
+  - DLワーカー  : チャンネルを巡回して queue/ に音声を蓄積。
+                  rate-limit 検知時はプローブループで解除を能動検知し自動再開。
+  - 文字起こしワーカー: queue/ を常時ドレイン（GPU を常時フル稼働）。
+  - Ctrl+C で両ワーカーを安全停止 → [session-end] を logs/autonomous/*.log に追記。
+
+オプション:
+  --limit N            チャンネルあたりのDL上限 (default: ${LIMIT})
+  --model MODEL        Whisper モデル名 (default: ${MODEL})
+  --dl-sleep N         チャンネル間DLスリープ秒数 (default: ${DL_SLEEP}s)
+  --probe-interval N   rate-limit 中の復帰チェック間隔秒数 (default: ${PROBE_INTERVAL}s)
+  --drain-poll N       drain-queue 完了後の待機秒数 (default: ${DRAIN_POLL}s)
+  -h, --help           このヘルプを表示して終了
+
+例:
+  $0                                      # デフォルト設定で起動
+  $0 --limit 20 --model large-v3
+  $0 --dl-sleep 60 --probe-interval 60
+
+ログ:
+  logs/autonomous/YYYYMMDD_HHMMSS_autonomous.log
+  セッション結果: grep '\[session-end\]' logs/autonomous/*.log
+EOF
+}
+
 while [[ $# -gt 0 ]]; do
   case "$1" in
+    -h|--help)        usage; exit 0 ;;
     --limit)          LIMIT="$2";          shift 2 ;;
     --model)          MODEL="$2";          shift 2 ;;
     --dl-sleep)       DL_SLEEP="$2";       shift 2 ;;
