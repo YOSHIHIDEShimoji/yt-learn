@@ -86,7 +86,7 @@ grep -v '^#\|^$\|^##\|^ ' logs/benchmark/*.log | sort -t$'\t' -k7 -rn | head -10
 - Python: `/home/wsl-yoshihide/.pyenv/versions/yt-learn-3.11.9/bin/python`（`.python-version` で自動選択）
 - GPU: CUDA（WSL）
 - LLM: Ollama（localhost）or Gemini（フォールバック）
-- `cookies.txt`: gitignore 対象。期限切れ時は Mac 側から転送が必要
+- `cookies.txt`: gitignore 対象。`python transcribe.py refresh-cookies` で Windows Firefox から自動更新（autonomous.sh 起動時に自動実行）
 
 ---
 
