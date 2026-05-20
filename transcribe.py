@@ -194,6 +194,22 @@ def _save_index(channel_name: str, index: dict) -> None:
     p.write_text(json.dumps(index, ensure_ascii=False, indent=2), encoding="utf-8")
 
 
+def _is_globally_processed(vid_id: str) -> tuple[bool, str, str]:
+    """全チャンネルの _index.json を横断して vid_id を検索。
+    Returns (found, channel_name, title)"""
+    if not TRANSCRIPTS_DIR.exists():
+        return False, "", ""
+    for index_path in TRANSCRIPTS_DIR.glob("*/_index.json"):
+        channel_name = index_path.parent.name
+        try:
+            index = json.loads(index_path.read_text(encoding="utf-8"))
+        except Exception:
+            continue
+        if vid_id in index:
+            return True, channel_name, index[vid_id].get("title", "")
+    return False, "", ""
+
+
 def _queue_dir(channel_name: str) -> Path:
     return QUEUE_DIR / _sanitize(channel_name)
 
@@ -757,6 +773,11 @@ def _process_url(url: str, channel_name: str, lang: str = "ja", title: str = Non
         _err(f"[skip] 処理済み: {index[vid_id]['title']}")
         return False
 
+    found, other_channel, other_title = _is_globally_processed(vid_id)
+    if found:
+        _err(f"[skip] 処理済み (チャンネル: {other_channel}): {other_title}")
+        return False
+
     if title is None:
         _err(f"[info] タイトル取得中: {url}")
         title = _get_video_title(url)
@@ -990,17 +1011,29 @@ def _drain_queue_all(model_size: str = WHISPER_MODEL,
     return processed
 
 
+def _git_pull_silent() -> None:
+    import subprocess
+    if not shutil.which("git"):
+        return
+    subprocess.run(
+        ["git", "pull", "--ff-only", "--quiet"],
+        cwd=BASE_DIR, capture_output=True,
+    )
+
+
 def _git_push_cache() -> None:
     import subprocess
     if not shutil.which("git"):
         return
+    index_files = list(TRANSCRIPTS_DIR.glob("*/_index.json")) if TRANSCRIPTS_DIR.exists() else []
+    index_rel = [str(p.relative_to(BASE_DIR)) for p in index_files]
     changed = subprocess.run(
-        ["git", "status", "--porcelain", "cache/", "channels.txt"],
+        ["git", "status", "--porcelain", "cache/", "channels.txt"] + index_rel,
         capture_output=True, text=True, cwd=BASE_DIR,
     ).stdout.strip()
     if not changed:
         return
-    subprocess.run(["git", "add", "cache/", "channels.txt"], cwd=BASE_DIR)
+    subprocess.run(["git", "add", "cache/", "channels.txt"] + index_rel, cwd=BASE_DIR)
     subprocess.run(
         ["git", "commit", "-m", f"chore: update cache ({date.today().isoformat()})"],
         cwd=BASE_DIR,
@@ -1062,6 +1095,11 @@ def main() -> None:
         description="YouTube動画の文字起こし・チャンネル管理ツール",
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""\
+常時稼働（WSL 推奨）:
+  ./autonomous.sh                    # これだけ叩けば全自動（rate-limit自動回復・GPU常時稼働）
+  ./autonomous.sh --limit 10 --model large-v3
+  Ctrl+C で安全停止 → [session-end] を logs/autonomous/*.log に記録
+
 ローカルLLM（Ollama）を使う場合:
   LOCAL_LLM_URL が設定されていれば Ollama 優先、失敗時は Gemini にフォールバック。
   Mac: .env に LOCAL_LLM_URL=http://<Windows-TailscaleIP>:11434 を設定（トンネル不要）
@@ -1165,6 +1203,7 @@ AI要約は別スクリプト:
         _list_channels()
 
     elif args.cmd == "process":
+        _git_pull_silent()
         url_langs = [(u, args.lang) for u in args.urls]
         if args.file:
             try:
