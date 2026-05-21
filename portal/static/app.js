@@ -203,7 +203,7 @@ document.addEventListener("DOMContentLoaded", () => {
         <div class="stat-item"><span class="stat-label">phase</span><span class="stat-val" style="font-size:13px">${esc(d.phase)}</span></div>
       </div>
       <div style="margin-top:12px;display:flex;justify-content:space-between;align-items:center;font-size:11px;color:var(--text-faint)">
-        <span>参照: ${esc(d.log_file || "—")}</span>
+        <span title="${esc(d.log_file_path || "")}">ログ: ${esc(d.log_file || "—")}</span>
         ${d.drive_folder_url ? `<a class="channel-link" href="${esc(d.drive_folder_url)}" target="_blank" rel="noopener" style="opacity:1;font-size:12px">↗ Google Drive</a>` : ""}
       </div>`;
   }
