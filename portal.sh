@@ -23,6 +23,15 @@ if [[ "$(uname)" == "Darwin" ]]; then
   fi
   echo "[portal] WSL IP: ${WSL_IP}"
 
+  # すでにサーバーが動いていればブラウザだけ開く
+  if curl -s --max-time 1 "http://${WSL_IP}:${PORT}/" > /dev/null 2>&1; then
+    echo "[portal] サーバーはすでに起動中です"
+    echo "[portal] ブラウザを開きます: http://${WSL_IP}:${PORT}"
+    open "http://${WSL_IP}:${PORT}"
+    echo "[portal] サーバー停止: ssh win \"wsl -- bash -c 'tmux kill-session -t ${TMUX_SESSION}'\""
+    exit 0
+  fi
+
   # WSL 側でサーバーを tmux セッションで起動
   echo "[portal] WSL: tmux セッション '$TMUX_SESSION' を起動中…"
   ssh win "wsl -- bash -c 'cd ~/my-projects/${PROJECT} && tmux kill-session -t ${TMUX_SESSION} 2>/dev/null; tmux new-session -d -s ${TMUX_SESSION} ./portal-server.sh'" 2>/dev/null
@@ -36,9 +45,6 @@ if [[ "$(uname)" == "Darwin" ]]; then
     fi
     sleep 1
   done
-
-  # 既存の不要な SSH トンネルを終了
-  pkill -f "ssh -L ${PORT}:localhost:${PORT} win" 2>/dev/null || true
 
   echo "[portal] ブラウザを開きます: http://${WSL_IP}:${PORT}"
   open "http://${WSL_IP}:${PORT}"
