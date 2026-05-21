@@ -106,17 +106,122 @@ ssh win "wsl -- bash -c 'tmux kill-server 2>/dev/null; cd ~/my-projects/yt-learn
 
 | # | タイトル |
 |---|---|
-| #13 | feat: 常時稼働ループスクリプト → **実装済み（このコミット）** |
-| #14 | feat: 自律型DL/文字起こし分離スクリプト → **次の実装候補** |
+| #19 | feat: GUI ポータルアプリ化 → **骨格実装済み（feat/portal ブランチ）** |
+| #13 | feat: 常時稼働ループスクリプト → **実装済み** |
+| #14 | feat: 自律型DL/文字起こし分離スクリプト → 実装済み |
 | #3 | channels.txt にチャンネルを追加する |
 | #2 | 文字起こしの活用方法を検討する |
 
 ---
 
-## 次に実装すべきこと（issue #14）
+## Portal（issue #19）
 
-DLと文字起こしを非同期分離する自律型スクリプト:
-- rate-limit 検知 → DL停止、文字起こしは継続
-- rate-limit 回復検知 → DL自動再開
-- GPUを常にフル稼働させ、現状比スループット大幅向上
-- 詳細は issue #14 を参照
+### 概要
+
+yt-learn を CLI から GUI ポータルへ昇華させる大型 feature（issue #19）。
+WSL 上で FastAPI サーバーを動かし、Mac・Windows ブラウザ両方から同じ画面を見られる構成。
+
+```
+Mac browser ─────────────────────────┐
+                                      ├─ FastAPI サーバー（WSL:8080）
+Windows browser ─────────────────────┘
+```
+
+変更はリアルタイムで両ブラウザに反映（Phase 3 で WebSocket 実装）。
+
+### 起動方法
+
+**Mac から起動（推奨）**
+
+```bash
+cd ~/my-projects/yt-learn
+./portal.sh
+# → WSL でサーバー起動 + SSH トンネル + Mac ブラウザが自動で開く
+```
+
+**WSL から直接起動**
+
+```bash
+cd ~/my-projects/yt-learn
+./portal.sh
+# → uvicorn をローカルで起動 + Windows ブラウザが自動で開く
+```
+
+### Mac アクセスの仕組み
+
+```
+Mac:8080 → SSH トンネル → Windows SSHd → WSL2 loopback → WSL:8080
+```
+
+トンネルは portal.sh が自動で管理する。手動で止めたい場合：
+
+```bash
+pkill -f "ssh -L 8080:localhost:8080 win"
+```
+
+WSL サーバーを止めたい場合（Mac から）：
+
+```bash
+ssh win "wsl -- bash -c 'tmux kill-session -t yt-portal'"
+```
+
+### ディレクトリ構成
+
+```
+portal/
+├── main.py           # FastAPI アプリ本体
+├── templates/
+│   └── index.html    # タブ骨格 HTML（Apple liquid glass ダークテーマ）
+└── static/
+    ├── style.css     # CSS
+    └── app.js        # タブ切り替え・API フェッチ
+portal.sh             # 起動スクリプト（Mac/WSL 自動判定）
+```
+
+### 実装フェーズ
+
+| Phase | 内容 | 状態 |
+|-------|------|------|
+| **1** | 骨格 + Mac アクセス（SSH トンネル）| ✅ 完了（2026-05-21） |
+| 2 | HOME タブ機能化（チャンネル追加/削除・実行パネル）| 未着手 |
+| 3 | STATUS タブ WebSocket リアルタイム更新 | 未着手 |
+| 4 | LIBRARY タブ（トランスクリプト全文検索）| 未着手 |
+| 5 | Apple liquid glass デザイン精緻化（getdesign 等）| 未着手 |
+| 6 | Tailscale direct アクセス（Windows portproxy）| 未着手 |
+
+### Phase 1 でできること（現状）
+
+- HOME タブ: channels.txt のチャンネル一覧を表示
+- STATUS タブ: 直近ログ末尾 50 行を表示（手動更新）
+- LOGS タブ: ログファイル一覧
+- README タブ: README.md をレンダリング
+- タブ切り替え（URL ハッシュ対応）
+
+### Phase 2 で実装すべきこと
+
+- HOME > チャンネル管理: `+` / `-` ボタンで channels.txt を編集
+- HOME > 実行パネル: `--limit` / `--model` フォーム → `autonomous.sh` 起動
+- HOME > URL 単発処理: URL を入力して個別動画を処理
+- 実行ボタン押下で STATUS タブへ自動遷移
+
+### Phase 3 で実装すべきこと
+
+- WebSocket エンドポイント（`/ws/logs`）
+- STATUS タブをリアルタイム自動更新（tail -f 相当）
+- autonomous.sh の状態（DL中/rate-limit/停止）をバッジ表示
+
+### 依存関係
+
+`requirements.txt` に追加済み：
+
+```
+fastapi>=0.115
+uvicorn[standard]>=0.30
+jinja2>=3.1
+```
+
+WSL 側で未インストールの場合：
+
+```bash
+pip install fastapi "uvicorn[standard]" jinja2
+```
