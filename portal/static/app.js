@@ -14,6 +14,7 @@ document.addEventListener("DOMContentLoaded", () => {
   }
 
   tabs.forEach(t => t.addEventListener("click", () => switchTab(t.dataset.tab)));
+  window.goHome = () => switchTab("home");
   const initial = location.hash.replace("#", "") || "home";
   switchTab(initial);
 
