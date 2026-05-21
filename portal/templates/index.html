@@ -42,13 +42,23 @@
         </div>
       </div>
       <div>
-        <!-- 実行パネル -->
+        <!-- クイック実行 -->
         <div class="card">
           <div class="card-title-row">
-            <span class="card-title" style="margin-bottom:0">実行パネル</span>
+            <span class="card-title" style="margin-bottom:0">クイック実行</span>
             <span id="run-badge" class="badge badge-gray">確認中…</span>
           </div>
           <div id="run-wsl-warn" class="run-warn" style="display:none">WSL 環境専用機能です</div>
+          <div class="run-btns" style="margin-top:4px">
+            <button id="run-start-btn" class="btn-primary" onclick="startRun()">▶ 起動</button>
+            <button id="run-stop-btn" class="btn-danger" style="display:none" onclick="stopRun()">■ 停止</button>
+          </div>
+        </div>
+
+        <!-- 詳細実行パネル -->
+        <div class="card">
+          <div class="card-title">詳細設定で起動</div>
+          <div id="adv-wsl-warn" class="run-warn" style="display:none">WSL 環境専用機能です</div>
           <div class="run-form">
             <div class="form-row">
               <label class="form-label">Limit（チャンネルあたり）</label>
@@ -66,8 +76,7 @@
             </div>
           </div>
           <div class="run-btns">
-            <button id="run-start-btn" class="btn-primary" onclick="startRun()">▶ 起動</button>
-            <button id="run-stop-btn" class="btn-danger" style="display:none" onclick="stopRun()">■ 停止</button>
+            <button id="adv-start-btn" class="btn-primary" onclick="startRun(true)">▶ 詳細設定で起動</button>
           </div>
         </div>
 

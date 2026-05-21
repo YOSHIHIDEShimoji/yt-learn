@@ -322,13 +322,14 @@ document.addEventListener("DOMContentLoaded", () => {
       try { const d = await api("/api/env"); _isWsl = d.is_wsl; }
       catch { _isWsl = false; }
       if (!_isWsl) {
-        const w1 = document.getElementById("run-wsl-warn");
-        const s  = document.getElementById("run-start-btn");
-        if (w1) w1.style.display = "block";
-        if (s)  s.disabled = true;
+        ["run-wsl-warn", "adv-wsl-warn"].forEach(id => {
+          const el = document.getElementById(id); if (el) el.style.display = "block";
+        });
+        ["run-start-btn", "adv-start-btn"].forEach(id => {
+          const el = document.getElementById(id); if (el) el.disabled = true;
+        });
         const badge = document.getElementById("run-badge");
         if (badge) { badge.className = "badge badge-gray"; badge.textContent = "WSL 専用"; }
-        // URL処理は WSL 制限なし — proc-submit-btn は常に有効
         return;
       }
     }
@@ -342,32 +343,37 @@ document.addEventListener("DOMContentLoaded", () => {
       const badge    = document.getElementById("run-badge");
       const startBtn = document.getElementById("run-start-btn");
       const stopBtn  = document.getElementById("run-stop-btn");
+      const advBtn   = document.getElementById("adv-start-btn");
       if (!badge) return;
       if (running) {
-        badge.className  = "badge badge-green";
+        badge.className   = "badge badge-green";
         badge.textContent = session ? `稼働中: ${session}` : "稼働中";
         if (startBtn) startBtn.style.display = "none";
         if (stopBtn)  stopBtn.style.display  = "";
+        if (advBtn)   advBtn.disabled = true;
       } else {
-        badge.className  = "badge badge-gray"; badge.textContent = "停止中";
+        badge.className   = "badge badge-gray"; badge.textContent = "停止中";
         if (startBtn) startBtn.style.display = "";
         if (stopBtn)  stopBtn.style.display  = "none";
+        if (advBtn)   advBtn.disabled = false;
       }
     } catch {}
   }
 
-  window.startRun = async function() {
-    const limit    = parseInt(document.getElementById("run-limit").value)  || 10;
-    const model    = document.getElementById("run-model").value;
-    const startBtn = document.getElementById("run-start-btn");
+  window.startRun = async function(useOptions = false) {
+    const limit    = useOptions ? (parseInt(document.getElementById("run-limit").value) || 10) : 10;
+    const model    = useOptions ? document.getElementById("run-model").value : "large-v3";
+    const btnId    = useOptions ? "adv-start-btn" : "run-start-btn";
+    const startBtn = document.getElementById(btnId);
+    const origText = startBtn.textContent;
     startBtn.disabled = true; startBtn.textContent = "起動中…";
     try {
       await api("/api/run", 10000, "POST", { limit, model });
       await _updateRunBadge();
       switchTab("status");
     } catch (e) {
-      alert("起動失敗: " + String(e.message));
-      startBtn.disabled = false; startBtn.textContent = "▶ 起動";
+      await showConfirm(`起動失敗: ${e.message}`, "OK", false);
+      startBtn.disabled = false; startBtn.textContent = origText;
     }
   };
 
