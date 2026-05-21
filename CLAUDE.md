@@ -88,6 +88,12 @@ grep -v '^#\|^$\|^##\|^ ' logs/benchmark/*.log | sort -t$'\t' -k7 -rn | head -10
 - LLM: Ollama（localhost）or Gemini（フォールバック）
 - `cookies.txt`: gitignore 対象。`python transcribe.py refresh-cookies` で Windows Firefox から自動更新（autonomous.sh 起動時に自動実行）
 
+### GPU 使用上の注意
+
+`repoint.py` が常時 tmux セッションで動いており、Local LLM（Ollama）が GPU を占有している場合がある。
+**WSL 側で GPU を使うテスト（transcribe.py 等）を実行する前に、必ず tmux ls で稼働中セッションを確認すること。**
+Mac 側（`./portal.sh --local`）ではGPU を使わないためテストは自由に実施可能。
+
 ### tmux セッション起動・再起動
 
 pyenv は `.zshrc` に初期化されているため、tmux は `zsh -ic` で起動すること（`-i` がないと pyenv が読まれず `python: command not found` になる）。
