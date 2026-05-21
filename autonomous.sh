@@ -15,9 +15,6 @@
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
-# tmux等の非ログインシェルでもpyenvが使えるようにPATHを補完
-export PATH="$HOME/.pyenv/shims:$HOME/.pyenv/bin:$PATH"
-
 DL_SLEEP=60          # チャンネル間DLスリープ(s)
 LIMIT=20             # チャンネルあたりDL上限
 MODEL=large-v3
