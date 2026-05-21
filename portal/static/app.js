@@ -19,20 +19,45 @@ document.addEventListener("DOMContentLoaded", () => {
   switchTab(initial);
 
   // ── HOME: channels ──────────────────────────────────────
+  let _channels = [];
+
   async function loadChannels() {
     const el = document.getElementById("channel-list");
     if (!el || el.dataset.loaded) return;
     try {
       const { channels } = await api("/api/channels");
+      _channels = channels;
       if (!channels.length) { el.innerHTML = placeholder("📭", "チャンネルなし"); return; }
-      el.innerHTML = channels.map(ch => `
-        <div class="channel-item">
+      el.innerHTML = channels.map((ch, i) => `
+        <div class="channel-item" data-idx="${i}">
           <span class="channel-lang">${esc(ch.lang)}</span>
           <span class="channel-name">${esc(ch.name)}</span>
           <a class="channel-link" href="${esc(ch.url)}" target="_blank" rel="noopener">↗ YouTube</a>
         </div>`).join("");
       el.dataset.loaded = "1";
+      fetchChannelDriveLinks();
     } catch { el.innerHTML = placeholder("⚠️", "読み込み失敗"); }
+  }
+
+  async function fetchChannelDriveLinks() {
+    try {
+      const { drive_urls } = await api("/api/channel-drive-urls", 20000);
+      _channels.forEach((ch, i) => {
+        const url = drive_urls[ch.name];
+        if (!url) return;
+        const item = document.querySelector(`#channel-list [data-idx="${i}"]`);
+        if (item && !item.querySelector("[data-drive]")) {
+          const a = document.createElement("a");
+          a.className = "channel-link drive-link-popin";
+          a.href = url;
+          a.target = "_blank";
+          a.rel = "noopener";
+          a.dataset.drive = "1";
+          a.textContent = "↗ Drive";
+          item.appendChild(a);
+        }
+      });
+    } catch (e) {}
   }
 
   // ── STATUS ───────────────────────────────────────────────

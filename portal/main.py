@@ -13,8 +13,18 @@ from fastapi.templating import Jinja2Templates
 ROOT = Path(__file__).parent.parent
 PORTAL_DIR = Path(__file__).parent
 
+
+class _NoCacheStaticFiles(StaticFiles):
+    async def get_response(self, path: str, scope):
+        resp = await super().get_response(path, scope)
+        resp.headers["Cache-Control"] = "no-cache, no-store, must-revalidate"
+        resp.headers["Pragma"] = "no-cache"
+        resp.headers["Expires"] = "0"
+        return resp
+
+
 app = FastAPI(title="yt-learn Portal")
-app.mount("/static", StaticFiles(directory=PORTAL_DIR / "static"), name="static")
+app.mount("/static", _NoCacheStaticFiles(directory=PORTAL_DIR / "static"), name="static")
 templates = Jinja2Templates(directory=PORTAL_DIR / "templates")
 
 # ── Drive キャッシュ ──────────────────────────────────────────
@@ -142,6 +152,22 @@ async def get_channels():
                     "lang": parts[2] if len(parts) >= 3 else "ja",
                 })
     return JSONResponse({"channels": channels})
+
+
+@app.get("/api/channel-drive-urls")
+async def get_channel_drive_urls_api():
+    channels_file = ROOT / "channels.txt"
+    names = []
+    if channels_file.exists():
+        for line in channels_file.read_text(encoding="utf-8").splitlines():
+            line = line.strip()
+            if not line or line.startswith("#"):
+                continue
+            parts = [p.strip() for p in line.split("|")]
+            if len(parts) >= 2:
+                names.append(parts[0])
+    urls = await asyncio.gather(*[_rclone_link(f"gdrive:yt-learn/transcripts/{n}") for n in names])
+    return JSONResponse({"drive_urls": dict(zip(names, urls))})
 
 
 @app.get("/api/readme")
