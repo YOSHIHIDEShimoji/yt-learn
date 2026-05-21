@@ -67,6 +67,17 @@ def _save_drive_link_cache() -> None:
 
 _load_drive_link_cache()  # モジュールロード時（サーバー起動時）に実行
 
+# 同時 rclone 実行数を制限（Google Drive API レートリミット対策）
+# asyncio.Semaphore はイベントループ生成後でないと使えないため起動時に初期化
+_rclone_semaphore: asyncio.Semaphore | None = None
+
+
+def _get_rclone_semaphore() -> asyncio.Semaphore:
+    global _rclone_semaphore
+    if _rclone_semaphore is None:
+        _rclone_semaphore = asyncio.Semaphore(4)  # 最大 4 並列
+    return _rclone_semaphore
+
 
 async def _rclone_link(path: str) -> str:
     """rclone link で URL 取得。空文字は 60 秒、ヒットは 1 時間キャッシュ。"""
@@ -79,11 +90,12 @@ async def _rclone_link(path: str) -> str:
     if not shutil.which("rclone"):
         return cached or ""
     try:
-        proc = await asyncio.create_subprocess_exec(
-            "rclone", "link", path,
-            stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE,
-        )
-        stdout, _ = await asyncio.wait_for(proc.communicate(), timeout=5)
+        async with _get_rclone_semaphore():
+            proc = await asyncio.create_subprocess_exec(
+                "rclone", "link", path,
+                stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE,
+            )
+            stdout, _ = await asyncio.wait_for(proc.communicate(), timeout=12)
         url = stdout.decode().strip() if proc.returncode == 0 else ""
         _rclone_link_cache[path] = url
         _rclone_link_cache_ts[path] = time.time()
