@@ -29,17 +29,24 @@ templates = Jinja2Templates(directory=PORTAL_DIR / "templates")
 
 # ── Drive キャッシュ ──────────────────────────────────────────
 _rclone_link_cache: dict[str, str] = {}          # path → url
+_rclone_link_cache_ts: dict[str, float] = {}     # path → epoch seconds
 _drive_file_cache: dict[str, dict[str, str]] = {}  # channel → {title: url}
 _drive_file_cache_ts: dict[str, float] = {}      # channel → epoch seconds
 DRIVE_FILE_CACHE_TTL = 60.0                       # 秒
+RCLONE_LINK_EMPTY_TTL = 60.0                      # 空文字キャッシュは短く（フォルダ未作成→作成後の検出用）
+RCLONE_LINK_HIT_TTL = 3600.0                      # URL 取得済みは長く（URL 変化は稀）
 
 
 async def _rclone_link(path: str) -> str:
-    """rclone link でフォルダ/ファイル URL を取得（キャッシュ付き）"""
-    if path in _rclone_link_cache:
-        return _rclone_link_cache[path]
+    """rclone link で URL 取得。空文字は 60 秒、ヒットは 1 時間キャッシュ。"""
+    cached = _rclone_link_cache.get(path)
+    if cached is not None:
+        age = time.time() - _rclone_link_cache_ts.get(path, 0)
+        ttl = RCLONE_LINK_HIT_TTL if cached else RCLONE_LINK_EMPTY_TTL
+        if age < ttl:
+            return cached
     if not shutil.which("rclone"):
-        return ""
+        return cached or ""
     try:
         proc = await asyncio.create_subprocess_exec(
             "rclone", "link", path,
@@ -48,9 +55,10 @@ async def _rclone_link(path: str) -> str:
         stdout, _ = await asyncio.wait_for(proc.communicate(), timeout=5)
         url = stdout.decode().strip() if proc.returncode == 0 else ""
         _rclone_link_cache[path] = url
+        _rclone_link_cache_ts[path] = time.time()
         return url
     except Exception:
-        return ""
+        return cached or ""
 
 
 _drive_fetch_running: set[str] = set()
