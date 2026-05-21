@@ -446,6 +446,34 @@ body {
 .stat-warn  { color: var(--warn); }
 .stat-err   { color: var(--err); }
 
+/* ── LOGS: 等高・1ページ収まりレイアウト ── */
+/* header(56) + tabbar(48) + padding-top(24) + padding-bottom(40) = 168px */
+.logs-grid {
+  align-items: stretch;
+  height: calc(100vh - 168px);
+}
+
+.logs-grid .card {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  margin-bottom: 0;
+}
+
+/* ログ一覧: カードタイトル固定 + 一覧スクロール */
+.logs-grid .channel-list {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+}
+
+/* ログビューア: カードタイトル固定 + 本文スクロール */
+.logs-grid .log-output {
+  flex: 1;
+  min-height: 0;
+  max-height: none;
+}
+
 /* ── LOGS: clickable log file ── */
 .log-file-item { cursor: pointer; }
 .log-file-item:hover { background: var(--surface-hover); }

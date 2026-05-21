@@ -248,7 +248,7 @@ document.addEventListener("DOMContentLoaded", () => {
     const card    = document.getElementById("log-viewer-card");
     const titleEl = document.getElementById("log-viewer-title");
     const content = document.getElementById("log-viewer-content");
-    card.style.display = "block";
+    card.style.display = "flex";
     titleEl.textContent = path.split("/").pop();
     content.textContent = "読み込み中…";
     try {
