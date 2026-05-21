@@ -592,6 +592,12 @@ body {
 .form-input:focus { border-color: var(--blue); }
 .form-input option { background: #1c1c24; }
 
+.form-textarea {
+  resize: vertical;
+  min-height: 72px;
+  line-height: 1.6;
+}
+
 .run-form { margin-bottom: 12px; }
 
 /* ── Phase 2: Buttons ── */
@@ -642,7 +648,7 @@ body {
 .delete-btn {
   background: transparent;
   border: none;
-  color: rgba(232,232,237,0.22);
+  color: var(--err);
   font-size: 15px;
   line-height: 1;
   width: 22px;

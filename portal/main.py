@@ -6,7 +6,7 @@ import time
 from datetime import datetime
 from pathlib import Path
 from fastapi import FastAPI, Request
-from fastapi.responses import HTMLResponse, JSONResponse
+from fastapi.responses import HTMLResponse, JSONResponse, Response
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from pydantic import BaseModel
@@ -17,8 +17,6 @@ PORTAL_DIR = Path(__file__).parent
 # WSL 環境かどうかを起動時に一度だけ判定
 _proc_version = Path("/proc/version")
 IS_WSL = _proc_version.exists() and "microsoft" in _proc_version.read_text().lower()
-
-TMUX_SESSION = "yt-learn"
 
 
 class _NoCacheStaticFiles(StaticFiles):
@@ -33,6 +31,16 @@ class _NoCacheStaticFiles(StaticFiles):
 app = FastAPI(title="yt-learn Portal")
 app.mount("/static", _NoCacheStaticFiles(directory=PORTAL_DIR / "static"), name="static")
 templates = Jinja2Templates(directory=PORTAL_DIR / "templates")
+
+# docs/ が存在すれば /docs で配信（README 内の画像リンク用）
+_docs_dir = ROOT / "docs"
+if _docs_dir.exists():
+    app.mount("/docs", StaticFiles(directory=_docs_dir), name="docs")
+
+
+@app.get("/favicon.ico")
+async def favicon():
+    return Response(status_code=204)
 
 # ── Drive キャッシュ ──────────────────────────────────────────
 DRIVE_LINK_CACHE_FILE = PORTAL_DIR / "drive_link_cache.json"
@@ -420,18 +428,26 @@ class RunBody(BaseModel):
 
 
 _VALID_MODELS = {"tiny", "base", "small", "medium", "large", "large-v2", "large-v3", "large-v3-turbo"}
+_YT_SESSION_PREFIX = "yt-learn_"
 
 
-async def _tmux_alive() -> bool:
+async def _find_yt_session() -> str | None:
+    """tmux ls から yt-learn_ プレフィックスのセッション名を返す。なければ None。"""
     try:
         proc = await asyncio.create_subprocess_exec(
-            "tmux", "has-session", "-t", TMUX_SESSION,
-            stdout=asyncio.subprocess.DEVNULL, stderr=asyncio.subprocess.DEVNULL,
+            "tmux", "ls",
+            stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.DEVNULL,
         )
-        await proc.wait()
-        return proc.returncode == 0
+        stdout, _ = await asyncio.wait_for(proc.communicate(), timeout=3)
+        if proc.returncode != 0:
+            return None
+        for line in stdout.decode().splitlines():
+            name = line.split(":")[0]
+            if name.startswith(_YT_SESSION_PREFIX):
+                return name
+        return None
     except Exception:
-        return False
+        return None
 
 
 @app.get("/api/env")
@@ -441,68 +457,82 @@ async def get_env():
 
 @app.get("/api/run/status")
 async def run_status():
-    return JSONResponse({"running": await _tmux_alive()})
+    session = await _find_yt_session()
+    return JSONResponse({"running": session is not None, "session": session})
 
 
 @app.post("/api/run")
 async def start_run(body: RunBody):
     if not IS_WSL:
         return JSONResponse({"error": "WSL 環境でのみ実行できます"}, status_code=400)
-    if await _tmux_alive():
-        return JSONResponse({"error": "既に実行中です"}, status_code=409)
-    limit = max(1, min(body.limit, 100))
-    model = body.model if body.model in _VALID_MODELS else "large-v3"
+    existing = await _find_yt_session()
+    if existing:
+        return JSONResponse({"error": f"既に実行中です ({existing})"}, status_code=409)
+    limit   = max(1, min(body.limit, 100))
+    model   = body.model if body.model in _VALID_MODELS else "large-v3"
+    session = f"{_YT_SESSION_PREFIX}{datetime.now().strftime('%Y%m%d_%H%M%S')}"
     proc = await asyncio.create_subprocess_exec(
-        "tmux", "new-session", "-d", "-s", TMUX_SESSION,
+        "tmux", "new-session", "-d", "-s", session,
         f"zsh -ic './autonomous.sh --limit {limit} --model {model}'",
         cwd=str(ROOT),
         stdout=asyncio.subprocess.DEVNULL, stderr=asyncio.subprocess.DEVNULL,
     )
     await proc.wait()
-    return JSONResponse({"ok": proc.returncode == 0})
+    return JSONResponse({"ok": proc.returncode == 0, "session": session})
 
 
 @app.post("/api/run/stop")
 async def stop_run():
     if not IS_WSL:
         return JSONResponse({"error": "WSL 環境でのみ実行できます"}, status_code=400)
-    if not await _tmux_alive():
+    session = await _find_yt_session()
+    if not session:
         return JSONResponse({"ok": True, "was_running": False})
     proc = await asyncio.create_subprocess_exec(
-        "tmux", "kill-session", "-t", TMUX_SESSION,
+        "tmux", "kill-session", "-t", session,
         stdout=asyncio.subprocess.DEVNULL, stderr=asyncio.subprocess.DEVNULL,
     )
     await proc.wait()
-    return JSONResponse({"ok": True, "was_running": True})
+    return JSONResponse({"ok": True, "was_running": True, "session": session})
 
 
-# ── Phase 2: URL 単発処理 ────────────────────────────────────────
+# ── Phase 2: URL 処理（複数URL対応） ────────────────────────────
 
 class ProcessUrlBody(BaseModel):
-    url: str
+    urls: list[str]
     channel: str = "misc"
     lang: str = "ja"
 
 
-async def _bg_process_url(url: str, channel: str, lang: str) -> None:
+async def _await_and_close(proc, f) -> None:
+    try:
+        await proc.wait()
+    finally:
+        f.close()
+
+
+async def _bg_process_urls(urls: list[str], channel: str, lang: str) -> None:
+    log_dir = ROOT / "logs" / "process"
+    log_dir.mkdir(parents=True, exist_ok=True)
+    log_file = log_dir / f"{datetime.now().strftime('%Y%m%d_%H%M%S')}_process.log"
     try:
         python = shutil.which("python") or "python3"
-        await asyncio.create_subprocess_exec(
-            python, str(ROOT / "transcribe.py"), "process", url,
+        f = open(log_file, "wb")
+        proc = await asyncio.create_subprocess_exec(
+            python, str(ROOT / "transcribe.py"), "process", *urls,
             "--channel", channel, "--lang", lang,
             cwd=str(ROOT),
-            stdout=asyncio.subprocess.DEVNULL, stderr=asyncio.subprocess.DEVNULL,
+            stdout=f, stderr=f,
         )
+        asyncio.ensure_future(_await_and_close(proc, f))
     except Exception:
         pass
 
 
 @app.post("/api/process-url")
 async def process_url(body: ProcessUrlBody):
-    if not IS_WSL:
-        return JSONResponse({"error": "WSL 環境でのみ実行できます"}, status_code=400)
-    url = body.url.strip()
-    if not url:
-        return JSONResponse({"error": "url は必須です"}, status_code=400)
-    asyncio.ensure_future(_bg_process_url(url, body.channel or "misc", body.lang or "ja"))
-    return JSONResponse({"ok": True, "message": "処理を開始しました"})
+    urls = [u.strip() for u in body.urls if u.strip()]
+    if not urls:
+        return JSONResponse({"error": "URL は必須です"}, status_code=400)
+    asyncio.ensure_future(_bg_process_urls(urls, body.channel or "misc", body.lang or "ja"))
+    return JSONResponse({"ok": True, "message": f"{len(urls)} 件の処理を開始しました", "count": len(urls)})

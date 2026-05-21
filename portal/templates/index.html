@@ -71,18 +71,18 @@
           </div>
         </div>
 
-        <!-- URL 単発処理 -->
+        <!-- URL 処理 -->
         <div class="card">
-          <div class="card-title">URL 単発処理</div>
-          <div id="proc-wsl-warn" class="run-warn" style="display:none">WSL 環境専用機能です</div>
+          <div class="card-title">URL 処理</div>
           <div class="run-form">
             <div class="form-row">
-              <label class="form-label">YouTube URL</label>
-              <input id="proc-url" type="url" class="form-input" placeholder="https://www.youtube.com/watch?v=...">
+              <label class="form-label">YouTube URL（1行1件、複数可）</label>
+              <textarea id="proc-urls" class="form-input form-textarea" rows="3"
+                placeholder="https://www.youtube.com/watch?v=...&#10;https://www.youtube.com/watch?v=..."></textarea>
             </div>
             <div class="form-row">
               <label class="form-label">チャンネル名（保存先）</label>
-              <input id="proc-channel" type="text" class="form-input" value="misc" placeholder="misc">
+              <select id="proc-channel" class="form-input"></select>
             </div>
             <div class="form-row">
               <label class="form-label">言語</label>
@@ -202,6 +202,17 @@
     <div class="modal-btns">
       <button class="btn-secondary" onclick="closeAddChannelModal()">キャンセル</button>
       <button class="btn-primary" onclick="submitAddChannel()">追加</button>
+    </div>
+  </div>
+</div>
+
+<!-- 汎用確認ダイアログ -->
+<div id="confirm-modal" class="modal-backdrop" style="display:none">
+  <div class="modal-box">
+    <div class="modal-title" id="confirm-message"></div>
+    <div class="modal-btns">
+      <button class="btn-secondary" id="confirm-cancel">キャンセル</button>
+      <button class="btn-danger"    id="confirm-ok">削除</button>
     </div>
   </div>
 </div>

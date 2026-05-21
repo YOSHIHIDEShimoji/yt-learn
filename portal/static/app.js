@@ -43,6 +43,7 @@ document.addEventListener("DOMContentLoaded", () => {
         btn.addEventListener("click", e => { e.stopPropagation(); deleteChannel(btn.dataset.name); });
       });
       el.dataset.loaded = "1";
+      _updateChannelSelect(channels);
       fetchChannelDriveLinks();
     } catch { el.innerHTML = placeholder("⚠️", "読み込み失敗"); }
   }
@@ -52,6 +53,15 @@ document.addEventListener("DOMContentLoaded", () => {
     if (el) { delete el.dataset.loaded; el.innerHTML = placeholder("⏳", "読み込み中…"); }
     loadChannels();
   };
+
+  function _updateChannelSelect(channels) {
+    const sel = document.getElementById("proc-channel");
+    if (!sel) return;
+    const prev = sel.value;
+    sel.innerHTML = channels.map(ch => `<option value="${esc(ch.name)}">${esc(ch.name)}</option>`).join("") +
+      `<option value="misc">misc</option>`;
+    if ([...sel.options].some(o => o.value === prev)) sel.value = prev;
+  }
 
   async function fetchChannelDriveLinks() {
     try {
@@ -68,7 +78,8 @@ document.addEventListener("DOMContentLoaded", () => {
           a.rel = "noopener";
           a.dataset.drive = "1";
           a.textContent = "↗ Drive";
-          item.appendChild(a);
+          const deleteBtn = item.querySelector(".delete-btn");
+          deleteBtn ? item.insertBefore(a, deleteBtn) : item.appendChild(a);
         }
       });
     } catch (e) {}
@@ -312,15 +323,12 @@ document.addEventListener("DOMContentLoaded", () => {
       catch { _isWsl = false; }
       if (!_isWsl) {
         const w1 = document.getElementById("run-wsl-warn");
-        const w2 = document.getElementById("proc-wsl-warn");
         const s  = document.getElementById("run-start-btn");
-        const p  = document.getElementById("proc-submit-btn");
         if (w1) w1.style.display = "block";
-        if (w2) w2.style.display = "block";
         if (s)  s.disabled = true;
-        if (p)  p.disabled = true;
         const badge = document.getElementById("run-badge");
         if (badge) { badge.className = "badge badge-gray"; badge.textContent = "WSL 専用"; }
+        // URL処理は WSL 制限なし — proc-submit-btn は常に有効
         return;
       }
     }
@@ -330,17 +338,18 @@ document.addEventListener("DOMContentLoaded", () => {
   async function _updateRunBadge() {
     if (!_isWsl) return;
     try {
-      const { running } = await api("/api/run/status");
+      const { running, session } = await api("/api/run/status");
       const badge    = document.getElementById("run-badge");
       const startBtn = document.getElementById("run-start-btn");
       const stopBtn  = document.getElementById("run-stop-btn");
       if (!badge) return;
       if (running) {
-        badge.className  = "badge badge-green"; badge.textContent = "稼働中";
+        badge.className  = "badge badge-green";
+        badge.textContent = session ? `稼働中: ${session}` : "稼働中";
         if (startBtn) startBtn.style.display = "none";
         if (stopBtn)  stopBtn.style.display  = "";
       } else {
-        badge.className  = "badge badge-gray";  badge.textContent = "停止中";
+        badge.className  = "badge badge-gray"; badge.textContent = "停止中";
         if (startBtn) startBtn.style.display = "";
         if (stopBtn)  stopBtn.style.display  = "none";
       }
@@ -376,22 +385,23 @@ document.addEventListener("DOMContentLoaded", () => {
     }
   };
 
-  // ── HOME: URL 単発処理 ──────────────────────────────────────
+  // ── HOME: URL 処理（複数URL対応） ──────────────────────────
   window.processUrl = async function() {
-    const url     = document.getElementById("proc-url").value.trim();
-    const channel = document.getElementById("proc-channel").value.trim() || "misc";
+    const raw     = document.getElementById("proc-urls").value;
+    const urls    = raw.split("\n").map(s => s.trim()).filter(Boolean);
+    const channel = document.getElementById("proc-channel").value || "misc";
     const lang    = document.getElementById("proc-lang").value;
     const resultEl = document.getElementById("proc-result");
     const btn      = document.getElementById("proc-submit-btn");
-    if (!url) {
+    if (!urls.length) {
       resultEl.style.color = "var(--err)"; resultEl.textContent = "URL を入力してください"; return;
     }
     btn.disabled = true; resultEl.style.color = "var(--text-dim)"; resultEl.textContent = "送信中…";
     try {
-      const res = await api("/api/process-url", 10000, "POST", { url, channel, lang });
+      const res = await api("/api/process-url", 10000, "POST", { urls, channel, lang });
       resultEl.style.color = "var(--green)";
       resultEl.textContent = res.message || "処理を開始しました";
-      document.getElementById("proc-url").value = "";
+      document.getElementById("proc-urls").value = "";
       setTimeout(() => switchTab("status"), 800);
     } catch (e) {
       resultEl.style.color = "var(--err)"; resultEl.textContent = String(e.message) || "エラー";
@@ -427,7 +437,8 @@ document.addEventListener("DOMContentLoaded", () => {
   };
 
   window.deleteChannel = async function(name) {
-    if (!confirm(`"${name}" を削除しますか？`)) return;
+    const ok = await showConfirm(`"${name}" を削除しますか？`);
+    if (!ok) return;
     try {
       const r = await fetch(`/api/channels?name=${encodeURIComponent(name)}`, { method: "DELETE" });
       if (!r.ok) {
@@ -435,12 +446,39 @@ document.addEventListener("DOMContentLoaded", () => {
         throw new Error(j.error || r.status);
       }
       reloadChannels();
-    } catch (e) { alert("削除失敗: " + String(e.message)); }
+    } catch (e) { await showConfirm(`削除失敗: ${e.message}`, "OK", false); }
   };
+
+  // ── 汎用確認ダイアログ ─────────────────────────────────────
+  function showConfirm(message, okLabel = "削除", showCancel = true) {
+    return new Promise(resolve => {
+      const modal  = document.getElementById("confirm-modal");
+      const msgEl  = document.getElementById("confirm-message");
+      const okBtn  = document.getElementById("confirm-ok");
+      const canBtn = document.getElementById("confirm-cancel");
+      msgEl.textContent   = message;
+      okBtn.textContent   = okLabel;
+      canBtn.style.display = showCancel ? "" : "none";
+      modal.style.display = "flex";
+      const cleanup = (result) => {
+        modal.style.display = "none";
+        okBtn.removeEventListener("click", onOk);
+        canBtn.removeEventListener("click", onCancel);
+        resolve(result);
+      };
+      const onOk     = () => cleanup(true);
+      const onCancel = () => cleanup(false);
+      okBtn.addEventListener("click",  onOk);
+      canBtn.addEventListener("click", onCancel);
+    });
+  }
 
   // Escape キーでモーダルを閉じる
   document.addEventListener("keydown", e => {
-    if (e.key === "Escape") closeAddChannelModal();
+    if (e.key === "Escape") {
+      closeAddChannelModal();
+      document.getElementById("confirm-modal").style.display = "none";
+    }
   });
 
   function esc(s) {
