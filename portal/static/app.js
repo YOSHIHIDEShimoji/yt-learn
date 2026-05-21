@@ -39,6 +39,12 @@ document.addEventListener("DOMContentLoaded", () => {
     } catch { el.innerHTML = placeholder("⚠️", "読み込み失敗"); }
   }
 
+  window.reloadChannels = function() {
+    const el = document.getElementById("channel-list");
+    if (el) { delete el.dataset.loaded; el.innerHTML = placeholder("⏳", "読み込み中…"); }
+    loadChannels();
+  };
+
   async function fetchChannelDriveLinks() {
     try {
       const { drive_urls } = await api("/api/channel-drive-urls", 20000);
@@ -227,6 +233,12 @@ document.addEventListener("DOMContentLoaded", () => {
       el.dataset.loaded = "1";
     } catch { el.innerHTML = placeholder("⚠️", "読み込み失敗"); }
   }
+
+  window.reloadLogs = function() {
+    const el = document.getElementById("log-list");
+    if (el) { delete el.dataset.loaded; el.innerHTML = placeholder("⏳", "読み込み中…"); }
+    loadLogs();
+  };
 
   window.openLog = async function(el) {
     document.querySelectorAll(".log-file-item").forEach(e => e.classList.remove("active-log"));

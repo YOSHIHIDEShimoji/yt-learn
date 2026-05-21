@@ -29,7 +29,10 @@
     <div class="grid-2">
       <div>
         <div class="card">
-          <div class="card-title">登録チャンネル</div>
+          <div class="card-title-row">
+            <span class="card-title" style="margin-bottom:0">登録チャンネル</span>
+            <button class="refresh-btn" onclick="reloadChannels()">↻ 更新</button>
+          </div>
           <div class="channel-list" id="channel-list">
             <div class="placeholder"><div class="placeholder-icon">📡</div><span>読み込み中…</span></div>
           </div>
@@ -92,7 +95,10 @@
   <div id="pane-logs" class="pane">
     <div class="grid-2" style="align-items:start">
       <div class="card">
-        <div class="card-title">ログファイル一覧</div>
+        <div class="card-title-row">
+          <span class="card-title" style="margin-bottom:0">ログファイル一覧</span>
+          <button class="refresh-btn" onclick="reloadLogs()">↻ 更新</button>
+        </div>
         <div class="channel-list" id="log-list">
           <div class="placeholder"><div class="placeholder-icon">📄</div><span>読み込み中…</span></div>
         </div>
