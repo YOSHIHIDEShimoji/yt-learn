@@ -19,37 +19,28 @@ LIMIT=20             # チャンネルあたりDL上限
 MODEL=large-v3
 PROBE_INTERVAL=60    # rate-limit中の復帰チェック間隔(s)
 DRAIN_POLL=10        # drain-queue終了後の待機(s)
+QUEUE_HIGH=200       # キューがこの件数以上でDL一時停止
+QUEUE_LOW=100        # キューがこの件数を下回ったらDL再開
 
 usage() {
   cat <<EOF
-使い方:
-  $0 [OPTIONS]
+使い方: $0 [OPTIONS]
 
-説明:
-  DLワーカー（バックグラウンド）と文字起こしワーカー（フォアグラウンド）を並列起動し、
-  channels.txt に登録したチャンネルを自律的に処理し続けます。
-
-  - DLワーカー  : チャンネルを巡回して queue/ に音声を蓄積。
-                  rate-limit 検知時はプローブループで解除を能動検知し自動再開。
-  - 文字起こしワーカー: queue/ を常時ドレイン（GPU を常時フル稼働）。
-  - Ctrl+C で両ワーカーを安全停止 → [session-end] を logs/autonomous/*.log に追記。
+DL（バックグラウンド）と文字起こし（フォアグラウンド）を並列起動。
+rate-limit 検知時は DL を自動停止・回復。キュー ${QUEUE_HIGH} 件超で DL 一時停止、${QUEUE_LOW} 件未満で再開。
+DL が全チャンネルを一周するたびに summarize.py を実行。
 
 オプション:
   --limit N            チャンネルあたりのDL上限 (default: ${LIMIT})
   --model MODEL        Whisper モデル名 (default: ${MODEL})
   --dl-sleep N         チャンネル間DLスリープ秒数 (default: ${DL_SLEEP}s)
-  --probe-interval N   rate-limit 中の復帰チェック間隔秒数 (default: ${PROBE_INTERVAL}s)
+  --probe-interval N   rate-limit 復帰チェック間隔秒数 (default: ${PROBE_INTERVAL}s)
   --drain-poll N       drain-queue 完了後の待機秒数 (default: ${DRAIN_POLL}s)
-  -h, --help           このヘルプを表示して終了
+  -h, --help           このヘルプを表示
 
 例:
-  $0                                      # デフォルト設定で起動
+  $0
   $0 --limit 20 --model large-v3
-  $0 --dl-sleep 60 --probe-interval 60
-
-ログ:
-  logs/autonomous/YYYYMMDD_HHMMSS_autonomous.log
-  セッション結果: grep '\[session-end\]' logs/autonomous/*.log
 EOF
 }
 
@@ -80,6 +71,10 @@ log() {
 
 stamp() {
   awk -v w="${WORKER:-[??]}" '{ printf "[%s] %s %s\n", strftime("%Y-%m-%d %H:%M:%S"), w, $0; fflush() }'
+}
+
+queue_size() {
+  find "$SCRIPT_DIR/queue" \( -name "*.m4a" -o -name "*.webm" -o -name "*.opus" -o -name "*.mp4" \) 2>/dev/null | wc -l
 }
 
 cleanup() {
@@ -121,6 +116,16 @@ dl_worker() {
     python "$SCRIPT_DIR/transcribe.py" refresh-cookies 2>&1 | stamp | tee -a "$LOG_FILE"
 
     for name in "${CHANNELS[@]}"; do
+      # キューが上限を超えていたら下限を下回るまで待機
+      qs=$(queue_size)
+      if [[ "$qs" -ge "$QUEUE_HIGH" ]]; then
+        log "キュー${qs}件 ≥ ${QUEUE_HIGH} → 文字起こしに専念（${QUEUE_LOW}件を下回ったら再開）"
+        while [[ $(queue_size) -ge "$QUEUE_LOW" ]]; do
+          sleep 60
+        done
+        log "キュー$(queue_size)件 < ${QUEUE_LOW} → DL再開"
+      fi
+
       tmpout=$(mktemp)
       python "$SCRIPT_DIR/transcribe.py" channel "$name" \
         --download-only --sort popular --limit "$LIMIT" 2>&1 \
@@ -139,6 +144,15 @@ dl_worker() {
 
       sleep "$DL_SLEEP"
     done
+
+    # 全チャンネルを一周したら要約を実行（rate-limit で中断した場合はスキップ）
+    if ! $rate_limited; then
+      WORKER="[SUM]"
+      log "DL 1周完了 → summarize.py 実行"
+      python "$SCRIPT_DIR/summarize.py" all 2>&1 \
+        | stamp | tee -a "$LOG_FILE"
+      WORKER="[DL]"
+    fi
 
     # rate-limit 中はプローブして解除を能動的に検知する
     if $rate_limited; then

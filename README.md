@@ -10,7 +10,9 @@ yt-learn/
 ├── transcribe.py        # 文字起こしコアエンジン
 ├── summarize.py         # AI要約スクリプト
 ├── channels.txt         # 追跡するチャンネルのリスト
-├── youtube.png          # 通知アイコン
+├── docs/
+│   ├── architecture.png # アーキテクチャ図
+│   └── DESIGN.md        # 設計メモ・WSL引き継ぎドキュメント
 ├── .env                 # 環境変数（GEMINI_API_KEY など）※ git管理外
 ├── cookies.txt          # YouTube クッキー（yt-dlp が書き出し）※ git管理外
 ├── cache/               # 再生数キャッシュ（チャンネル別）
@@ -252,6 +254,10 @@ python transcribe.py sync --only summaries
 
 人気順ソート（`--sort popular`）で再生数取得時にメンバー限定動画に当たると、`cache/*_view_cache.json` に `-1` を sentinel として保存する。次回以降は再取得せず、ソートでも最下位に回るため `--limit N` の上位 N 件には含まれない。`[error]` / `ERROR:` のログにも出ない。
 
+## アーキテクチャ
+
+![アーキテクチャ図](docs/architecture.png)
+
 ## WSL での継続実行
 
 **これだけ叩けば全自動**:
@@ -260,11 +266,15 @@ python transcribe.py sync --only summaries
 ./autonomous.sh
 ```
 
-DL（バックグラウンド）と文字起こし（フォアグラウンド）を並列実行。rate-limit を検知すると DL を停止し、YouTube への疎通チェックを繰り返して回復を自動検知 → DL 再開。その間も文字起こしワーカーは `queue/` をドレインし続けるため GPU はアイドルにならない。
+DL（バックグラウンド）と文字起こし（フォアグラウンド）を並列実行。
+
+- rate-limit を検知すると DL を停止し、疎通チェックで回復を自動検知 → DL 再開。その間も文字起こしワーカーは `queue/` をドレインし続けるため GPU はアイドルにならない
+- キューが 200 件を超えると DL を一時停止し、文字起こしに専念。100 件を下回ると DL 再開（バックプレッシャー制御）
+- DL が全チャンネルを一周するたびに `summarize.py all` を実行してサマリーを更新
 
 ```bash
 # オプション指定
-./autonomous.sh --limit 10 --model large-v3
+./autonomous.sh --limit 20 --model large-v3
 ./autonomous.sh --probe-interval 120   # rate-limit 復帰チェック間隔を調整
 
 # Ctrl+C で安全停止 → [session-end] を logs/autonomous/*.log に記録

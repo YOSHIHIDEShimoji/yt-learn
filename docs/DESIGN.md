@@ -223,13 +223,12 @@ grep -v '^#\|^$\|^##\|^ ' logs/benchmark/*.log | sort -t$'\t' -k7 -rn | head -5
 # Ctrl+C で安全停止 → [session-end] 行を logs/autonomous/*.log に追記
 ```
 
-**動作**: DL（バックグラウンド）と文字起こし（フォアグラウンド）を並列実行。
-rate-limit 検知 → `--probe-interval` 秒ごとに YouTube に疎通チェック → 解除を検知したら DL 自動再開。
-その間も文字起こしワーカーは queue/ をドレインし続けるため GPU はアイドルにならない。
+**動作**:
 
-```
-./autonomous.sh を叩くだけ。あとは全自動。
-```
+- DL（バックグラウンド）と文字起こし（フォアグラウンド）を並列実行
+- rate-limit 検知 → `--probe-interval` 秒ごとに YouTube に疎通チェック → 解除を検知したら DL 自動再開。その間も文字起こしワーカーは queue/ をドレインし続けるため GPU はアイドルにならない
+- キューが 200 件超 → DL 一時停止（文字起こしに専念）。100 件未満になったら DL 再開（バックプレッシャー制御）
+- DL が全チャンネルを一周するたびに `summarize.py all` を実行してサマリーを更新
 
 **ログ確認**:
 ```bash
