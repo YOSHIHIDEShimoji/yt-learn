@@ -179,22 +179,27 @@ portal.sh             # 起動スクリプト（Mac/WSL 自動判定）
 
 ### 実装フェーズ
 
+各フェーズ完了時に `feat/portal` → `main` へマージする。
+
 | Phase | 内容 | 状態 |
 |-------|------|------|
-| **1** | 骨格 + Mac アクセス（SSH トンネル）| ✅ 完了（2026-05-21） |
+| **1** | 骨格 + チャンネル一覧・STATUS・LOGS・README 表示 + Mac ローカルモード | ✅ 完了（2026-05-21） |
 | 2 | HOME タブ機能化（チャンネル追加/削除・実行パネル）| 未着手 |
-| 3 | STATUS タブ WebSocket リアルタイム更新 | 未着手 |
+| 3 | リアルタイム更新（WebSocket / SSE）| 未着手 |
 | 4 | LIBRARY タブ（トランスクリプト全文検索）| 未着手 |
 | 5 | Apple liquid glass デザイン精緻化（getdesign 等）| 未着手 |
 | 6 | Tailscale direct アクセス（Windows portproxy）| 未着手 |
 
-### Phase 1 でできること（現状）
+### Phase 1 でできること
 
-- HOME タブ: channels.txt のチャンネル一覧を表示
-- STATUS タブ: 直近ログ末尾 50 行を表示（手動更新）
-- LOGS タブ: ログファイル一覧
+- HOME タブ: channels.txt のチャンネル一覧 + Google Drive フォルダリンク表示
+- STATUS タブ: 処理済み動画・統計・Drive リンク（15 秒ポーリング自動更新）
+- LOGS タブ: ログファイル一覧 + ビューアー（手動更新）
 - README タブ: README.md をレンダリング
 - タブ切り替え（URL ハッシュ対応）
+- `./portal.sh --local` で Mac 上のログを読むローカルモード
+- Drive URL キャッシュ（メモリ + ファイル永続化、サーバー再起動後も即表示）
+- ログ終了マーカー `[session-end]` 統一（live/done 判定の信頼性向上）
 
 ### Phase 2 で実装すべきこと
 
@@ -205,8 +210,9 @@ portal.sh             # 起動スクリプト（Mac/WSL 自動判定）
 
 ### Phase 3 で実装すべきこと
 
-- WebSocket エンドポイント（`/ws/logs`）
-- STATUS タブをリアルタイム自動更新（tail -f 相当）
+- WebSocket または SSE エンドポイント
+- LOGS タブ: live ログを開いているときポーリングで自動更新（tail -f 相当）
+- STATUS タブ: WebSocket でリアルタイム自動更新
 - autonomous.sh の状態（DL中/rate-limit/停止）をバッジ表示
 
 ### 依存関係
