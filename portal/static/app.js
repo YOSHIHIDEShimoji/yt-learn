@@ -7,7 +7,8 @@ document.addEventListener("DOMContentLoaded", () => {
     panes.forEach(p => p.classList.toggle("active", p.id === `pane-${id}`));
     history.replaceState(null, "", `#${id}`);
     if (id === "home")   loadChannels();
-    if (id === "status") loadStatus();
+    if (id === "status") { loadStatus(); startStatusPolling(); }
+    else                 stopStatusPolling();
     if (id === "readme") loadReadme();
     if (id === "logs")   loadLogs();
   }
@@ -34,75 +35,123 @@ document.addEventListener("DOMContentLoaded", () => {
   }
 
   // ── STATUS ───────────────────────────────────────────────
-  async function loadStatus() {
+  let _statusData = null;
+  let _statusPollTimer = null;
+
+  function startStatusPolling() {
+    if (_statusPollTimer) return;
+    _statusPollTimer = setInterval(pollStatusUpdates, 15000);
+  }
+
+  function stopStatusPolling() {
+    if (_statusPollTimer) { clearInterval(_statusPollTimer); _statusPollTimer = null; }
+  }
+
+  async function pollStatusUpdates() {
+    if (!_statusData) return;
+    try {
+      const d = await api("/api/status-summary");
+      const videoCountChanged = d.done_videos.length !== _statusData.done_videos.length;
+      const runningChanged = (d.running_video?.title ?? null) !== (_statusData.running_video?.title ?? null);
+      const metaChanged = d.status !== _statusData.status
+        || d.phase !== _statusData.phase
+        || d.done_count !== _statusData.done_count;
+
+      if (videoCountChanged || runningChanged || metaChanged) {
+        renderStatusData(d);
+      } else {
+        // Drive リンクだけ外科的に追加
+        d.done_videos.forEach((v, i) => {
+          if (v.drive_url && !(_statusData.done_videos[i]?.drive_url)) {
+            const card = document.querySelector(`#status-videos .video-card[data-idx="${i}"]`);
+            if (card && !card.querySelector(".channel-link")) {
+              const a = document.createElement("a");
+              a.className = "channel-link drive-link-popin";
+              a.href = v.drive_url;
+              a.target = "_blank";
+              a.rel = "noopener";
+              a.style.flexShrink = "0";
+              a.textContent = "↗ Drive";
+              card.appendChild(a);
+            }
+          }
+        });
+      }
+      _statusData = d;
+    } catch (e) {}
+  }
+
+  function renderStatusData(d) {
     const headerEl = document.getElementById("status-header-card");
     const videosEl = document.getElementById("status-videos");
     const statsEl  = document.getElementById("status-stats");
     if (!headerEl) return;
 
+    const statusCls = d.status === "稼働中" ? "badge-green"
+      : d.status === "rate-limit 中" ? "badge-warn"
+      : "badge-gray";
+    headerEl.innerHTML = `
+      <div class="status-header-inner">
+        <div class="status-header-left">
+          <div class="status-script">autonomous.sh</div>
+          <div class="status-session">${esc(d.last_session || "セッション情報なし")}</div>
+        </div>
+        <div class="status-header-right">
+          <span class="badge ${statusCls}">${esc(d.status)}</span>
+          <span class="status-phase">${esc(d.phase)}</span>
+        </div>
+      </div>`;
+
+    const cards = [];
+    if (d.running_video) {
+      cards.push(`
+        <div class="video-card">
+          <span class="badge badge-blue" style="flex-shrink:0">running</span>
+          <div class="video-info">
+            <div class="video-title">${esc(d.running_video.title)}</div>
+            <div class="video-channel">${esc(d.running_video.channel || "—")}</div>
+          </div>
+        </div>`);
+    }
+    if (d.done_videos && d.done_videos.length) {
+      d.done_videos.forEach((v, i) => {
+        cards.push(`
+          <div class="video-card" data-idx="${i}">
+            <span class="badge badge-green" style="flex-shrink:0">done</span>
+            <div class="video-info">
+              <div class="video-title">${esc(v.title)}</div>
+              <div class="video-channel">${esc(v.channel)}</div>
+            </div>
+            ${v.drive_url ? `<a class="channel-link" href="${esc(v.drive_url)}" target="_blank" rel="noopener" style="flex-shrink:0">↗ Drive</a>` : ""}
+          </div>`);
+      });
+    } else if (!d.running_video) {
+      cards.push(placeholder("🎞️", "処理済み動画なし"));
+    }
+    videosEl.innerHTML = cards.join("");
+
+    statsEl.innerHTML = `
+      <div class="stat-grid">
+        <div class="stat-item"><span class="stat-label">queue</span><span class="stat-val">${d.queue_count} 件</span></div>
+        <div class="stat-item"><span class="stat-label">完了</span><span class="stat-val stat-green">${d.done_count} 件</span></div>
+        <div class="stat-item"><span class="stat-label">警告</span><span class="stat-val stat-warn">${d.warn_count} 件</span></div>
+        <div class="stat-item"><span class="stat-label">エラー</span><span class="stat-val stat-err">${d.error_count} 件</span></div>
+        <div class="stat-item"><span class="stat-label">rate-limit</span><span class="stat-val">${d.rate_limit_count} 回</span></div>
+        <div class="stat-item"><span class="stat-label">フェーズ</span><span class="stat-val">${esc(d.phase)}</span></div>
+      </div>
+      <div style="margin-top:12px;display:flex;justify-content:space-between;align-items:center;font-size:11px;color:var(--text-faint)">
+        <span>参照: ${esc(d.log_file || "—")}</span>
+        ${d.drive_folder_url ? `<a class="channel-link" href="${esc(d.drive_folder_url)}" target="_blank" rel="noopener" style="opacity:1;font-size:12px">↗ Google Drive</a>` : ""}
+      </div>`;
+  }
+
+  async function loadStatus() {
+    const headerEl = document.getElementById("status-header-card");
+    if (!headerEl) return;
     try {
       const d = await api("/api/status-summary");
-
-      // ヘッダーカード
-      const statusCls = d.status === "稼働中" ? "badge-green"
-        : d.status === "rate-limit 中" ? "badge-warn"
-        : "badge-gray";
-      headerEl.innerHTML = `
-        <div class="status-header-inner">
-          <div class="status-header-left">
-            <div class="status-script">autonomous.sh</div>
-            <div class="status-session">${esc(d.last_session || "セッション情報なし")}</div>
-          </div>
-          <div class="status-header-right">
-            <span class="badge ${statusCls}">${esc(d.status)}</span>
-            <span class="status-phase">${esc(d.phase)}</span>
-          </div>
-        </div>`;
-
-      // 動画カード（running + done）
-      const cards = [];
-      if (d.running_video) {
-        cards.push(`
-          <div class="video-card">
-            <span class="badge badge-blue" style="flex-shrink:0">running</span>
-            <div class="video-info">
-              <div class="video-title">${esc(d.running_video.title)}</div>
-              <div class="video-channel">${esc(d.running_video.channel || "—")}</div>
-            </div>
-          </div>`);
-      }
-      if (d.done_videos && d.done_videos.length) {
-        d.done_videos.forEach(v => {
-          cards.push(`
-            <div class="video-card">
-              <span class="badge badge-green" style="flex-shrink:0">done</span>
-              <div class="video-info">
-                <div class="video-title">${esc(v.title)}</div>
-                <div class="video-channel">${esc(v.channel)}</div>
-              </div>
-              ${v.drive_url ? `<a class="channel-link" href="${esc(v.drive_url)}" target="_blank" rel="noopener" style="flex-shrink:0">↗ Drive</a>` : ""}
-            </div>`);
-        });
-      } else if (!d.running_video) {
-        cards.push(placeholder("🎞️", "処理済み動画なし"));
-      }
-      videosEl.innerHTML = cards.join("");
-
-      // 統計パネル
-      statsEl.innerHTML = `
-        <div class="stat-grid">
-          <div class="stat-item"><span class="stat-label">queue</span><span class="stat-val">${d.queue_count} 件</span></div>
-          <div class="stat-item"><span class="stat-label">完了</span><span class="stat-val stat-green">${d.done_count} 件</span></div>
-          <div class="stat-item"><span class="stat-label">警告</span><span class="stat-val stat-warn">${d.warn_count} 件</span></div>
-          <div class="stat-item"><span class="stat-label">エラー</span><span class="stat-val stat-err">${d.error_count} 件</span></div>
-          <div class="stat-item"><span class="stat-label">rate-limit</span><span class="stat-val">${d.rate_limit_count} 回</span></div>
-          <div class="stat-item"><span class="stat-label">フェーズ</span><span class="stat-val">${esc(d.phase)}</span></div>
-        </div>
-        <div style="margin-top:12px;display:flex;justify-content:space-between;align-items:center;font-size:11px;color:var(--text-faint)">
-          <span>参照: ${esc(d.log_file || "—")}</span>
-          ${d.drive_folder_url ? `<a class="channel-link" href="${esc(d.drive_folder_url)}" target="_blank" rel="noopener" style="opacity:1;font-size:12px">↗ Google Drive</a>` : ""}
-        </div>`;
-
+      renderStatusData(d);
+      _statusData = d;
     } catch (e) {
       headerEl.innerHTML = placeholder("⚠️", "読み込み失敗");
     }
@@ -187,12 +236,6 @@ document.addEventListener("DOMContentLoaded", () => {
       return `<span class="${cls}">${esc(l)}</span>`;
     }).join("\n");
     el.scrollTop = el.scrollHeight;
-  }
-
-  function formatSec(sec) {
-    if (sec < 60) return `${sec}秒`;
-    const m = Math.floor(sec / 60), s = sec % 60;
-    return s > 0 ? `${m}分${s}秒` : `${m}分`;
   }
 
   function placeholder(icon, text) {
