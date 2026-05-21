@@ -1,6 +1,8 @@
 import asyncio
+import json
 import re
 import shutil
+import time
 from datetime import datetime
 from pathlib import Path
 from fastapi import FastAPI, Request
@@ -12,10 +14,63 @@ ROOT = Path(__file__).parent.parent
 PORTAL_DIR = Path(__file__).parent
 
 app = FastAPI(title="yt-learn Portal")
+app.mount("/static", StaticFiles(directory=PORTAL_DIR / "static"), name="static")
+templates = Jinja2Templates(directory=PORTAL_DIR / "templates")
 
-# rclone link 結果キャッシュ（プロセス内永続）
-_drive_url_cache: dict[str, str] = {}
+# ── Drive キャッシュ ──────────────────────────────────────────
+_rclone_link_cache: dict[str, str] = {}          # path → url
+_drive_file_cache: dict[str, dict[str, str]] = {}  # channel → {title: url}
 
+
+async def _rclone_link(path: str) -> str:
+    """rclone link でフォルダ/ファイル URL を取得（キャッシュ付き）"""
+    if path in _rclone_link_cache:
+        return _rclone_link_cache[path]
+    if not shutil.which("rclone"):
+        return ""
+    try:
+        proc = await asyncio.create_subprocess_exec(
+            "rclone", "link", path,
+            stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE,
+        )
+        stdout, _ = await asyncio.wait_for(proc.communicate(), timeout=5)
+        url = stdout.decode().strip() if proc.returncode == 0 else ""
+        _rclone_link_cache[path] = url
+        return url
+    except Exception:
+        return ""
+
+
+async def _get_channel_drive_urls(channel: str) -> dict[str, str]:
+    """rclone lsjson でチャンネルフォルダのファイル ID を一括取得し title→url マップを返す"""
+    if channel in _drive_file_cache:
+        return _drive_file_cache[channel]
+    if not shutil.which("rclone"):
+        _drive_file_cache[channel] = {}
+        return {}
+    try:
+        proc = await asyncio.create_subprocess_exec(
+            "rclone", "lsjson", "--files-only",
+            f"gdrive:yt-learn/transcripts/{channel}/",
+            stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE,
+        )
+        stdout, _ = await asyncio.wait_for(proc.communicate(), timeout=15)
+        items = json.loads(stdout.decode())
+        result = {}
+        for item in items:
+            name = item.get("Name", "")
+            file_id = item.get("ID", "")
+            if name and file_id:
+                title = name[:-3] if name.endswith(".md") else name
+                result[title] = f"https://drive.google.com/file/d/{file_id}/view"
+        _drive_file_cache[channel] = result
+        return result
+    except Exception:
+        _drive_file_cache[channel] = {}
+        return {}
+
+
+# ── ログ解析 ──────────────────────────────────────────────────
 def _parse_session_videos(lines: list[str]) -> tuple[list[dict], dict | None]:
     """ログ行から動画イベントを解析。(done_videos newest-first, running_or_None) を返す"""
     done: list[dict] = []
@@ -37,44 +92,24 @@ def _parse_session_videos(lines: list[str]) -> tuple[list[dict], dict | None]:
                 cur["channel"] = parts[-2] if len(parts) >= 2 else ""
         elif "[drive]" in l and cur is not None:
             cur["drive_ts"] = ts
-            if cur["drain_ts"] and cur["drive_ts"]:
-                try:
+            try:
+                if cur["drain_ts"] and cur["drive_ts"]:
                     t1 = datetime.strptime(cur["drain_ts"], "%Y-%m-%d %H:%M:%S")
                     t2 = datetime.strptime(cur["drive_ts"], "%Y-%m-%d %H:%M:%S")
                     cur["processing_sec"] = int((t2 - t1).total_seconds())
-                except ValueError:
+                else:
                     cur["processing_sec"] = 0
-            else:
+            except ValueError:
                 cur["processing_sec"] = 0
             done.append(cur)
             cur = None
 
-    running = cur  # drain 後 drive 前 → 現在処理中
-    done.reverse()  # 新しい順
+    running = cur
+    done.reverse()
     return done, running
 
 
-async def _rclone_link(path: str) -> str:
-    if path in _drive_url_cache:
-        return _drive_url_cache[path]
-    if not shutil.which("rclone"):
-        return ""
-    try:
-        proc = await asyncio.create_subprocess_exec(
-            "rclone", "link", path,
-            stdout=asyncio.subprocess.PIPE,
-            stderr=asyncio.subprocess.PIPE,
-        )
-        stdout, _ = await asyncio.wait_for(proc.communicate(), timeout=5)
-        url = stdout.decode().strip() if proc.returncode == 0 else ""
-        _drive_url_cache[path] = url
-        return url
-    except Exception:
-        return ""
-app.mount("/static", StaticFiles(directory=PORTAL_DIR / "static"), name="static")
-templates = Jinja2Templates(directory=PORTAL_DIR / "templates")
-
-
+# ── Routes ───────────────────────────────────────────────────
 @app.get("/", response_class=HTMLResponse)
 async def index(request: Request):
     return templates.TemplateResponse(request=request, name="index.html")
@@ -110,12 +145,17 @@ async def get_readme():
 async def get_logs():
     log_dirs = [ROOT / "logs", ROOT / "log"]
     log_files = []
+    now = time.time()
+    live_threshold = 30 * 60  # 30分以内に更新 + session-end なし → live
+
     for log_dir in log_dirs:
         if log_dir.exists():
             for f in sorted(log_dir.rglob("*.log"), key=lambda x: x.stat().st_mtime, reverse=True)[:30]:
                 try:
                     tail = f.read_bytes()[-512:].decode(errors="replace")
-                    is_done = "[session-end]" in tail
+                    session_ended = "[session-end]" in tail
+                    recently_modified = (now - f.stat().st_mtime) < live_threshold
+                    is_done = session_ended or not recently_modified
                 except Exception:
                     is_done = True
                 log_files.append({
@@ -125,6 +165,9 @@ async def get_logs():
                     "mtime": f.stat().st_mtime,
                     "is_done": is_done,
                 })
+
+    # live を先頭、次いで done（両グループ内は mtime 降順）
+    log_files.sort(key=lambda x: (x["is_done"], -x["mtime"]))
     return JSONResponse({"logs": log_files})
 
 
@@ -161,58 +204,43 @@ async def get_status_summary():
         error_count = sum(1 for l in lines if "[error]" in l)
         rl_count    = sum(1 for l in lines if "rate-limit" in l.lower() or "レートリミット" in l)
 
-        # 動画イベントを解析（セッション全体）
         done_videos, running_video = _parse_session_videos(lines)
 
-        # 現在のフェーズ（直近の行から推定）
         phase = "アイドル"
         for l in reversed(lines[-20:]):
             if "[model]" in l or "[transcribe]" in l:
-                phase = "Whisper 処理中"
-                break
+                phase = "Whisper 処理中"; break
             if "[summary]" in l:
-                phase = "AI 要約中"
-                break
+                phase = "AI 要約中"; break
             if "[download]" in l:
-                phase = "ダウンロード中"
-                break
+                phase = "ダウンロード中"; break
 
-        # 稼働ステータス
         status = "不明"
         for l in reversed(lines[-30:]):
             if "[session-end]" in l:
-                status = "停止"
-                break
+                status = "停止"; break
             if "rate-limit" in l.lower() or "レートリミット" in l:
-                status = "rate-limit 中"
-                break
+                status = "rate-limit 中"; break
             if "[done]" in l or "[download]" in l or "[saved]" in l or "[skip]" in l:
-                status = "稼働中"
-                break
+                status = "稼働中"; break
 
-        # セッション開始行
         last_session = next(
             (l for l in reversed(lines) if "=== 開始" in l or "=== Started" in l), None
         )
 
-        # queue 残数
         queue_dir = ROOT / "queue"
         queue_count = len(list(queue_dir.glob("*.m4a"))) if queue_dir.exists() else 0
 
-        # Google Drive リンクを並列取得（キャッシュ済みなら即返却）
-        channels_needed = list({v["channel"] for v in done_videos if v.get("channel")})
-        if running_video and running_video.get("channel"):
-            channels_needed = list(set(channels_needed + [running_video["channel"]]))
-        drive_results = await asyncio.gather(
+        # 個別ファイル Drive URL（rclone lsjson でチャンネルごとに一括取得）
+        unique_channels = list({v["channel"] for v in done_videos if v.get("channel")})
+        channel_maps, folder_url = await asyncio.gather(
+            asyncio.gather(*[_get_channel_drive_urls(ch) for ch in unique_channels]),
             _rclone_link("gdrive:yt-learn"),
-            *[_rclone_link(f"gdrive:yt-learn/transcripts/{ch}") for ch in channels_needed],
         )
-        drive_folder_url = drive_results[0]
-        channel_drive = dict(zip(channels_needed, drive_results[1:]))
+        ch_url_map = dict(zip(unique_channels, channel_maps))
         for v in done_videos:
-            v["drive_url"] = channel_drive.get(v.get("channel", ""), "")
-        if running_video:
-            running_video["drive_url"] = channel_drive.get(running_video.get("channel", ""), "")
+            file_map = ch_url_map.get(v.get("channel", ""), {})
+            v["drive_url"] = file_map.get(v.get("title", ""), "")
 
         return JSONResponse({
             "log_file": logs[0].name,
@@ -226,8 +254,7 @@ async def get_status_summary():
             "phase": phase,
             "status": status,
             "last_session": last_session,
-            "drive_folder_url": drive_folder_url,
-            "lines": lines[-50:],
+            "drive_folder_url": folder_url,
         })
 
     return JSONResponse({

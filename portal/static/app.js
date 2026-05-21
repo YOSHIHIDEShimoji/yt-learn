@@ -63,34 +63,24 @@ document.addEventListener("DOMContentLoaded", () => {
       const cards = [];
       if (d.running_video) {
         cards.push(`
-          <div class="video-card-outer">
-            <div class="video-card">
-              <span class="badge badge-blue" style="flex-shrink:0">running</span>
-              <div class="video-info">
-                <div class="video-title">${esc(d.running_video.title)}</div>
-                <div class="video-channel">${esc(d.running_video.channel || "—")}</div>
-              </div>
+          <div class="video-card">
+            <span class="badge badge-blue" style="flex-shrink:0">running</span>
+            <div class="video-info">
+              <div class="video-title">${esc(d.running_video.title)}</div>
+              <div class="video-channel">${esc(d.running_video.channel || "—")}</div>
             </div>
           </div>`);
       }
       if (d.done_videos && d.done_videos.length) {
         d.done_videos.forEach(v => {
-          const timeStr = v.processing_sec > 0 ? `処理時間: ${formatSec(v.processing_sec)}` : "";
-          const driveHtml = v.drive_url
-            ? `<a class="channel-link" href="${esc(v.drive_url)}" target="_blank" rel="noopener">↗ Google Drive</a>`
-            : "";
-          const hasMore = timeStr || driveHtml;
           cards.push(`
-            <div class="video-card-outer">
-              <div class="video-card">
-                <span class="badge badge-green" style="flex-shrink:0">done</span>
-                <div class="video-info">
-                  <div class="video-title">${esc(v.title)}</div>
-                  <div class="video-channel">${esc(v.channel)}</div>
-                </div>
-                ${hasMore ? `<button class="more-btn" onclick="toggleVideoMore(this)">···</button>` : ""}
+            <div class="video-card">
+              <span class="badge badge-green" style="flex-shrink:0">done</span>
+              <div class="video-info">
+                <div class="video-title">${esc(v.title)}</div>
+                <div class="video-channel">${esc(v.channel)}</div>
               </div>
-              ${hasMore ? `<div class="video-more">${timeStr ? `<span>${timeStr}</span>` : ""}${driveHtml}</div>` : ""}
+              ${v.drive_url ? `<a class="channel-link" href="${esc(v.drive_url)}" target="_blank" rel="noopener" style="flex-shrink:0">↗ Drive</a>` : ""}
             </div>`);
         });
       } else if (!d.running_video) {
@@ -113,25 +103,17 @@ document.addEventListener("DOMContentLoaded", () => {
           ${d.drive_folder_url ? `<a class="channel-link" href="${esc(d.drive_folder_url)}" target="_blank" rel="noopener" style="opacity:1;font-size:12px">↗ Google Drive</a>` : ""}
         </div>`;
 
-      // 直近ログ
-      const logEl = document.getElementById("status-log");
-      if (logEl) renderLog(logEl, d.lines || []);
-
     } catch (e) {
       headerEl.innerHTML = placeholder("⚠️", "読み込み失敗");
     }
   }
 
   window.reloadStatus = function() {
-    ["status-header-card", "status-videos", "status-stats", "status-log"].forEach(id => {
+    ["status-header-card", "status-videos", "status-stats"].forEach(id => {
       const el = document.getElementById(id);
       if (el) el.innerHTML = placeholder("⏳", "更新中…");
     });
     loadStatus();
-  };
-
-  window.toggleVideoMore = function(btn) {
-    btn.closest(".video-card-outer").classList.toggle("expanded");
   };
 
   // ── README ───────────────────────────────────────────────
