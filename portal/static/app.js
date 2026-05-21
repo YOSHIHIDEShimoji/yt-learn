@@ -236,7 +236,7 @@ document.addEventListener("DOMContentLoaded", () => {
   // ── LOGS ────────────────────────────────────────────────
   async function loadLogs() {
     const el = document.getElementById("log-list");
-    if (!el || el.dataset.loaded) return;
+    if (!el) return;
     el.innerHTML = placeholder("⏳", "読み込み中…");
     try {
       const { logs } = await api("/api/logs");
@@ -247,15 +247,10 @@ document.addEventListener("DOMContentLoaded", () => {
           <span class="channel-name">${esc(l.path)}</span>
           <span style="color:var(--text-faint);font-size:11px;flex-shrink:0">${(l.size/1024).toFixed(1)} KB</span>
         </div>`).join("");
-      el.dataset.loaded = "1";
     } catch { el.innerHTML = placeholder("⚠️", "読み込み失敗"); }
   }
 
-  window.reloadLogs = function() {
-    const el = document.getElementById("log-list");
-    if (el) { delete el.dataset.loaded; el.innerHTML = placeholder("⏳", "読み込み中…"); }
-    loadLogs();
-  };
+  window.reloadLogs = function() { loadLogs(); };
 
   window.openLog = async function(el) {
     document.querySelectorAll(".log-file-item").forEach(e => e.classList.remove("active-log"));
@@ -361,7 +356,6 @@ document.addEventListener("DOMContentLoaded", () => {
     try {
       await api("/api/run", 10000, "POST", { limit: 10, model: "large-v3" });
       await _updateRunBadge();
-      switchTab("status");
     } catch (e) {
       await showConfirm(`起動失敗: ${e.message}`, "OK", false);
       startBtn.disabled = false; startBtn.textContent = origText;
@@ -400,7 +394,6 @@ document.addEventListener("DOMContentLoaded", () => {
       resultEl.style.color = "var(--green)";
       resultEl.textContent = res.message || "処理を開始しました";
       document.getElementById("proc-urls").value = "";
-      setTimeout(() => switchTab("status"), 800);
     } catch (e) {
       resultEl.style.color = "var(--err)"; resultEl.textContent = String(e.message) || "エラー";
     } finally {
@@ -417,7 +410,6 @@ document.addEventListener("DOMContentLoaded", () => {
     try {
       const res = await api(endpoint, 30000, "POST", payload);
       if (resultEl) { resultEl.style.color = "var(--green)"; resultEl.textContent = res.message || "開始しました"; }
-      setTimeout(() => switchTab("logs"), 800);
     } catch (e) {
       if (resultEl) { resultEl.style.color = "var(--err)"; resultEl.textContent = String(e.message) || "エラー"; }
     } finally {

@@ -504,9 +504,11 @@ class ProcessUrlBody(BaseModel):
     lang: str = "ja"
 
 
-async def _await_and_close(proc, f) -> None:
+async def _await_and_close(proc, f, append_session_end: bool = False) -> None:
     try:
         await proc.wait()
+        if append_session_end:
+            f.write(b"\n[session-end]\n")
     finally:
         f.close()
 
@@ -524,7 +526,7 @@ async def _bg_process_urls(urls: list[str], channel: str, lang: str) -> None:
             cwd=str(ROOT),
             stdout=f, stderr=f,
         )
-        asyncio.ensure_future(_await_and_close(proc, f))
+        asyncio.ensure_future(_await_and_close(proc, f, append_session_end=True))
     except Exception:
         pass
 
@@ -549,7 +551,7 @@ async def _bg_run_script(args: list[str], log_subdir: str, log_prefix: str) -> N
         proc = await asyncio.create_subprocess_exec(
             *args, cwd=str(ROOT), stdout=f, stderr=f,
         )
-        asyncio.ensure_future(_await_and_close(proc, f))
+        asyncio.ensure_future(_await_and_close(proc, f, append_session_end=True))
     except Exception:
         pass
 
