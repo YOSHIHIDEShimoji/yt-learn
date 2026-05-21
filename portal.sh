@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 # portal.sh — yt-learn Portal 起動スクリプト
-# Mac から実行: WSL でサーバー起動 → WSL の Tailscale IP でブラウザを開く
+# Mac から実行 (デフォルト): WSL でサーバー起動 → WSL の Tailscale IP でブラウザを開く
+# Mac から実行 (--local):    Mac でサーバーをローカル起動 → localhost でブラウザを開く
 # WSL から実行: サーバーをローカルで起動 + Windows ブラウザを開く
 
 set -euo pipefail
@@ -9,11 +10,30 @@ PORT=8080
 PROJECT="yt-learn"
 TMUX_SESSION="yt-portal"
 
+# --local フラグ解析
+LOCAL_MODE=false
+for arg in "$@"; do
+  [[ "$arg" == "--local" ]] && LOCAL_MODE=true
+done
+
 # ──────────────────────────────────────────
 # Mac モード
 # ──────────────────────────────────────────
 if [[ "$(uname)" == "Darwin" ]]; then
-  echo "[portal] Mac モード"
+  echo "[portal] Mac モード${LOCAL_MODE:+ (--local)}"
+
+  # --local: Mac 自身でサーバーを起動してローカルログを読む
+  if [[ "$LOCAL_MODE" == true ]]; then
+    cd "$(dirname "$(realpath "$0")")"
+    if curl -s --max-time 1 "http://localhost:${PORT}/" > /dev/null 2>&1; then
+      echo "[portal] サーバーはすでに起動中です"
+      open "http://localhost:${PORT}"
+      exit 0
+    fi
+    echo "[portal] Mac ローカルサーバーを起動します (port ${PORT})"
+    (sleep 2 && open "http://localhost:${PORT}") &
+    exec uvicorn portal.main:app --host 127.0.0.1 --port "${PORT}" --reload
+  fi
 
   # WSL の IP を取得（Tailscale ミラーネットワーク）
   WSL_IP=$(ssh win "wsl -- bash -c 'hostname -I | cut -d\" \" -f1'" 2>/dev/null | tr -d '\r')
