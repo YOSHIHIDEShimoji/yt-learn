@@ -62,7 +62,6 @@ body {
   width: auto;
   display: block;
   border-radius: 6px;
-  mix-blend-mode: multiply;
   transition: opacity 0.15s;
 }
 .header-logo-btn:hover .header-logo-img { opacity: 0.8; }
