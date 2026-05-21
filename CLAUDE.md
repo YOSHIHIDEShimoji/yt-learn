@@ -149,15 +149,14 @@ cd ~/my-projects/yt-learn
 
 ### Mac アクセスの仕組み
 
+WSL は mirrored ネットワークモードで Tailscale IP を共有しているため、
+**SSH トンネル不要**。Mac → WSL の Tailscale IP:8080 に直接アクセスする。
+
 ```
-Mac:8080 → SSH トンネル → Windows SSHd → WSL2 loopback → WSL:8080
+Mac ──Tailscale──▶ WSL (100.85.4.93:8080)
 ```
 
-トンネルは portal.sh が自動で管理する。手動で止めたい場合：
-
-```bash
-pkill -f "ssh -L 8080:localhost:8080 win"
-```
+portal.sh が WSL の IP を自動取得して開く URL を決定するため手動設定不要。
 
 WSL サーバーを止めたい場合（Mac から）：
 
