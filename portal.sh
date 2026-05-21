@@ -64,8 +64,9 @@ elif grep -qi microsoft /proc/version 2>/dev/null; then
   # すでにサーバーが動いていればブラウザだけ開く
   if curl -s --max-time 1 "http://localhost:${PORT}/" > /dev/null 2>&1; then
     echo "[portal] サーバーはすでに起動中です"
-    powershell.exe -Command "Start-Process 'http://${WSL_IP}:${PORT}'" 2>/dev/null \
-      || cmd.exe /c "start \"\" \"http://${WSL_IP}:${PORT}\"" 2>/dev/null || true
+    explorer.exe "http://${WSL_IP}:${PORT}" 2>/dev/null \
+      || powershell.exe -Command "Start-Process 'http://${WSL_IP}:${PORT}'" 2>/dev/null \
+      || true
     echo "[portal] ブラウザを開きました: http://${WSL_IP}:${PORT}"
     echo "[portal] サーバー停止: tmux kill-session -t ${TMUX_SESSION}"
     exit 0
@@ -74,7 +75,7 @@ elif grep -qi microsoft /proc/version 2>/dev/null; then
   echo "[portal] WSL モード — uvicorn を 0.0.0.0:${PORT} で起動します"
 
   # Windows ブラウザを非同期で開く（起動後3秒後）
-  (sleep 3 && cmd.exe /c start "http://localhost:${PORT}" 2>/dev/null) &
+  (sleep 3 && explorer.exe "http://${WSL_IP}:${PORT}" 2>/dev/null) &
 
   exec uvicorn portal.main:app --host 0.0.0.0 --port "${PORT}" --reload
 
