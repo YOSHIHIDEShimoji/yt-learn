@@ -2,21 +2,32 @@ document.addEventListener("DOMContentLoaded", () => {
   const tabs  = document.querySelectorAll(".tab-btn");
   const panes = document.querySelectorAll(".pane");
 
-  // ── 状態変数（switchTab 呼び出し前に初期化、TDZ 回避）─────
+  // ── 状態変数 ─────────────────────────────────────────────
   let _channels = [];
   let _statusData = null;
-  let _statusPollTimer = null;
-  let _isWsl = null;  // null = 未取得
+  let _statusEventSource = null;
+  let _logEventSource = null;
+  let _isWsl = null;
+
+  const SESSION_TYPE_LABELS = {
+    autonomous: "autonomous.sh",
+    process:    "URL処理",
+    summarize:  "Summarize",
+    sync:       "Drive Sync",
+    transcribe: "文字起こし",
+    idle:       "idle",
+  };
 
   function switchTab(id) {
     tabs.forEach(t  => t.classList.toggle("active", t.dataset.tab === id));
     panes.forEach(p => p.classList.toggle("active", p.id === `pane-${id}`));
     history.replaceState(null, "", `#${id}`);
     if (id === "home")   { loadChannels(); loadRunPanel(); }
-    if (id === "status") { loadStatus(); startStatusPolling(); }
-    else                 stopStatusPolling();
+    if (id === "status") { loadStatus(); startStatusSSE(); }
+    else                 stopStatusSSE();
     if (id === "readme") loadReadme();
     if (id === "logs")   loadLogs();
+    else                 stopLogStream();
   }
 
   tabs.forEach(t => t.addEventListener("click", () => switchTab(t.dataset.tab)));
@@ -85,49 +96,29 @@ document.addEventListener("DOMContentLoaded", () => {
     } catch (e) {}
   }
 
-  // ── STATUS ───────────────────────────────────────────────
-  function startStatusPolling() {
-    if (_statusPollTimer) return;
-    _statusPollTimer = setInterval(pollStatusUpdates, 15000);
+  // ── STATUS: SSE ─────────────────────────────────────────
+  function startStatusSSE() {
+    if (_statusEventSource) return;
+    _statusEventSource = new EventSource("/api/events");
+    _statusEventSource.onmessage = e => {
+      try {
+        const d = JSON.parse(e.data);
+        if (!d.error) {
+          renderStatusData(d);
+          _statusData = d;
+        }
+      } catch {}
+    };
+    _statusEventSource.onerror = () => {
+      // EventSource は自動再接続する。明示的な処理不要。
+    };
   }
 
-  function stopStatusPolling() {
-    if (_statusPollTimer) { clearInterval(_statusPollTimer); _statusPollTimer = null; }
-  }
-
-  async function pollStatusUpdates() {
-    if (!_statusData) return;
-    try {
-      const d = await api("/api/status-summary");
-      const videoCountChanged = d.done_videos.length !== _statusData.done_videos.length;
-      const runningChanged = (d.running_video?.title ?? null) !== (_statusData.running_video?.title ?? null);
-      const metaChanged = d.status !== _statusData.status
-        || d.phase !== _statusData.phase
-        || d.done_count !== _statusData.done_count
-        || d.drive_folder_url !== _statusData.drive_folder_url;
-
-      if (videoCountChanged || runningChanged || metaChanged) {
-        renderStatusData(d);
-      } else {
-        // Drive リンクだけ外科的に追加
-        d.done_videos.forEach((v, i) => {
-          if (v.drive_url && !(_statusData.done_videos[i]?.drive_url)) {
-            const card = document.querySelector(`#status-videos .video-card[data-idx="${i}"]`);
-            if (card && !card.querySelector(".channel-link")) {
-              const a = document.createElement("a");
-              a.className = "channel-link drive-link-popin";
-              a.href = v.drive_url;
-              a.target = "_blank";
-              a.rel = "noopener";
-              a.style.flexShrink = "0";
-              a.textContent = "↗ Drive";
-              card.appendChild(a);
-            }
-          }
-        });
-      }
-      _statusData = d;
-    } catch (e) {}
+  function stopStatusSSE() {
+    if (_statusEventSource) {
+      _statusEventSource.close();
+      _statusEventSource = null;
+    }
   }
 
   function renderStatusData(d) {
@@ -139,15 +130,29 @@ document.addEventListener("DOMContentLoaded", () => {
     const statusCls = d.status === "running" ? "badge-green"
       : d.status === "rate-limit" ? "badge-warn"
       : "badge-gray";
+
+    const sessionLabel = SESSION_TYPE_LABELS[d.session_type] || d.session_type || "idle";
+    const sessionActive = d.session_type && d.session_type !== "idle";
+
+    const stopBtns = (d.active_jobs || []).map(job => {
+      const label = SESSION_TYPE_LABELS[job.type] || job.type;
+      return `<button class="btn-danger btn-sm" onclick="stopJob('${esc(job.id)}')">■ ${esc(label)} 中止</button>`;
+    }).join("");
+
+    const ytStopBtn = (d.session_type === "autonomous" && d.yt_session)
+      ? `<button class="btn-danger btn-sm" onclick="stopRun()">■ autonomous 停止</button>`
+      : "";
+
     headerEl.innerHTML = `
       <div class="status-header-inner">
         <div class="status-header-left">
-          <div class="status-script">autonomous.sh</div>
-          <div class="status-session">${esc(d.last_session || "no session")}</div>
+          <div class="status-script">${esc(sessionLabel)}</div>
+          <div class="status-session">${esc(d.last_session || d.yt_session || "no session")}</div>
         </div>
         <div class="status-header-right">
           <span class="badge ${statusCls}">${esc(d.status)}</span>
           <span class="status-phase">${esc(d.phase)}</span>
+          ${ytStopBtn}${stopBtns}
         </div>
       </div>`;
 
@@ -182,11 +187,19 @@ document.addEventListener("DOMContentLoaded", () => {
     statsEl.innerHTML = `
       <div class="stat-grid">
         <div class="stat-item"><span class="stat-label">queue</span><span class="stat-val">${d.queue_count}</span></div>
-        <div class="stat-item"><span class="stat-label">done</span><span class="stat-val stat-green">${d.done_count}</span></div>
-        <div class="stat-item"><span class="stat-label">warn</span><span class="stat-val stat-warn">${d.warn_count}</span></div>
-        <div class="stat-item"><span class="stat-label">error</span><span class="stat-val stat-err">${d.error_count}</span></div>
-        <div class="stat-item"><span class="stat-label">rate-limit</span><span class="stat-val">${d.rate_limit_count}</span></div>
-        <div class="stat-item"><span class="stat-label">phase</span><span class="stat-val">${esc(d.phase)}</span></div>
+        <div class="stat-item stat-clickable" onclick="showLogFilter('done')" title="ログでフィルタ">
+          <span class="stat-label">done ↗</span><span class="stat-val stat-green">${d.done_count}</span>
+        </div>
+        <div class="stat-item stat-clickable" onclick="showLogFilter('warn')" title="ログでフィルタ">
+          <span class="stat-label">warn ↗</span><span class="stat-val stat-warn">${d.warn_count}</span>
+        </div>
+        <div class="stat-item stat-clickable" onclick="showLogFilter('error')" title="ログでフィルタ">
+          <span class="stat-label">error ↗</span><span class="stat-val stat-err">${d.error_count}</span>
+        </div>
+        <div class="stat-item stat-clickable" onclick="showLogFilter('rate-limit')" title="ログでフィルタ">
+          <span class="stat-label">rate-limit ↗</span><span class="stat-val">${d.rate_limit_count}</span>
+        </div>
+        <div class="stat-item"><span class="stat-label">phase</span><span class="stat-val" style="font-size:13px">${esc(d.phase)}</span></div>
       </div>
       <div style="margin-top:12px;display:flex;justify-content:space-between;align-items:center;font-size:11px;color:var(--text-faint)">
         <span>参照: ${esc(d.log_file || "—")}</span>
@@ -212,6 +225,59 @@ document.addEventListener("DOMContentLoaded", () => {
       if (el) el.innerHTML = placeholder("⏳", "更新中…");
     });
     loadStatus();
+  };
+
+  // ── STATUS: ジョブ停止 ───────────────────────────────────
+  window.stopJob = async function(jobId) {
+    const ok = await showConfirm("処理を中止しますか？", "中止");
+    if (!ok) return;
+    try {
+      await api(`/api/jobs/${encodeURIComponent(jobId)}/stop`, 5000, "POST");
+    } catch (e) {
+      await showConfirm(`中止失敗: ${e.message}`, "OK", false);
+    }
+  };
+
+  // ── STATUS: ログフィルタ ─────────────────────────────────
+  window.showLogFilter = async function(filterType) {
+    if (!_statusData?.log_file_path) return;
+    const filterMap = {
+      done: "[done]",
+      warn: "[warn]",
+      error: "[error]",
+      "rate-limit": "rate-limit",
+    };
+    const tag = filterMap[filterType];
+    if (!tag) return;
+
+    const modal    = document.getElementById("log-filter-modal");
+    const titleEl  = document.getElementById("log-filter-title");
+    const countEl  = document.getElementById("log-filter-count");
+    const content  = document.getElementById("log-filter-content");
+    if (!modal) return;
+
+    titleEl.textContent = `${filterType} 行`;
+    countEl.textContent = "";
+    content.textContent = "読み込み中…";
+    modal.style.display = "flex";
+
+    try {
+      const d = await api(`/api/log-content?path=${encodeURIComponent(_statusData.log_file_path)}`);
+      const lines = d.content.split("\n").filter(l => l.includes(tag));
+      countEl.textContent = `${lines.length} 件`;
+      if (!lines.length) {
+        content.textContent = "該当行なし";
+      } else {
+        renderLog(content, lines);
+      }
+    } catch (e) {
+      content.textContent = `読み込み失敗: ${e.message}`;
+    }
+  };
+
+  window.closeLogFilter = function() {
+    const modal = document.getElementById("log-filter-modal");
+    if (modal) modal.style.display = "none";
   };
 
   // ── README ───────────────────────────────────────────────
@@ -245,8 +311,8 @@ document.addEventListener("DOMContentLoaded", () => {
         const badgeCls = !l.is_done ? "badge-blue" : l.has_error ? "badge-err" : "badge-green";
         const badgeText = !l.is_done ? "live" : l.has_error ? "error" : "done";
         return `
-        <div class="channel-item log-file-item" data-path="${esc(l.path)}" onclick="openLog(this)">
-          <span class="badge ${badgeCls}">${badgeText}</span>
+        <div class="channel-item log-file-item" data-path="${esc(l.path)}" data-is-done="${l.is_done}" onclick="openLog(this)">
+          <span class="badge ${badgeCls}" data-live-badge>${badgeText}</span>
           <span class="channel-name">${esc(l.path)}</span>
           <span style="color:var(--text-faint);font-size:11px;flex-shrink:0">${(l.size/1024).toFixed(1)} KB</span>
         </div>`;
@@ -254,25 +320,97 @@ document.addEventListener("DOMContentLoaded", () => {
     } catch { el.innerHTML = placeholder("⚠️", "読み込み失敗"); }
   }
 
-  window.reloadLogs = function() { loadLogs(); };
+  window.reloadLogs = function() { stopLogStream(); loadLogs(); };
 
   window.openLog = async function(el) {
     document.querySelectorAll(".log-file-item").forEach(e => e.classList.remove("active-log"));
     el.classList.add("active-log");
-    const path = el.dataset.path;
+    const path   = el.dataset.path;
+    const isDone = el.dataset.isDone === "true";
     const card    = document.getElementById("log-viewer-card");
     const titleEl = document.getElementById("log-viewer-title");
     const content = document.getElementById("log-viewer-content");
     card.style.display = "flex";
     titleEl.textContent = path.split("/").pop();
     content.textContent = "読み込み中…";
-    try {
-      const d = await api(`/api/log-content?path=${encodeURIComponent(path)}`);
-      renderLog(content, d.content.split("\n"));
-    } catch { content.textContent = "読み込み失敗"; }
+
+    stopLogStream();
+
+    if (!isDone) {
+      // live ログ: SSE ストリームで tail -f 相当
+      startLogStream(path, content, el);
+    } else {
+      try {
+        const d = await api(`/api/log-content?path=${encodeURIComponent(path)}`);
+        renderLog(content, d.content.split("\n"));
+      } catch { content.textContent = "読み込み失敗"; }
+    }
   };
 
+  function startLogStream(path, contentEl, listEl) {
+    contentEl.textContent = "";
+    const es = new EventSource(`/api/log-stream?path=${encodeURIComponent(path)}`);
+    _logEventSource = es;
+
+    es.onmessage = e => {
+      try {
+        const d = JSON.parse(e.data);
+        if (d.lines) {
+          if (d.init) {
+            renderLog(contentEl, d.lines);
+          } else {
+            appendLogLines(contentEl, d.lines);
+          }
+        }
+        if (d.done) {
+          stopLogStream();
+          // バッジを done に更新
+          if (listEl) {
+            const badge = listEl.querySelector("[data-live-badge]");
+            if (badge) {
+              badge.className = "badge badge-green";
+              badge.textContent = "done";
+            }
+            listEl.dataset.isDone = "true";
+          }
+        }
+      } catch {}
+    };
+    es.onerror = () => {
+      // 接続エラーは自動再接続に任せる
+    };
+  }
+
+  function stopLogStream() {
+    if (_logEventSource) {
+      _logEventSource.close();
+      _logEventSource = null;
+    }
+  }
+
+  function appendLogLines(el, lines) {
+    const fragment = document.createDocumentFragment();
+    lines.forEach(l => {
+      if (el.textContent === "" && el.children.length === 0) {
+        // 初回
+      } else {
+        fragment.appendChild(document.createTextNode("\n"));
+      }
+      const span = document.createElement("span");
+      const cls = l.includes("[error]") || l.includes("ERROR") ? "log-error"
+        : l.includes("[warn]")  || l.includes("WARN")  ? "log-warn"
+        : l.includes("[done]")  || l.includes("Done")  ? "log-done"
+        : l.includes("[info]")                          ? "log-info" : "";
+      if (cls) span.className = cls;
+      span.textContent = l;
+      fragment.appendChild(span);
+    });
+    el.appendChild(fragment);
+    el.scrollTop = el.scrollHeight;
+  }
+
   window.closeLogViewer = function() {
+    stopLogStream();
     document.getElementById("log-viewer-card").style.display = "none";
     document.querySelectorAll(".log-file-item").forEach(e => e.classList.remove("active-log"));
   };
@@ -300,13 +438,21 @@ document.addEventListener("DOMContentLoaded", () => {
   }
 
   function renderLog(el, lines) {
-    el.innerHTML = lines.map(l => {
+    el.innerHTML = "";
+    el.textContent = "";
+    const fragment = document.createDocumentFragment();
+    lines.forEach((l, i) => {
+      if (i > 0) fragment.appendChild(document.createTextNode("\n"));
+      const span = document.createElement("span");
       const cls = l.includes("[error]") || l.includes("ERROR") ? "log-error"
         : l.includes("[warn]")  || l.includes("WARN")  ? "log-warn"
         : l.includes("[done]")  || l.includes("Done")  ? "log-done"
         : l.includes("[info]")                          ? "log-info" : "";
-      return `<span class="${cls}">${esc(l)}</span>`;
-    }).join("\n");
+      if (cls) span.className = cls;
+      span.textContent = l;
+      fragment.appendChild(span);
+    });
+    el.appendChild(fragment);
     el.scrollTop = el.scrollHeight;
   }
 
@@ -370,18 +516,18 @@ document.addEventListener("DOMContentLoaded", () => {
     const ok = await showConfirm("autonomous.sh を停止しますか？", "停止");
     if (!ok) return;
     const stopBtn = document.getElementById("run-stop-btn");
-    stopBtn.disabled = true;
+    if (stopBtn) stopBtn.disabled = true;
     try {
       await api("/api/run/stop", 10000, "POST");
       await _updateRunBadge();
     } catch (e) {
       await showConfirm(`停止失敗: ${e.message}`, "OK", false);
     } finally {
-      stopBtn.disabled = false;
+      if (stopBtn) stopBtn.disabled = false;
     }
   };
 
-  // ── HOME: URL 処理（複数URL対応） ──────────────────────────
+  // ── HOME: URL 処理 ──────────────────────────────────────
   window.processUrl = async function() {
     const raw     = document.getElementById("proc-urls").value;
     const urls    = raw.split("\n").map(s => s.trim()).filter(Boolean);
@@ -405,7 +551,7 @@ document.addEventListener("DOMContentLoaded", () => {
     }
   };
 
-  // ── HOME: CLI コマンド ──────────────────────────────────────
+  // ── HOME: CLI コマンド ──────────────────────────────────
   async function _runCmd(endpoint, payload, resultId, btnEl) {
     const resultEl = document.getElementById(resultId);
     const origText = btnEl.textContent;
@@ -432,7 +578,7 @@ document.addEventListener("DOMContentLoaded", () => {
     await _runCmd("/api/summarize", { threshold }, "batch-result", btn);
   };
 
-  // ── HOME: チャンネル管理モーダル ────────────────────────────
+  // ── HOME: チャンネル管理モーダル ───────────────────────────
   window.openAddChannelModal = function() {
     document.getElementById("modal-error").textContent = "";
     document.getElementById("add-channel-modal").style.display = "flex";
@@ -495,10 +641,10 @@ document.addEventListener("DOMContentLoaded", () => {
     });
   }
 
-  // Escape キーでモーダルを閉じる
   document.addEventListener("keydown", e => {
     if (e.key === "Escape") {
       closeAddChannelModal();
+      closeLogFilter();
       document.getElementById("confirm-modal").style.display = "none";
     }
   });

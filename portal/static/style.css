@@ -447,6 +447,15 @@ body {
 .stat-warn  { color: var(--warn); }
 .stat-err   { color: var(--err); }
 
+.stat-clickable {
+  cursor: pointer;
+  transition: background 0.12s, border-color 0.12s;
+}
+.stat-clickable:hover {
+  background: var(--surface-hover);
+  border-color: var(--border-strong);
+}
+
 /* ── LOGS: 等高・1ページ収まりレイアウト ── */
 /* header(56) + tabbar(48) + padding-top(24) + padding-bottom(40) = 168px */
 .logs-grid {
@@ -630,6 +639,12 @@ body {
 .btn-danger:hover    { opacity: 0.85; }
 .btn-danger:disabled { opacity: 0.4; cursor: not-allowed; }
 
+.btn-sm {
+  padding: 4px 10px;
+  font-size: 12px;
+  border-radius: 6px;
+}
+
 .btn-secondary {
   background: var(--surface-hover);
   color: var(--text-dim);
@@ -705,6 +720,26 @@ body {
   width: 100%;
   max-width: 420px;
   box-shadow: 0 28px 64px rgba(0,0,0,0.55);
+}
+
+.modal-box-wide {
+  max-width: 720px;
+  display: flex;
+  flex-direction: column;
+  max-height: 80vh;
+}
+
+.modal-title-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 14px;
+}
+
+.log-filter-output {
+  flex: 1;
+  min-height: 200px;
+  max-height: none;
 }
 
 .modal-title {

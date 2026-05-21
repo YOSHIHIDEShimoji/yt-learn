@@ -120,7 +120,7 @@
         </div>
       </div>
       <div class="card status-stats-card">
-        <div class="card-title">統計</div>
+        <div class="card-title">統計 <span style="font-size:10px;color:var(--text-faint);font-weight:400;letter-spacing:0;text-transform:none">（数字クリックでログフィルタ）</span></div>
         <div id="status-stats"><div class="placeholder"><div class="placeholder-icon">📊</div><span>読み込み中…</span></div></div>
       </div>
     </div>
@@ -214,6 +214,19 @@
       <button class="btn-secondary" id="confirm-cancel">キャンセル</button>
       <button class="btn-danger"    id="confirm-ok">削除</button>
     </div>
+  </div>
+</div>
+
+<!-- ログフィルタモーダル -->
+<div id="log-filter-modal" class="modal-backdrop" style="display:none"
+     onclick="if(event.target===this)closeLogFilter()">
+  <div class="modal-box modal-box-wide">
+    <div class="modal-title-row">
+      <span class="modal-title" id="log-filter-title" style="margin-bottom:0"></span>
+      <span style="font-size:12px;color:var(--text-faint)" id="log-filter-count"></span>
+      <button class="refresh-btn" onclick="closeLogFilter()">✕ 閉じる</button>
+    </div>
+    <div class="log-output log-filter-output" id="log-filter-content"></div>
   </div>
 </div>
 
