@@ -41,20 +41,20 @@ async def _rclone_link(path: str) -> str:
         return ""
 
 
-async def _get_channel_drive_urls(channel: str) -> dict[str, str]:
-    """rclone lsjson でチャンネルフォルダのファイル ID を一括取得し title→url マップを返す"""
-    if channel in _drive_file_cache:
-        return _drive_file_cache[channel]
-    if not shutil.which("rclone"):
-        _drive_file_cache[channel] = {}
-        return {}
+_drive_fetch_running: set[str] = set()
+
+
+async def _fetch_channel_drive_urls_bg(channel: str) -> None:
+    """バックグラウンドで rclone lsjson を実行してキャッシュを埋める（タイムアウトなし）"""
     try:
         proc = await asyncio.create_subprocess_exec(
             "rclone", "lsjson", "--files-only",
             f"gdrive:yt-learn/transcripts/{channel}/",
             stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE,
         )
-        stdout, _ = await asyncio.wait_for(proc.communicate(), timeout=15)
+        stdout, _ = await proc.communicate()  # タイムアウトなし（大フォルダ対応）
+        if proc.returncode != 0:
+            return
         items = json.loads(stdout.decode())
         result = {}
         for item in items:
@@ -64,10 +64,20 @@ async def _get_channel_drive_urls(channel: str) -> dict[str, str]:
                 title = name[:-3] if name.endswith(".md") else name
                 result[title] = f"https://drive.google.com/file/d/{file_id}/view"
         _drive_file_cache[channel] = result
-        return result
     except Exception:
-        _drive_file_cache[channel] = {}
-        return {}
+        pass  # 失敗してもキャッシュしない → 次回リトライ
+    finally:
+        _drive_fetch_running.discard(channel)
+
+
+def _get_channel_drive_urls(channel: str) -> dict[str, str]:
+    """キャッシュがあれば返す。なければバックグラウンドフェッチを開始して空を返す。"""
+    if channel in _drive_file_cache:
+        return _drive_file_cache[channel]
+    if channel not in _drive_fetch_running and shutil.which("rclone"):
+        _drive_fetch_running.add(channel)
+        asyncio.ensure_future(_fetch_channel_drive_urls_bg(channel))
+    return {}
 
 
 # ── ログ解析 ──────────────────────────────────────────────────
@@ -231,15 +241,10 @@ async def get_status_summary():
         queue_dir = ROOT / "queue"
         queue_count = len(list(queue_dir.glob("*.m4a"))) if queue_dir.exists() else 0
 
-        # 個別ファイル Drive URL（rclone lsjson でチャンネルごとに一括取得）
+        # 個別ファイル Drive URL（バックグラウンドフェッチ済みキャッシュから取得）
         unique_channels = list({v["channel"] for v in done_videos if v.get("channel")})
-        all_results = await asyncio.gather(
-            *[_get_channel_drive_urls(ch) for ch in unique_channels],
-            _rclone_link("gdrive:yt-learn"),
-        )
-        channel_maps = list(all_results[:-1])
-        folder_url = all_results[-1] if all_results else ""
-        ch_url_map = dict(zip(unique_channels, channel_maps))
+        folder_url = await _rclone_link("gdrive:yt-learn")
+        ch_url_map = {ch: _get_channel_drive_urls(ch) for ch in unique_channels}
         for v in done_videos:
             file_map = ch_url_map.get(v.get("channel", ""), {})
             v["drive_url"] = file_map.get(v.get("title", ""), "")
