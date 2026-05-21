@@ -50,10 +50,18 @@ if [[ "$(uname)" == "Darwin" ]]; then
 # WSL モード
 # ──────────────────────────────────────────
 elif grep -qi microsoft /proc/version 2>/dev/null; then
-  echo "[portal] WSL モード — ローカルでサーバーを起動します"
-
   cd "$(dirname "$(realpath "$0")")"
-  echo "[portal] uvicorn を 0.0.0.0:${PORT} で起動します"
+
+  # すでにサーバーが動いていればブラウザだけ開く
+  if curl -s --max-time 1 "http://localhost:${PORT}/" > /dev/null 2>&1; then
+    echo "[portal] サーバーはすでに起動中です"
+    cmd.exe /c start "http://localhost:${PORT}" 2>/dev/null
+    echo "[portal] ブラウザを開きました: http://localhost:${PORT}"
+    echo "[portal] サーバー停止: tmux kill-session -t ${TMUX_SESSION}"
+    exit 0
+  fi
+
+  echo "[portal] WSL モード — uvicorn を 0.0.0.0:${PORT} で起動します"
 
   # Windows ブラウザを非同期で開く（起動後3秒後）
   (sleep 3 && cmd.exe /c start "http://localhost:${PORT}" 2>/dev/null) &
