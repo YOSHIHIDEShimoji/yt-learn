@@ -233,10 +233,12 @@ async def get_status_summary():
 
         # 個別ファイル Drive URL（rclone lsjson でチャンネルごとに一括取得）
         unique_channels = list({v["channel"] for v in done_videos if v.get("channel")})
-        channel_maps, folder_url = await asyncio.gather(
-            asyncio.gather(*[_get_channel_drive_urls(ch) for ch in unique_channels]),
+        all_results = await asyncio.gather(
+            *[_get_channel_drive_urls(ch) for ch in unique_channels],
             _rclone_link("gdrive:yt-learn"),
         )
+        channel_maps = list(all_results[:-1])
+        folder_url = all_results[-1] if all_results else ""
         ch_url_map = dict(zip(unique_channels, channel_maps))
         for v in done_videos:
             file_map = ch_url_map.get(v.get("channel", ""), {})
