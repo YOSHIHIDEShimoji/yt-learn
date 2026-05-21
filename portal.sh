@@ -61,14 +61,12 @@ elif grep -qi microsoft /proc/version 2>/dev/null; then
   # WSL IP（Tailscale ミラー）を取得
   WSL_IP=$(hostname -I | cut -d" " -f1)
 
-  # Windows ブラウザを開く関数
+  # Windows ブラウザを開く関数（cmd.exe start 経由で確実に Windows ブラウザを起動）
   open_browser() {
     local url="$1"
     echo "[portal] ブラウザ起動: ${url}"
-    if xdg-open "${url}" 2>/dev/null; then return 0; fi
-    if explorer.exe "${url}" 2>/dev/null; then return 0; fi
-    if cmd.exe /c start "" "${url}" 2>/dev/null; then return 0; fi
-    echo "[portal] 自動起動失敗 — ブラウザで手動で開いてください: ${url}"
+    /mnt/c/Windows/System32/cmd.exe /c start "" "${url}" 2>/dev/null \
+      || echo "[portal] 自動起動失敗 — ブラウザで手動で開いてください: ${url}"
   }
 
   # すでにサーバーが動いていればブラウザだけ開く
