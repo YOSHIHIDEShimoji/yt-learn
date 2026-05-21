@@ -106,6 +106,66 @@
           </div>
           <div id="proc-result" class="proc-result"></div>
         </div>
+
+        <!-- チャンネル文字起こし -->
+        <div class="card">
+          <div class="card-title">チャンネル文字起こし</div>
+          <div class="run-form">
+            <div class="form-row">
+              <label class="form-label">チャンネル</label>
+              <select id="tr-channel" class="form-input"></select>
+            </div>
+            <div class="form-row">
+              <label class="form-label">Limit</label>
+              <input id="tr-limit" type="number" class="form-input" value="10" min="1" max="100">
+            </div>
+            <div class="form-row">
+              <label class="form-label">Whisper Model</label>
+              <select id="tr-model" class="form-input">
+                <option value="large-v3">large-v3</option>
+                <option value="large-v3-turbo">large-v3-turbo</option>
+                <option value="medium">medium</option>
+                <option value="small">small</option>
+                <option value="tiny">tiny</option>
+              </select>
+            </div>
+          </div>
+          <div class="run-btns">
+            <button class="btn-primary" onclick="transcribeChannel()">▶ 文字起こし開始</button>
+          </div>
+          <div id="tr-channel-result" class="proc-result"></div>
+        </div>
+
+        <!-- 一括処理 -->
+        <div class="card">
+          <div class="card-title">一括処理</div>
+          <div class="run-form">
+            <div class="form-row">
+              <label class="form-label">Limit（transcribe all 用）</label>
+              <input id="batch-limit" type="number" class="form-input" value="10" min="1" max="100">
+            </div>
+            <div class="form-row">
+              <label class="form-label">Whisper Model（transcribe all 用）</label>
+              <select id="batch-model" class="form-input">
+                <option value="large-v3">large-v3</option>
+                <option value="large-v3-turbo">large-v3-turbo</option>
+                <option value="medium">medium</option>
+                <option value="small">small</option>
+                <option value="tiny">tiny</option>
+              </select>
+            </div>
+            <div class="form-row">
+              <label class="form-label">Threshold（summarize 用、単語数未満をスキップ）</label>
+              <input id="batch-threshold" type="number" class="form-input" value="20" min="1" max="1000">
+            </div>
+          </div>
+          <div class="run-btns" style="flex-wrap:wrap;gap:6px">
+            <button class="btn-primary" onclick="transcribeAll()">▶ Transcribe All</button>
+            <button class="btn-primary" onclick="transcribeSync()">↻ Drive Sync</button>
+            <button class="btn-primary" onclick="summarizeAll()">▶ Summarize All</button>
+          </div>
+          <div id="batch-result" class="proc-result"></div>
+        </div>
       </div>
     </div>
   </div>

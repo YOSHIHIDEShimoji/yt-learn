@@ -536,3 +536,82 @@ async def process_url(body: ProcessUrlBody):
         return JSONResponse({"error": "URL は必須です"}, status_code=400)
     asyncio.ensure_future(_bg_process_urls(urls, body.channel or "misc", body.lang or "ja"))
     return JSONResponse({"ok": True, "message": f"{len(urls)} 件の処理を開始しました", "count": len(urls)})
+
+
+# ── Phase 2: その他 CLI コマンド ──────────────────────────────────
+
+async def _bg_run_script(args: list[str], log_subdir: str, log_prefix: str) -> None:
+    log_dir = ROOT / "logs" / log_subdir
+    log_dir.mkdir(parents=True, exist_ok=True)
+    log_file = log_dir / f"{datetime.now().strftime('%Y%m%d_%H%M%S')}_{log_prefix}.log"
+    try:
+        f = open(log_file, "wb")
+        proc = await asyncio.create_subprocess_exec(
+            *args, cwd=str(ROOT), stdout=f, stderr=f,
+        )
+        asyncio.ensure_future(_await_and_close(proc, f))
+    except Exception:
+        pass
+
+
+class TranscribeChannelBody(BaseModel):
+    channel: str
+    limit: int = 10
+    model: str = "large-v3"
+
+
+class TranscribeAllBody(BaseModel):
+    limit: int = 10
+    model: str = "large-v3"
+
+
+class TranscribeSyncBody(BaseModel):
+    only: str = ""
+
+
+class SummarizeBody(BaseModel):
+    threshold: int = 20
+
+
+@app.post("/api/transcribe/channel")
+async def transcribe_channel(body: TranscribeChannelBody):
+    channel = body.channel.strip()
+    if not channel:
+        return JSONResponse({"error": "channel は必須です"}, status_code=400)
+    limit = max(1, min(body.limit, 100))
+    model = body.model if body.model in _VALID_MODELS else "large-v3"
+    python = shutil.which("python") or "python3"
+    args = [python, str(ROOT / "transcribe.py"), "channel", channel,
+            "--sort", "popular", "--limit", str(limit), "--model", model]
+    asyncio.ensure_future(_bg_run_script(args, "transcribe", f"ch_{channel[:20]}"))
+    return JSONResponse({"ok": True, "message": f"'{channel}' の文字起こしを開始しました"})
+
+
+@app.post("/api/transcribe/all")
+async def transcribe_all(body: TranscribeAllBody):
+    limit = max(1, min(body.limit, 100))
+    model = body.model if body.model in _VALID_MODELS else "large-v3"
+    python = shutil.which("python") or "python3"
+    args = [python, str(ROOT / "transcribe.py"), "all",
+            "--sort", "popular", "--limit", str(limit), "--model", model]
+    asyncio.ensure_future(_bg_run_script(args, "transcribe", "all"))
+    return JSONResponse({"ok": True, "message": "全チャンネルの文字起こしを開始しました"})
+
+
+@app.post("/api/transcribe/sync")
+async def transcribe_sync(body: TranscribeSyncBody):
+    python = shutil.which("python") or "python3"
+    args = [python, str(ROOT / "transcribe.py"), "sync"]
+    if body.only in ("transcripts", "summaries"):
+        args += ["--only", body.only]
+    asyncio.ensure_future(_bg_run_script(args, "transcribe", "sync"))
+    return JSONResponse({"ok": True, "message": "Drive 同期を開始しました"})
+
+
+@app.post("/api/summarize")
+async def summarize_all(body: SummarizeBody):
+    threshold = max(1, min(body.threshold, 1000))
+    python = shutil.which("python") or "python3"
+    args = [python, str(ROOT / "summarize.py"), "all", "--threshold", str(threshold)]
+    asyncio.ensure_future(_bg_run_script(args, "summarize", "all"))
+    return JSONResponse({"ok": True, "message": "要約を開始しました"})

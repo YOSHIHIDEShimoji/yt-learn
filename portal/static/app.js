@@ -55,12 +55,17 @@ document.addEventListener("DOMContentLoaded", () => {
   };
 
   function _updateChannelSelect(channels) {
-    const sel = document.getElementById("proc-channel");
-    if (!sel) return;
-    const prev = sel.value;
-    sel.innerHTML = channels.map(ch => `<option value="${esc(ch.name)}">${esc(ch.name)}</option>`).join("") +
-      `<option value="misc">misc</option>`;
-    if ([...sel.options].some(o => o.value === prev)) sel.value = prev;
+    const optionsHtml = channels.map(ch => `<option value="${esc(ch.name)}">${esc(ch.name)}</option>`).join("");
+    [
+      { id: "proc-channel", extra: `<option value="misc">misc</option>` },
+      { id: "tr-channel",   extra: "" },
+    ].forEach(({ id, extra }) => {
+      const sel = document.getElementById(id);
+      if (!sel) return;
+      const prev = sel.value;
+      sel.innerHTML = optionsHtml + extra;
+      if ([...sel.options].some(o => o.value === prev)) sel.value = prev;
+    });
   }
 
   async function fetchChannelDriveLinks() {
@@ -378,14 +383,15 @@ document.addEventListener("DOMContentLoaded", () => {
   };
 
   window.stopRun = async function() {
-    if (!confirm("autonomous.sh を停止しますか？")) return;
+    const ok = await showConfirm("autonomous.sh を停止しますか？", "停止");
+    if (!ok) return;
     const stopBtn = document.getElementById("run-stop-btn");
     stopBtn.disabled = true;
     try {
       await api("/api/run/stop", 10000, "POST");
       await _updateRunBadge();
     } catch (e) {
-      alert("停止失敗: " + String(e.message));
+      await showConfirm(`停止失敗: ${e.message}`, "OK", false);
     } finally {
       stopBtn.disabled = false;
     }
@@ -414,6 +420,50 @@ document.addEventListener("DOMContentLoaded", () => {
     } finally {
       btn.disabled = false;
     }
+  };
+
+  // ── HOME: CLI コマンド ──────────────────────────────────────
+  async function _runCmd(endpoint, payload, resultId, btnEl) {
+    const resultEl = document.getElementById(resultId);
+    const origText = btnEl.textContent;
+    btnEl.disabled = true;
+    if (resultEl) { resultEl.style.color = "var(--text-dim)"; resultEl.textContent = "送信中…"; }
+    try {
+      const res = await api(endpoint, 30000, "POST", payload);
+      if (resultEl) { resultEl.style.color = "var(--green)"; resultEl.textContent = res.message || "開始しました"; }
+      setTimeout(() => switchTab("logs"), 800);
+    } catch (e) {
+      if (resultEl) { resultEl.style.color = "var(--err)"; resultEl.textContent = String(e.message) || "エラー"; }
+    } finally {
+      btnEl.disabled = false; btnEl.textContent = origText;
+    }
+  }
+
+  window.transcribeChannel = async function() {
+    const channel = document.getElementById("tr-channel").value;
+    const limit   = parseInt(document.getElementById("tr-limit").value) || 10;
+    const model   = document.getElementById("tr-model").value;
+    const btn     = event.currentTarget;
+    if (!channel) return;
+    await _runCmd("/api/transcribe/channel", { channel, limit, model }, "tr-channel-result", btn);
+  };
+
+  window.transcribeAll = async function() {
+    const limit = parseInt(document.getElementById("batch-limit").value) || 10;
+    const model = document.getElementById("batch-model").value;
+    const btn   = event.currentTarget;
+    await _runCmd("/api/transcribe/all", { limit, model }, "batch-result", btn);
+  };
+
+  window.transcribeSync = async function() {
+    const btn = event.currentTarget;
+    await _runCmd("/api/transcribe/sync", {}, "batch-result", btn);
+  };
+
+  window.summarizeAll = async function() {
+    const threshold = parseInt(document.getElementById("batch-threshold").value) || 20;
+    const btn       = event.currentTarget;
+    await _runCmd("/api/summarize", { threshold }, "batch-result", btn);
   };
 
   // ── HOME: チャンネル管理モーダル ────────────────────────────
