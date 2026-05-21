@@ -8,6 +8,7 @@ document.addEventListener("DOMContentLoaded", () => {
   let _statusEventSource = null;
   let _logEventSource = null;
   let _isWsl = null;
+  let _pendingLogPath = null;
 
   const SESSION_TYPE_LABELS = {
     autonomous: "autonomous.sh",
@@ -239,6 +240,19 @@ document.addEventListener("DOMContentLoaded", () => {
   };
 
   // ── STATUS: ログフィルタ ─────────────────────────────────
+  function lineColorClass(line) {
+    return line.includes("[error]") || line.includes("ERROR") ? "log-error"
+         : line.includes("[warn]")  || line.includes("WARN")  ? "log-warn"
+         : line.includes("[done]")  || line.includes("Done")  ? "log-done"
+         : line.includes("[info]")                             ? "log-info" : "";
+  }
+
+  window.openLogByPath = function(path) {
+    closeLogFilter();
+    _pendingLogPath = path;
+    switchTab("logs");
+  };
+
   window.showLogFilter = async function(filterType) {
     if (!_statusData?.log_file_path) return;
     const filterMap = {
@@ -250,26 +264,77 @@ document.addEventListener("DOMContentLoaded", () => {
     const tag = filterMap[filterType];
     if (!tag) return;
 
+    const logPath = _statusData.log_file_path;
+    const logName = logPath.split("/").pop();
+
     const modal    = document.getElementById("log-filter-modal");
     const titleEl  = document.getElementById("log-filter-title");
     const countEl  = document.getElementById("log-filter-count");
     const content  = document.getElementById("log-filter-content");
+    const openBtn  = document.getElementById("log-filter-open-btn");
     if (!modal) return;
 
-    titleEl.textContent = `${filterType} 行`;
+    titleEl.textContent = `${filterType} — ${logName}`;
     countEl.textContent = "";
     content.textContent = "読み込み中…";
+    if (openBtn) openBtn.onclick = () => openLogByPath(logPath);
     modal.style.display = "flex";
 
     try {
-      const d = await api(`/api/log-content?path=${encodeURIComponent(_statusData.log_file_path)}`);
-      const lines = d.content.split("\n").filter(l => l.includes(tag));
-      countEl.textContent = `${lines.length} 件`;
-      if (!lines.length) {
-        content.textContent = "該当行なし";
-      } else {
-        renderLog(content, lines);
+      const d = await api(`/api/log-content?path=${encodeURIComponent(logPath)}`);
+      const allLines = d.content.split("\n");
+      const matchIndices = [];
+      allLines.forEach((line, i) => { if (line.includes(tag)) matchIndices.push(i); });
+
+      countEl.textContent = `${matchIndices.length} 件`;
+      if (!matchIndices.length) { content.textContent = "該当行なし"; return; }
+
+      // ±10行コンテキスト、重複ウィンドウをマージ
+      const CONTEXT = 10;
+      const groups = [];
+      let cur = null;
+      for (const idx of matchIndices) {
+        const s = Math.max(0, idx - CONTEXT);
+        const e = Math.min(allLines.length - 1, idx + CONTEXT);
+        if (!cur || s > cur.e + 1) {
+          cur = { s, e, matches: new Set([idx]) };
+          groups.push(cur);
+        } else {
+          cur.e = Math.max(cur.e, e);
+          cur.matches.add(idx);
+        }
       }
+
+      content.innerHTML = "";
+      const frag = document.createDocumentFragment();
+      groups.forEach((g, gi) => {
+        if (gi > 0) {
+          const sep = document.createElement("div");
+          sep.className = "log-filter-sep";
+          frag.appendChild(sep);
+        }
+        for (let i = g.s; i <= g.e; i++) {
+          const line = allLines[i];
+          if (i > g.s) frag.appendChild(document.createTextNode("\n"));
+          if (g.matches.has(i)) {
+            const arrow = document.createElement("span");
+            arrow.className = "log-filter-arrow";
+            arrow.textContent = "▸ ";
+            frag.appendChild(arrow);
+            const span = document.createElement("span");
+            const colorCls = lineColorClass(line);
+            span.className = colorCls ? `${colorCls} log-match` : "log-match";
+            span.textContent = line;
+            frag.appendChild(span);
+          } else {
+            const span = document.createElement("span");
+            span.className = "log-ctx";
+            span.textContent = line;
+            frag.appendChild(span);
+          }
+        }
+      });
+      content.appendChild(frag);
     } catch (e) {
       content.textContent = `読み込み失敗: ${e.message}`;
     }
@@ -317,6 +382,11 @@ document.addEventListener("DOMContentLoaded", () => {
           <span style="color:var(--text-faint);font-size:11px;flex-shrink:0">${(l.size/1024).toFixed(1)} KB</span>
         </div>`;
       }).join("");
+      if (_pendingLogPath) {
+        const target = el.querySelector(`[data-path="${CSS.escape(_pendingLogPath)}"]`);
+        if (target) { _pendingLogPath = null; openLog(target); }
+        else _pendingLogPath = null;
+      }
     } catch { el.innerHTML = placeholder("⚠️", "読み込み失敗"); }
   }
 
@@ -391,16 +461,11 @@ document.addEventListener("DOMContentLoaded", () => {
   function appendLogLines(el, lines) {
     const fragment = document.createDocumentFragment();
     lines.forEach(l => {
-      if (el.textContent === "" && el.children.length === 0) {
-        // 初回
-      } else {
+      if (!(el.textContent === "" && el.children.length === 0)) {
         fragment.appendChild(document.createTextNode("\n"));
       }
       const span = document.createElement("span");
-      const cls = l.includes("[error]") || l.includes("ERROR") ? "log-error"
-        : l.includes("[warn]")  || l.includes("WARN")  ? "log-warn"
-        : l.includes("[done]")  || l.includes("Done")  ? "log-done"
-        : l.includes("[info]")                          ? "log-info" : "";
+      const cls = lineColorClass(l);
       if (cls) span.className = cls;
       span.textContent = l;
       fragment.appendChild(span);
@@ -444,10 +509,7 @@ document.addEventListener("DOMContentLoaded", () => {
     lines.forEach((l, i) => {
       if (i > 0) fragment.appendChild(document.createTextNode("\n"));
       const span = document.createElement("span");
-      const cls = l.includes("[error]") || l.includes("ERROR") ? "log-error"
-        : l.includes("[warn]")  || l.includes("WARN")  ? "log-warn"
-        : l.includes("[done]")  || l.includes("Done")  ? "log-done"
-        : l.includes("[info]")                          ? "log-info" : "";
+      const cls = lineColorClass(l);
       if (cls) span.className = cls;
       span.textContent = l;
       fragment.appendChild(span);
