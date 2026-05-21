@@ -2,6 +2,11 @@ document.addEventListener("DOMContentLoaded", () => {
   const tabs  = document.querySelectorAll(".tab-btn");
   const panes = document.querySelectorAll(".pane");
 
+  // ── 状態変数（switchTab 呼び出し前に初期化、TDZ 回避）─────
+  let _channels = [];
+  let _statusData = null;
+  let _statusPollTimer = null;
+
   function switchTab(id) {
     tabs.forEach(t  => t.classList.toggle("active", t.dataset.tab === id));
     panes.forEach(p => p.classList.toggle("active", p.id === `pane-${id}`));
@@ -19,8 +24,6 @@ document.addEventListener("DOMContentLoaded", () => {
   switchTab(initial);
 
   // ── HOME: channels ──────────────────────────────────────
-  let _channels = [];
-
   async function loadChannels() {
     const el = document.getElementById("channel-list");
     if (!el || el.dataset.loaded) return;
@@ -67,9 +70,6 @@ document.addEventListener("DOMContentLoaded", () => {
   }
 
   // ── STATUS ───────────────────────────────────────────────
-  let _statusData = null;
-  let _statusPollTimer = null;
-
   function startStatusPolling() {
     if (_statusPollTimer) return;
     _statusPollTimer = setInterval(pollStatusUpdates, 15000);
