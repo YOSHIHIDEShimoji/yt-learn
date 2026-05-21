@@ -15,3 +15,5 @@ __pycache__/
 cookies.txt
 yt-learn-drive
 Archive/
+.playwright-mcp/
+portal/drive_link_cache.json

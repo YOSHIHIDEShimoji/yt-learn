@@ -1,0 +1,142 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>yt-learn Portal</title>
+  <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+
+<header class="header">
+  <button class="header-logo-btn" onclick="goHome()">
+    <img src="/static/logo.png" alt="yt-learn" class="header-logo-img">
+  </button>
+</header>
+
+<nav class="tabbar">
+  <button class="tab-btn" data-tab="home">HOME</button>
+  <button class="tab-btn" data-tab="status">STATUS</button>
+  <button class="tab-btn" data-tab="library">LIBRARY</button>
+  <button class="tab-btn" data-tab="logs">LOGS</button>
+  <button class="tab-btn" data-tab="readme">README</button>
+</nav>
+
+<main class="main">
+
+  <!-- HOME -->
+  <div id="pane-home" class="pane">
+    <div class="grid-2">
+      <div>
+        <div class="card">
+          <div class="card-title-row">
+            <span class="card-title" style="margin-bottom:0">登録チャンネル</span>
+            <button class="refresh-btn" onclick="reloadChannels()">↻ 更新</button>
+          </div>
+          <div class="channel-list" id="channel-list">
+            <div class="placeholder"><div class="placeholder-icon">📡</div><span>読み込み中…</span></div>
+          </div>
+        </div>
+      </div>
+      <div>
+        <div class="card">
+          <div class="card-title">実行パネル</div>
+          <div class="placeholder"><div class="placeholder-icon">🚀</div><span>Phase 2 で実装予定</span></div>
+        </div>
+        <div class="card">
+          <div class="card-title">URL 単発処理</div>
+          <div class="placeholder"><div class="placeholder-icon">🎬</div><span>Phase 2 で実装予定</span></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- STATUS -->
+  <div id="pane-status" class="pane">
+    <!-- ヘッダー -->
+    <div class="card status-header-card" id="status-header-card">
+      <div class="placeholder"><div class="placeholder-icon">⏳</div><span>読み込み中…</span></div>
+    </div>
+
+    <!-- 左右パネル（高さ揃え） -->
+    <div class="grid-2">
+      <div class="card status-videos-card">
+        <div class="card-title-row">
+          <span class="card-title" style="margin-bottom:0">処理済み動画（今セッション）</span>
+          <button class="refresh-btn" onclick="reloadStatus()">↻ 更新</button>
+        </div>
+        <div class="status-videos-scroll" id="status-videos">
+          <div class="placeholder"><div class="placeholder-icon">🎞️</div><span>読み込み中…</span></div>
+        </div>
+      </div>
+      <div class="card status-stats-card">
+        <div class="card-title">統計</div>
+        <div id="status-stats"><div class="placeholder"><div class="placeholder-icon">📊</div><span>読み込み中…</span></div></div>
+      </div>
+    </div>
+
+    <!-- GPU（下段 full-width） -->
+    <div class="card">
+      <div class="card-title">GPU 使用率</div>
+      <div class="placeholder"><div class="placeholder-icon">🖥️</div><span>Phase 3 で実装予定（リアルタイムグラフ）</span></div>
+    </div>
+
+  </div>
+
+  <!-- LIBRARY -->
+  <div id="pane-library" class="pane">
+    <div class="card">
+      <div class="card-title">トランスクリプトライブラリ</div>
+      <div class="placeholder"><div class="placeholder-icon">📚</div><span>Phase 4 で全文検索付きライブラリを実装予定</span></div>
+    </div>
+  </div>
+
+  <!-- LOGS -->
+  <div id="pane-logs" class="pane">
+    <div class="grid-2 logs-grid">
+      <div class="card">
+        <div class="card-title-row">
+          <span class="card-title" style="margin-bottom:0">ログファイル一覧</span>
+          <button class="refresh-btn" onclick="reloadLogs()">↻ 更新</button>
+        </div>
+        <div class="channel-list" id="log-list">
+          <div class="placeholder"><div class="placeholder-icon">📄</div><span>読み込み中…</span></div>
+        </div>
+      </div>
+      <div class="card" id="log-viewer-card" style="display:none">
+        <div class="card-title-row">
+          <span class="card-title" id="log-viewer-title" style="margin-bottom:0"></span>
+          <button class="refresh-btn" onclick="closeLogViewer()">✕ 閉じる</button>
+        </div>
+        <div class="log-output" id="log-viewer-content"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- README -->
+  <div id="pane-readme" class="pane">
+    <div class="card">
+      <div class="card-title-row">
+        <span class="card-title" style="margin-bottom:0">README.md</span>
+        <button class="refresh-btn" onclick="reloadReadme()">↻ 再読み込み</button>
+      </div>
+      <div class="markdown-body" id="readme-body">読み込み中…</div>
+    </div>
+  </div>
+
+</main>
+
+<script src="/static/marked.min.js"></script>
+<script src="/static/app.js"></script>
+
+<!-- Liquid Glass SVG filter: organic edge distortion for tab capsule -->
+<svg style="position:absolute;width:0;height:0;overflow:hidden" aria-hidden="true">
+  <defs>
+    <filter id="lg-tab" x="-20%" y="-30%" width="140%" height="160%" color-interpolation-filters="sRGB">
+      <feTurbulence type="fractalNoise" baseFrequency="0.038 0.060" numOctaves="3" seed="12" result="noise"/>
+      <feDisplacementMap in="SourceGraphic" in2="noise" scale="4" xChannelSelector="R" yChannelSelector="G"/>
+    </filter>
+  </defs>
+</svg>
+</body>
+</html>
