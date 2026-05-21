@@ -71,6 +71,7 @@ document.addEventListener("DOMContentLoaded", () => {
               <div class="video-title">${esc(v.title)}</div>
               <div class="video-channel">${esc(v.channel)}</div>
             </div>
+            ${v.drive_url ? `<a class="channel-link" href="${esc(v.drive_url)}" target="_blank" rel="noopener" style="flex-shrink:0">↗ Drive</a>` : ''}
           </div>`).join("");
       }
 
@@ -84,7 +85,10 @@ document.addEventListener("DOMContentLoaded", () => {
           <div class="stat-item"><span class="stat-label">rate-limit</span><span class="stat-val">${d.rate_limit_count} 回</span></div>
           <div class="stat-item"><span class="stat-label">フェーズ</span><span class="stat-val">${esc(d.phase)}</span></div>
         </div>
-        <div style="margin-top:12px;font-size:11px;color:var(--text-faint)">参照: ${esc(d.log_file || "—")}</div>`;
+        <div style="margin-top:12px;display:flex;justify-content:space-between;align-items:center;font-size:11px;color:var(--text-faint)">
+          <span>参照: ${esc(d.log_file || "—")}</span>
+          ${d.drive_folder_url ? `<a class="channel-link" href="${esc(d.drive_folder_url)}" target="_blank" rel="noopener" style="opacity:1;font-size:12px">↗ Google Drive</a>` : ''}
+        </div>`;
 
       // ログ末尾
       renderLog(logEl, d.lines || []);

@@ -1,4 +1,6 @@
+import asyncio
 import re
+import shutil
 from pathlib import Path
 from fastapi import FastAPI, Request
 from fastapi.responses import HTMLResponse, JSONResponse
@@ -9,6 +11,27 @@ ROOT = Path(__file__).parent.parent
 PORTAL_DIR = Path(__file__).parent
 
 app = FastAPI(title="yt-learn Portal")
+
+# rclone link 結果キャッシュ（プロセス内永続）
+_drive_url_cache: dict[str, str] = {}
+
+async def _rclone_link(path: str) -> str:
+    if path in _drive_url_cache:
+        return _drive_url_cache[path]
+    if not shutil.which("rclone"):
+        return ""
+    try:
+        proc = await asyncio.create_subprocess_exec(
+            "rclone", "link", path,
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.PIPE,
+        )
+        stdout, _ = await asyncio.wait_for(proc.communicate(), timeout=5)
+        url = stdout.decode().strip() if proc.returncode == 0 else ""
+        _drive_url_cache[path] = url
+        return url
+    except Exception:
+        return ""
 app.mount("/static", StaticFiles(directory=PORTAL_DIR / "static"), name="static")
 templates = Jinja2Templates(directory=PORTAL_DIR / "templates")
 
@@ -144,6 +167,17 @@ async def get_status_summary():
         queue_dir = ROOT / "queue"
         queue_count = len(list(queue_dir.glob("*.m4a"))) if queue_dir.exists() else 0
 
+        # Google Drive リンクを並列取得（キャッシュ済みなら即返却）
+        unique_channels = list({v["channel"] for v in recent_videos if v.get("channel")})
+        drive_results = await asyncio.gather(
+            _rclone_link("gdrive:yt-learn"),
+            *[_rclone_link(f"gdrive:yt-learn/transcripts/{ch}") for ch in unique_channels],
+        )
+        drive_folder_url = drive_results[0]
+        channel_drive = dict(zip(unique_channels, drive_results[1:]))
+        for v in recent_videos:
+            v["drive_url"] = channel_drive.get(v.get("channel", ""), "")
+
         return JSONResponse({
             "log_file": logs[0].name,
             "done_count": done_count,
@@ -156,6 +190,7 @@ async def get_status_summary():
             "status": status,
             "last_session": last_session,
             "lines": lines[-50:],
+            "drive_folder_url": drive_folder_url,
         })
 
     return JSONResponse({
@@ -163,5 +198,5 @@ async def get_status_summary():
         "done_count": 0, "warn_count": 0, "error_count": 0,
         "rate_limit_count": 0, "queue_count": 0,
         "recent_videos": [], "phase": "—", "status": "不明",
-        "last_session": None, "lines": [],
+        "last_session": None, "lines": [], "drive_folder_url": "",
     })
