@@ -10,6 +10,7 @@
 import argparse
 import json
 import os
+import shutil
 import sys
 from datetime import date
 from pathlib import Path
@@ -21,26 +22,22 @@ CHANNELS_FILE = BASE_DIR / "channels.txt"
 
 GEMINI_MODEL = "gemini-2.5-flash-lite"
 OLLAMA_GENERATE_PATH = "/api/generate"
+RCLONE_REMOTE = "gdrive"
+RCLONE_DEST = f"{RCLONE_REMOTE}:yt-learn"
 
 
 def _err(msg: str) -> None:
     print(msg, file=sys.stderr)
 
 
-def _notify(message: str) -> None:
-    import subprocess
-    notifier = Path.home() / "Applications/Notifiers/yt-learn.app/Contents/MacOS/yt-learn"
-    subprocess.run([
-        str(notifier),
-        "-title", "yt-learn",
-        "-message", message,
-    ], check=False)
-
-
 def _sanitize(name: str) -> str:
     import re
     name = re.sub(r'[\\/:*?"<>|]', "_", name)
-    return name.strip()[:200]
+    name = name.strip()
+    encoded = name.encode("utf-8")
+    if len(encoded) > 200:
+        name = encoded[:200].decode("utf-8", errors="ignore")
+    return name
 
 
 def _load_env() -> None:
@@ -62,8 +59,10 @@ def _load_channels() -> dict:
         line = line.strip()
         if not line or line.startswith("#") or "|" not in line:
             continue
-        name, url = line.split("|", 1)
-        channels[name.strip()] = url.strip()
+        parts = [p.strip() for p in line.split("|")]
+        name, url = parts[0], parts[1]
+        lang = parts[2] if len(parts) >= 3 and parts[2] else "ja"
+        channels[name] = {"url": url, "lang": lang}
     return channels
 
 
@@ -107,6 +106,23 @@ def _call_ollama(prompt: str, base_url: str, model: str) -> str | None:
     with urllib.request.urlopen(req, timeout=120) as resp:
         data = json.loads(resp.read().decode("utf-8"))
     return (data.get("response") or "").strip() or None
+
+
+def _copy_file_to_drive(file_path: Path) -> None:
+    import subprocess
+    if not shutil.which("rclone"):
+        return
+    try:
+        rel = file_path.relative_to(BASE_DIR)
+    except ValueError:
+        return
+    dest = f"{RCLONE_DEST}/{rel.parent}"
+    subprocess.run(
+        ["rclone", "copy", str(file_path), dest],
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL,
+    )
+    _err(f"[drive] {rel} → {dest}")
 
 
 # ── チャンネルサマリー生成 ────────────────────────────────────────────────────
@@ -214,15 +230,12 @@ def _summarize_channel(channel_name: str, api_key: str, force: bool = False, thr
             transcript_text = t.read_text(encoding="utf-8")
             video_count = len(processed) + i
             _update_summary(channel_name, transcript_text, t.stem, api_key, video_count)
+            _copy_file_to_drive(summary_path)
             processed.add(t.name)
             _save_processed(channel_name, processed)
             done_count += 1
         except Exception as e:
             _err(f"  [error] {t.name}: {e}")
-
-    if done_count > 0:
-        action = "作成" if is_new else "更新"
-        _notify(f"  {channel_name} の要約を{action}しました（{done_count}件）")
 
     _err(f"[done] {channel_name}: サマリー更新完了")
 
