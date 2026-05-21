@@ -87,7 +87,8 @@ document.addEventListener("DOMContentLoaded", () => {
       const runningChanged = (d.running_video?.title ?? null) !== (_statusData.running_video?.title ?? null);
       const metaChanged = d.status !== _statusData.status
         || d.phase !== _statusData.phase
-        || d.done_count !== _statusData.done_count;
+        || d.done_count !== _statusData.done_count
+        || d.drive_folder_url !== _statusData.drive_folder_url;
 
       if (videoCountChanged || runningChanged || metaChanged) {
         renderStatusData(d);
