@@ -40,8 +40,8 @@ if Path(_deno_bin).is_dir() and _deno_bin not in os.environ.get("PATH", ""):
 def _setup_log() -> None:
     import atexit
     global _log_file
-    log_dir = BASE_DIR / "logs"
-    log_dir.mkdir(exist_ok=True)
+    log_dir = BASE_DIR / "logs" / "transcribe"
+    log_dir.mkdir(parents=True, exist_ok=True)
     log_path = log_dir / f"transcribe_{date.today().strftime('%Y%m%d')}.log"
     _log_file = open(log_path, "a", encoding="utf-8", buffering=1)
     atexit.register(_teardown_log)

@@ -4,7 +4,7 @@ summaries/
 logs/loop/
 logs/benchmark/
 logs/autonomous/
-logs/transcribe_*.log
+logs/transcribe/
 queue/
 __pycache__/
 *.wav
