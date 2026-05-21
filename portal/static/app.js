@@ -6,12 +6,13 @@ document.addEventListener("DOMContentLoaded", () => {
   let _channels = [];
   let _statusData = null;
   let _statusPollTimer = null;
+  let _isWsl = null;  // null = 未取得
 
   function switchTab(id) {
     tabs.forEach(t  => t.classList.toggle("active", t.dataset.tab === id));
     panes.forEach(p => p.classList.toggle("active", p.id === `pane-${id}`));
     history.replaceState(null, "", `#${id}`);
-    if (id === "home")   loadChannels();
+    if (id === "home")   { loadChannels(); loadRunPanel(); }
     if (id === "status") { loadStatus(); startStatusPolling(); }
     else                 stopStatusPolling();
     if (id === "readme") loadReadme();
@@ -36,7 +37,11 @@ document.addEventListener("DOMContentLoaded", () => {
           <span class="channel-lang">${esc(ch.lang)}</span>
           <span class="channel-name">${esc(ch.name)}</span>
           <a class="channel-link" href="${esc(ch.url)}" target="_blank" rel="noopener">↗ YouTube</a>
+          <button class="delete-btn" data-name="${esc(ch.name)}" title="削除">×</button>
         </div>`).join("");
+      el.querySelectorAll(".delete-btn").forEach(btn => {
+        btn.addEventListener("click", e => { e.stopPropagation(); deleteChannel(btn.dataset.name); });
+      });
       el.dataset.loaded = "1";
       fetchChannelDriveLinks();
     } catch { el.innerHTML = placeholder("⚠️", "読み込み失敗"); }
@@ -263,12 +268,21 @@ document.addEventListener("DOMContentLoaded", () => {
   };
 
   // ── utils ────────────────────────────────────────────────
-  async function api(url, timeoutMs = 10000) {
+  async function api(url, timeoutMs = 10000, method = "GET", body = null) {
     const ctrl = new AbortController();
     const timer = setTimeout(() => ctrl.abort(), timeoutMs);
     try {
-      const r = await fetch(url, { signal: ctrl.signal });
-      if (!r.ok) throw new Error(r.status);
+      const opts = { method, signal: ctrl.signal };
+      if (body !== null) {
+        opts.headers = { "Content-Type": "application/json" };
+        opts.body = JSON.stringify(body);
+      }
+      const r = await fetch(url, opts);
+      if (!r.ok) {
+        let msg = String(r.status);
+        try { const j = await r.json(); msg = j.error || msg; } catch {}
+        throw new Error(msg);
+      }
       return r.json();
     } finally {
       clearTimeout(timer);
@@ -289,6 +303,145 @@ document.addEventListener("DOMContentLoaded", () => {
   function placeholder(icon, text) {
     return `<div class="placeholder"><div class="placeholder-icon">${icon}</div><span>${text}</span></div>`;
   }
+
+  // ── HOME: 実行パネル ────────────────────────────────────────
+  async function loadRunPanel() {
+    // WSL 判定は初回のみ
+    if (_isWsl === null) {
+      try { const d = await api("/api/env"); _isWsl = d.is_wsl; }
+      catch { _isWsl = false; }
+      if (!_isWsl) {
+        const w1 = document.getElementById("run-wsl-warn");
+        const w2 = document.getElementById("proc-wsl-warn");
+        const s  = document.getElementById("run-start-btn");
+        const p  = document.getElementById("proc-submit-btn");
+        if (w1) w1.style.display = "block";
+        if (w2) w2.style.display = "block";
+        if (s)  s.disabled = true;
+        if (p)  p.disabled = true;
+        const badge = document.getElementById("run-badge");
+        if (badge) { badge.className = "badge badge-gray"; badge.textContent = "WSL 専用"; }
+        return;
+      }
+    }
+    await _updateRunBadge();
+  }
+
+  async function _updateRunBadge() {
+    if (!_isWsl) return;
+    try {
+      const { running } = await api("/api/run/status");
+      const badge    = document.getElementById("run-badge");
+      const startBtn = document.getElementById("run-start-btn");
+      const stopBtn  = document.getElementById("run-stop-btn");
+      if (!badge) return;
+      if (running) {
+        badge.className  = "badge badge-green"; badge.textContent = "稼働中";
+        if (startBtn) startBtn.style.display = "none";
+        if (stopBtn)  stopBtn.style.display  = "";
+      } else {
+        badge.className  = "badge badge-gray";  badge.textContent = "停止中";
+        if (startBtn) startBtn.style.display = "";
+        if (stopBtn)  stopBtn.style.display  = "none";
+      }
+    } catch {}
+  }
+
+  window.startRun = async function() {
+    const limit    = parseInt(document.getElementById("run-limit").value)  || 10;
+    const model    = document.getElementById("run-model").value;
+    const startBtn = document.getElementById("run-start-btn");
+    startBtn.disabled = true; startBtn.textContent = "起動中…";
+    try {
+      await api("/api/run", 10000, "POST", { limit, model });
+      await _updateRunBadge();
+      switchTab("status");
+    } catch (e) {
+      alert("起動失敗: " + String(e.message));
+      startBtn.disabled = false; startBtn.textContent = "▶ 起動";
+    }
+  };
+
+  window.stopRun = async function() {
+    if (!confirm("autonomous.sh を停止しますか？")) return;
+    const stopBtn = document.getElementById("run-stop-btn");
+    stopBtn.disabled = true;
+    try {
+      await api("/api/run/stop", 10000, "POST");
+      await _updateRunBadge();
+    } catch (e) {
+      alert("停止失敗: " + String(e.message));
+    } finally {
+      stopBtn.disabled = false;
+    }
+  };
+
+  // ── HOME: URL 単発処理 ──────────────────────────────────────
+  window.processUrl = async function() {
+    const url     = document.getElementById("proc-url").value.trim();
+    const channel = document.getElementById("proc-channel").value.trim() || "misc";
+    const lang    = document.getElementById("proc-lang").value;
+    const resultEl = document.getElementById("proc-result");
+    const btn      = document.getElementById("proc-submit-btn");
+    if (!url) {
+      resultEl.style.color = "var(--err)"; resultEl.textContent = "URL を入力してください"; return;
+    }
+    btn.disabled = true; resultEl.style.color = "var(--text-dim)"; resultEl.textContent = "送信中…";
+    try {
+      const res = await api("/api/process-url", 10000, "POST", { url, channel, lang });
+      resultEl.style.color = "var(--green)";
+      resultEl.textContent = res.message || "処理を開始しました";
+      document.getElementById("proc-url").value = "";
+      setTimeout(() => switchTab("status"), 800);
+    } catch (e) {
+      resultEl.style.color = "var(--err)"; resultEl.textContent = String(e.message) || "エラー";
+    } finally {
+      btn.disabled = false;
+    }
+  };
+
+  // ── HOME: チャンネル管理モーダル ────────────────────────────
+  window.openAddChannelModal = function() {
+    document.getElementById("modal-error").textContent = "";
+    document.getElementById("add-channel-modal").style.display = "flex";
+    document.getElementById("modal-name").focus();
+  };
+
+  window.closeAddChannelModal = function() {
+    document.getElementById("add-channel-modal").style.display = "none";
+  };
+
+  window.submitAddChannel = async function() {
+    const name  = document.getElementById("modal-name").value.trim();
+    const url   = document.getElementById("modal-url").value.trim();
+    const lang  = document.getElementById("modal-lang").value;
+    const errEl = document.getElementById("modal-error");
+    if (!name || !url) { errEl.textContent = "名前と URL を入力してください"; return; }
+    try {
+      await api("/api/channels", 10000, "POST", { name, url, lang });
+      closeAddChannelModal();
+      document.getElementById("modal-name").value = "";
+      document.getElementById("modal-url").value  = "";
+      reloadChannels();
+    } catch (e) { errEl.textContent = String(e.message) || "追加失敗"; }
+  };
+
+  window.deleteChannel = async function(name) {
+    if (!confirm(`"${name}" を削除しますか？`)) return;
+    try {
+      const r = await fetch(`/api/channels?name=${encodeURIComponent(name)}`, { method: "DELETE" });
+      if (!r.ok) {
+        const j = await r.json().catch(() => ({}));
+        throw new Error(j.error || r.status);
+      }
+      reloadChannels();
+    } catch (e) { alert("削除失敗: " + String(e.message)); }
+  };
+
+  // Escape キーでモーダルを閉じる
+  document.addEventListener("keydown", e => {
+    if (e.key === "Escape") closeAddChannelModal();
+  });
 
   function esc(s) {
     return String(s ?? "").replace(/[&<>"']/g, c =>

@@ -31,7 +31,10 @@
         <div class="card">
           <div class="card-title-row">
             <span class="card-title" style="margin-bottom:0">登録チャンネル</span>
-            <button class="refresh-btn" onclick="reloadChannels()">↻ 更新</button>
+            <div style="display:flex;gap:6px">
+              <button class="refresh-btn" onclick="openAddChannelModal()">+ 追加</button>
+              <button class="refresh-btn" onclick="reloadChannels()">↻ 更新</button>
+            </div>
           </div>
           <div class="channel-list" id="channel-list">
             <div class="placeholder"><div class="placeholder-icon">📡</div><span>読み込み中…</span></div>
@@ -39,13 +42,60 @@
         </div>
       </div>
       <div>
+        <!-- 実行パネル -->
         <div class="card">
-          <div class="card-title">実行パネル</div>
-          <div class="placeholder"><div class="placeholder-icon">🚀</div><span>Phase 2 で実装予定</span></div>
+          <div class="card-title-row">
+            <span class="card-title" style="margin-bottom:0">実行パネル</span>
+            <span id="run-badge" class="badge badge-gray">確認中…</span>
+          </div>
+          <div id="run-wsl-warn" class="run-warn" style="display:none">WSL 環境専用機能です</div>
+          <div class="run-form">
+            <div class="form-row">
+              <label class="form-label">Limit（チャンネルあたり）</label>
+              <input id="run-limit" type="number" class="form-input" value="10" min="1" max="100">
+            </div>
+            <div class="form-row">
+              <label class="form-label">Whisper Model</label>
+              <select id="run-model" class="form-input">
+                <option value="large-v3">large-v3</option>
+                <option value="large-v3-turbo">large-v3-turbo</option>
+                <option value="medium">medium</option>
+                <option value="small">small</option>
+                <option value="tiny">tiny</option>
+              </select>
+            </div>
+          </div>
+          <div class="run-btns">
+            <button id="run-start-btn" class="btn-primary" onclick="startRun()">▶ 起動</button>
+            <button id="run-stop-btn" class="btn-danger" style="display:none" onclick="stopRun()">■ 停止</button>
+          </div>
         </div>
+
+        <!-- URL 単発処理 -->
         <div class="card">
           <div class="card-title">URL 単発処理</div>
-          <div class="placeholder"><div class="placeholder-icon">🎬</div><span>Phase 2 で実装予定</span></div>
+          <div id="proc-wsl-warn" class="run-warn" style="display:none">WSL 環境専用機能です</div>
+          <div class="run-form">
+            <div class="form-row">
+              <label class="form-label">YouTube URL</label>
+              <input id="proc-url" type="url" class="form-input" placeholder="https://www.youtube.com/watch?v=...">
+            </div>
+            <div class="form-row">
+              <label class="form-label">チャンネル名（保存先）</label>
+              <input id="proc-channel" type="text" class="form-input" value="misc" placeholder="misc">
+            </div>
+            <div class="form-row">
+              <label class="form-label">言語</label>
+              <select id="proc-lang" class="form-input">
+                <option value="ja">ja</option>
+                <option value="en">en</option>
+              </select>
+            </div>
+          </div>
+          <div class="run-btns">
+            <button id="proc-submit-btn" class="btn-primary" onclick="processUrl()">▶ 処理開始</button>
+          </div>
+          <div id="proc-result" class="proc-result"></div>
         </div>
       </div>
     </div>
@@ -125,6 +175,36 @@
   </div>
 
 </main>
+
+<!-- チャンネル追加モーダル -->
+<div id="add-channel-modal" class="modal-backdrop" style="display:none"
+     onclick="if(event.target===this)closeAddChannelModal()">
+  <div class="modal-box">
+    <div class="modal-title">チャンネルを追加</div>
+    <div class="run-form">
+      <div class="form-row">
+        <label class="form-label">チャンネル名</label>
+        <input id="modal-name" type="text" class="form-input" placeholder="ひろゆき">
+      </div>
+      <div class="form-row">
+        <label class="form-label">YouTube URL</label>
+        <input id="modal-url" type="url" class="form-input" placeholder="https://www.youtube.com/@...">
+      </div>
+      <div class="form-row">
+        <label class="form-label">言語</label>
+        <select id="modal-lang" class="form-input">
+          <option value="ja">ja</option>
+          <option value="en">en</option>
+        </select>
+      </div>
+    </div>
+    <div id="modal-error" class="modal-error"></div>
+    <div class="modal-btns">
+      <button class="btn-secondary" onclick="closeAddChannelModal()">キャンセル</button>
+      <button class="btn-primary" onclick="submitAddChannel()">追加</button>
+    </div>
+  </div>
+</div>
 
 <script src="/static/marked.min.js"></script>
 <script src="/static/app.js"></script>

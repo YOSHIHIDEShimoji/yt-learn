@@ -9,9 +9,16 @@ from fastapi import FastAPI, Request
 from fastapi.responses import HTMLResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
+from pydantic import BaseModel
 
 ROOT = Path(__file__).parent.parent
 PORTAL_DIR = Path(__file__).parent
+
+# WSL 環境かどうかを起動時に一度だけ判定
+_proc_version = Path("/proc/version")
+IS_WSL = _proc_version.exists() and "microsoft" in _proc_version.read_text().lower()
+
+TMUX_SESSION = "yt-learn"
 
 
 class _NoCacheStaticFiles(StaticFiles):
@@ -353,3 +360,149 @@ async def get_status_summary():
         "done_videos": [], "running_video": None, "phase": "—", "status": "不明",
         "last_session": None, "drive_folder_url": "",
     })
+
+
+# ── Phase 2: チャンネル管理 ──────────────────────────────────────
+
+class ChannelBody(BaseModel):
+    name: str
+    url: str
+    lang: str = "ja"
+
+
+@app.post("/api/channels")
+async def add_channel(body: ChannelBody):
+    name = body.name.strip()
+    url = body.url.strip()
+    lang = body.lang.strip() or "ja"
+    if not name or not url:
+        return JSONResponse({"error": "name と url は必須です"}, status_code=400)
+    channels_file = ROOT / "channels.txt"
+    content = channels_file.read_text(encoding="utf-8") if channels_file.exists() else ""
+    for line in content.splitlines():
+        parts = [p.strip() for p in line.split("|")]
+        if parts and parts[0] == name:
+            return JSONResponse({"error": f"'{name}' は既に登録済みです"}, status_code=409)
+    if content and not content.endswith("\n"):
+        content += "\n"
+    content += f"{name} | {url} | {lang}\n"
+    channels_file.write_text(content, encoding="utf-8")
+    return JSONResponse({"ok": True})
+
+
+@app.delete("/api/channels")
+async def delete_channel(name: str):
+    channels_file = ROOT / "channels.txt"
+    if not channels_file.exists():
+        return JSONResponse({"error": "channels.txt が見つかりません"}, status_code=404)
+    lines = channels_file.read_text(encoding="utf-8").splitlines(keepends=True)
+    new_lines = []
+    found = False
+    for line in lines:
+        stripped = line.strip()
+        if stripped and not stripped.startswith("#"):
+            parts = [p.strip() for p in stripped.split("|")]
+            if parts[0] == name:
+                found = True
+                continue
+        new_lines.append(line)
+    if not found:
+        return JSONResponse({"error": f"'{name}' が見つかりません"}, status_code=404)
+    channels_file.write_text("".join(new_lines), encoding="utf-8")
+    return JSONResponse({"ok": True})
+
+
+# ── Phase 2: 実行管理 ────────────────────────────────────────────
+
+class RunBody(BaseModel):
+    limit: int = 10
+    model: str = "large-v3"
+
+
+_VALID_MODELS = {"tiny", "base", "small", "medium", "large", "large-v2", "large-v3", "large-v3-turbo"}
+
+
+async def _tmux_alive() -> bool:
+    try:
+        proc = await asyncio.create_subprocess_exec(
+            "tmux", "has-session", "-t", TMUX_SESSION,
+            stdout=asyncio.subprocess.DEVNULL, stderr=asyncio.subprocess.DEVNULL,
+        )
+        await proc.wait()
+        return proc.returncode == 0
+    except Exception:
+        return False
+
+
+@app.get("/api/env")
+async def get_env():
+    return JSONResponse({"is_wsl": IS_WSL})
+
+
+@app.get("/api/run/status")
+async def run_status():
+    return JSONResponse({"running": await _tmux_alive()})
+
+
+@app.post("/api/run")
+async def start_run(body: RunBody):
+    if not IS_WSL:
+        return JSONResponse({"error": "WSL 環境でのみ実行できます"}, status_code=400)
+    if await _tmux_alive():
+        return JSONResponse({"error": "既に実行中です"}, status_code=409)
+    limit = max(1, min(body.limit, 100))
+    model = body.model if body.model in _VALID_MODELS else "large-v3"
+    proc = await asyncio.create_subprocess_exec(
+        "tmux", "new-session", "-d", "-s", TMUX_SESSION,
+        f"zsh -ic './autonomous.sh --limit {limit} --model {model}'",
+        cwd=str(ROOT),
+        stdout=asyncio.subprocess.DEVNULL, stderr=asyncio.subprocess.DEVNULL,
+    )
+    await proc.wait()
+    return JSONResponse({"ok": proc.returncode == 0})
+
+
+@app.post("/api/run/stop")
+async def stop_run():
+    if not IS_WSL:
+        return JSONResponse({"error": "WSL 環境でのみ実行できます"}, status_code=400)
+    if not await _tmux_alive():
+        return JSONResponse({"ok": True, "was_running": False})
+    proc = await asyncio.create_subprocess_exec(
+        "tmux", "kill-session", "-t", TMUX_SESSION,
+        stdout=asyncio.subprocess.DEVNULL, stderr=asyncio.subprocess.DEVNULL,
+    )
+    await proc.wait()
+    return JSONResponse({"ok": True, "was_running": True})
+
+
+# ── Phase 2: URL 単発処理 ────────────────────────────────────────
+
+class ProcessUrlBody(BaseModel):
+    url: str
+    channel: str = "misc"
+    lang: str = "ja"
+
+
+async def _bg_process_url(url: str, channel: str, lang: str) -> None:
+    try:
+        python = shutil.which("python") or "python3"
+        await asyncio.create_subprocess_exec(
+            python, str(ROOT / "transcribe.py"), "process", url,
+            "--channel", channel, "--lang", lang,
+            cwd=str(ROOT),
+            stdout=asyncio.subprocess.DEVNULL, stderr=asyncio.subprocess.DEVNULL,
+        )
+    except Exception:
+        pass
+
+
+@app.post("/api/process-url")
+async def process_url(body: ProcessUrlBody):
+    if not IS_WSL:
+        return JSONResponse({"error": "WSL 環境でのみ実行できます"}, status_code=400)
+    url = body.url.strip()
+    if not url:
+        return JSONResponse({"error": "url は必須です"}, status_code=400)
+    asyncio.ensure_future(_bg_process_url(url, body.channel or "misc", body.lang or "ja"))
+    return JSONResponse({"ok": True, "message": "処理を開始しました"})
