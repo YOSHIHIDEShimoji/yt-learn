@@ -55,17 +55,12 @@ document.addEventListener("DOMContentLoaded", () => {
   };
 
   function _updateChannelSelect(channels) {
-    const optionsHtml = channels.map(ch => `<option value="${esc(ch.name)}">${esc(ch.name)}</option>`).join("");
-    [
-      { id: "proc-channel", extra: `<option value="misc">misc</option>` },
-      { id: "tr-channel",   extra: "" },
-    ].forEach(({ id, extra }) => {
-      const sel = document.getElementById(id);
-      if (!sel) return;
-      const prev = sel.value;
-      sel.innerHTML = optionsHtml + extra;
-      if ([...sel.options].some(o => o.value === prev)) sel.value = prev;
-    });
+    const sel = document.getElementById("proc-channel");
+    if (!sel) return;
+    const prev = sel.value;
+    sel.innerHTML = channels.map(ch => `<option value="${esc(ch.name)}">${esc(ch.name)}</option>`).join("") +
+      `<option value="misc">misc</option>`;
+    if ([...sel.options].some(o => o.value === prev)) sel.value = prev;
   }
 
   async function fetchChannelDriveLinks() {
@@ -141,14 +136,14 @@ document.addEventListener("DOMContentLoaded", () => {
     const statsEl  = document.getElementById("status-stats");
     if (!headerEl) return;
 
-    const statusCls = d.status === "稼働中" ? "badge-green"
-      : d.status === "rate-limit 中" ? "badge-warn"
+    const statusCls = d.status === "running" ? "badge-green"
+      : d.status === "rate-limit" ? "badge-warn"
       : "badge-gray";
     headerEl.innerHTML = `
       <div class="status-header-inner">
         <div class="status-header-left">
           <div class="status-script">autonomous.sh</div>
-          <div class="status-session">${esc(d.last_session || "セッション情報なし")}</div>
+          <div class="status-session">${esc(d.last_session || "no session")}</div>
         </div>
         <div class="status-header-right">
           <span class="badge ${statusCls}">${esc(d.status)}</span>
@@ -180,18 +175,18 @@ document.addEventListener("DOMContentLoaded", () => {
           </div>`);
       });
     } else if (!d.running_video) {
-      cards.push(placeholder("🎞️", "処理済み動画なし"));
+      cards.push(placeholder("🎞️", "no videos this session"));
     }
     videosEl.innerHTML = cards.join("");
 
     statsEl.innerHTML = `
       <div class="stat-grid">
-        <div class="stat-item"><span class="stat-label">queue</span><span class="stat-val">${d.queue_count} 件</span></div>
-        <div class="stat-item"><span class="stat-label">完了</span><span class="stat-val stat-green">${d.done_count} 件</span></div>
-        <div class="stat-item"><span class="stat-label">警告</span><span class="stat-val stat-warn">${d.warn_count} 件</span></div>
-        <div class="stat-item"><span class="stat-label">エラー</span><span class="stat-val stat-err">${d.error_count} 件</span></div>
-        <div class="stat-item"><span class="stat-label">rate-limit</span><span class="stat-val">${d.rate_limit_count} 回</span></div>
-        <div class="stat-item"><span class="stat-label">フェーズ</span><span class="stat-val">${esc(d.phase)}</span></div>
+        <div class="stat-item"><span class="stat-label">queue</span><span class="stat-val">${d.queue_count}</span></div>
+        <div class="stat-item"><span class="stat-label">done</span><span class="stat-val stat-green">${d.done_count}</span></div>
+        <div class="stat-item"><span class="stat-label">warn</span><span class="stat-val stat-warn">${d.warn_count}</span></div>
+        <div class="stat-item"><span class="stat-label">error</span><span class="stat-val stat-err">${d.error_count}</span></div>
+        <div class="stat-item"><span class="stat-label">rate-limit</span><span class="stat-val">${d.rate_limit_count}</span></div>
+        <div class="stat-item"><span class="stat-label">phase</span><span class="stat-val">${esc(d.phase)}</span></div>
       </div>
       <div style="margin-top:12px;display:flex;justify-content:space-between;align-items:center;font-size:11px;color:var(--text-faint)">
         <span>参照: ${esc(d.log_file || "—")}</span>
@@ -322,19 +317,16 @@ document.addEventListener("DOMContentLoaded", () => {
 
   // ── HOME: 実行パネル ────────────────────────────────────────
   async function loadRunPanel() {
-    // WSL 判定は初回のみ
     if (_isWsl === null) {
       try { const d = await api("/api/env"); _isWsl = d.is_wsl; }
       catch { _isWsl = false; }
       if (!_isWsl) {
-        ["run-wsl-warn", "adv-wsl-warn"].forEach(id => {
-          const el = document.getElementById(id); if (el) el.style.display = "block";
-        });
-        ["run-start-btn", "adv-start-btn"].forEach(id => {
-          const el = document.getElementById(id); if (el) el.disabled = true;
-        });
+        const warn = document.getElementById("run-wsl-warn");
+        if (warn) warn.style.display = "block";
+        const startBtn = document.getElementById("run-start-btn");
+        if (startBtn) startBtn.disabled = true;
         const badge = document.getElementById("run-badge");
-        if (badge) { badge.className = "badge badge-gray"; badge.textContent = "WSL 専用"; }
+        if (badge) { badge.className = "badge badge-gray"; badge.textContent = "WSL only"; }
         return;
       }
     }
@@ -348,32 +340,26 @@ document.addEventListener("DOMContentLoaded", () => {
       const badge    = document.getElementById("run-badge");
       const startBtn = document.getElementById("run-start-btn");
       const stopBtn  = document.getElementById("run-stop-btn");
-      const advBtn   = document.getElementById("adv-start-btn");
       if (!badge) return;
       if (running) {
         badge.className   = "badge badge-green";
-        badge.textContent = session ? `稼働中: ${session}` : "稼働中";
+        badge.textContent = session ? `running: ${session}` : "running";
         if (startBtn) startBtn.style.display = "none";
         if (stopBtn)  stopBtn.style.display  = "";
-        if (advBtn)   advBtn.disabled = true;
       } else {
-        badge.className   = "badge badge-gray"; badge.textContent = "停止中";
+        badge.className   = "badge badge-gray"; badge.textContent = "stopped";
         if (startBtn) startBtn.style.display = "";
         if (stopBtn)  stopBtn.style.display  = "none";
-        if (advBtn)   advBtn.disabled = false;
       }
     } catch {}
   }
 
-  window.startRun = async function(useOptions = false) {
-    const limit    = useOptions ? (parseInt(document.getElementById("run-limit").value) || 10) : 10;
-    const model    = useOptions ? document.getElementById("run-model").value : "large-v3";
-    const btnId    = useOptions ? "adv-start-btn" : "run-start-btn";
-    const startBtn = document.getElementById(btnId);
+  window.startRun = async function() {
+    const startBtn = document.getElementById("run-start-btn");
     const origText = startBtn.textContent;
-    startBtn.disabled = true; startBtn.textContent = "起動中…";
+    startBtn.disabled = true; startBtn.textContent = "starting…";
     try {
-      await api("/api/run", 10000, "POST", { limit, model });
+      await api("/api/run", 10000, "POST", { limit: 10, model: "large-v3" });
       await _updateRunBadge();
       switchTab("status");
     } catch (e) {
@@ -438,22 +424,6 @@ document.addEventListener("DOMContentLoaded", () => {
       btnEl.disabled = false; btnEl.textContent = origText;
     }
   }
-
-  window.transcribeChannel = async function() {
-    const channel = document.getElementById("tr-channel").value;
-    const limit   = parseInt(document.getElementById("tr-limit").value) || 10;
-    const model   = document.getElementById("tr-model").value;
-    const btn     = event.currentTarget;
-    if (!channel) return;
-    await _runCmd("/api/transcribe/channel", { channel, limit, model }, "tr-channel-result", btn);
-  };
-
-  window.transcribeAll = async function() {
-    const limit = parseInt(document.getElementById("batch-limit").value) || 10;
-    const model = document.getElementById("batch-model").value;
-    const btn   = event.currentTarget;
-    await _runCmd("/api/transcribe/all", { limit, model }, "batch-result", btn);
-  };
 
   window.transcribeSync = async function() {
     const btn = event.currentTarget;

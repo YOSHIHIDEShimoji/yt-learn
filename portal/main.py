@@ -313,23 +313,23 @@ async def get_status_summary():
 
         done_videos, running_video = _parse_session_videos(lines)
 
-        phase = "アイドル"
+        phase = "idle"
         for l in reversed(lines[-20:]):
             if "[model]" in l or "[transcribe]" in l:
-                phase = "Whisper 処理中"; break
+                phase = "transcribing"; break
             if "[summary]" in l:
-                phase = "AI 要約中"; break
+                phase = "summarizing"; break
             if "[download]" in l:
-                phase = "ダウンロード中"; break
+                phase = "downloading"; break
 
-        status = "不明"
+        status = "unknown"
         for l in reversed(lines[-30:]):
             if "[session-end]" in l:
-                status = "停止"; break
+                status = "stopped"; break
             if "rate-limit" in l.lower() or "レートリミット" in l:
-                status = "rate-limit 中"; break
+                status = "rate-limit"; break
             if "[done]" in l or "[download]" in l or "[saved]" in l or "[skip]" in l:
-                status = "稼働中"; break
+                status = "running"; break
 
         last_session = next(
             (l for l in reversed(lines) if "=== 開始" in l or "=== Started" in l), None

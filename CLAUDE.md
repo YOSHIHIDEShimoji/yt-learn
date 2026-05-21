@@ -184,8 +184,8 @@ portal.sh             # 起動スクリプト（Mac/WSL 自動判定）
 | Phase | 内容 | 状態 |
 |-------|------|------|
 | **1** | 骨格 + チャンネル一覧・STATUS・LOGS・README 表示 + Mac ローカルモード | ✅ 完了（2026-05-21） |
-| 2 | HOME タブ機能化（チャンネル追加/削除・実行パネル）| 未着手 |
-| 3 | リアルタイム更新（WebSocket / SSE）| 未着手 |
+| **2** | HOME タブ機能化（チャンネル追加/削除・実行パネル・URL処理・Summarize/Sync）| ✅ 実装済み（feat/portal-phase2）— main マージ待ち |
+| 3 | リアルタイム更新（WebSocket / SSE）+ STATUS 改善 | 未着手 |
 | 4 | LIBRARY タブ（トランスクリプト全文検索）| 未着手 |
 | 5 | Apple liquid glass デザイン精緻化（getdesign 等）| 未着手 |
 | 6 | Tailscale direct アクセス（Windows portproxy）| 未着手 |
@@ -201,12 +201,16 @@ portal.sh             # 起動スクリプト（Mac/WSL 自動判定）
 - Drive URL キャッシュ（メモリ + ファイル永続化、サーバー再起動後も即表示）
 - ログ終了マーカー `[session-end]` 統一（live/done 判定の信頼性向上）
 
-### Phase 2 で実装すべきこと
+### Phase 2 で実装したこと
 
-- HOME > チャンネル管理: `+` / `-` ボタンで channels.txt を編集
-- HOME > 実行パネル: `--limit` / `--model` フォーム → `autonomous.sh` 起動
-- HOME > URL 単発処理: URL を入力して個別動画を処理
-- 実行ボタン押下で STATUS タブへ自動遷移
+- HOME > チャンネル管理: `+` 追加 / `×` 削除（channels.txt 編集）、カスタム確認ダイアログ
+- HOME > クイック実行: `autonomous.sh` 起動/停止（WSL 専用）
+- HOME > URL 処理: 複数 URL 一括処理、チャンネル名 select、ログ出力
+- HOME > その他: Summarize All / Drive Sync
+- STATUS テキストを英語統一（running / stopped / rate-limit / idle 等）
+- tmux セッション名を `yt-learn_YYYYMMDD_HHMMSS` 自動生成
+- favicon 204、docs/ 静的配信
+- **マージルール**: 各フェーズ完了後、`feat/portal-*` → `main` へのマージは**必ずユーザーの承認を得てから**行うこと
 
 ### Phase 3 で実装すべきこと
 
@@ -214,6 +218,7 @@ portal.sh             # 起動スクリプト（Mac/WSL 自動判定）
 - LOGS タブ: live ログを開いているときポーリングで自動更新（tail -f 相当）
 - STATUS タブ: WebSocket でリアルタイム自動更新
 - autonomous.sh の状態（DL中/rate-limit/停止）をバッジ表示
+- STATUS 統計パネル: queue / done / warn / error のカウントをクリック可能にし、ログ内の該当行をフィルタしてモーダルまたはインラインで表示（どのエラーか・どの警告かを確認できる）
 
 ### 依存関係
 
