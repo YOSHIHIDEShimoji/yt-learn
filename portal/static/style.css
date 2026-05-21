@@ -451,12 +451,14 @@ body {
 .logs-grid {
   align-items: stretch;
   height: calc(100vh - 168px);
+  grid-template-rows: 1fr;  /* 行高を明示固定して子を拘束 */
+  overflow: hidden;
 }
 
 .logs-grid .card {
   display: flex;
   flex-direction: column;
-  height: 100%;
+  min-height: 0;   /* flex/grid 子要素のコンテンツ膨張を防ぐ */
   margin-bottom: 0;
 }
 
