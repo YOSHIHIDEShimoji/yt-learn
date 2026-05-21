@@ -214,11 +214,20 @@ portal.sh             # 起動スクリプト（Mac/WSL 自動判定）
 
 ### Phase 3 で実装すべきこと
 
+**リアルタイム更新**
 - WebSocket または SSE エンドポイント
 - LOGS タブ: live ログを開いているときポーリングで自動更新（tail -f 相当）
 - STATUS タブ: WebSocket でリアルタイム自動更新
 - autonomous.sh の状態（DL中/rate-limit/停止）をバッジ表示
-- STATUS 統計パネル: queue / done / warn / error のカウントをクリック可能にし、ログ内の該当行をフィルタしてモーダルまたはインラインで表示（どのエラーか・どの警告かを確認できる）
+
+**STATUS タブ改善**
+- URL処理の進行状況を STATUS タブで確認可能にする
+  - `transcribe.py process` のログ出力フォーマットを解析して running/done 表示
+  - STATUS ヘッダーを autonomous.sh 固定から「最新セッション種別」に動的切り替え
+  - 処理済み動画パネルに URL処理中の "running" バッジを表示
+- URL処理・Summarize All・Drive Sync の中止ボタン（Ctrl+C 相当）
+  - バックグラウンドプロセスの PID 追跡が必要
+- 統計パネル: queue / done / warn / error のカウントをクリックしてログ内の該当行をフィルタ表示
 
 ### 依存関係
 
