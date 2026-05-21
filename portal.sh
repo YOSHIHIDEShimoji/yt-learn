@@ -25,10 +25,12 @@ if [[ "$(uname)" == "Darwin" ]]; then
   # --local: Mac 自身でサーバーを起動してローカルログを読む
   if [[ "$LOCAL_MODE" == true ]]; then
     cd "$(dirname "$(realpath "$0")")"
-    if curl -s --max-time 1 "http://localhost:${PORT}/" > /dev/null 2>&1; then
-      echo "[portal] サーバーはすでに起動中です"
-      open "http://localhost:${PORT}"
-      exit 0
+    # 旧サーバーを常に停止して最新コードで再起動
+    OLD_PID=$(lsof -ti :"${PORT}" 2>/dev/null || true)
+    if [[ -n "$OLD_PID" ]]; then
+      echo "[portal] 旧サーバー (PID ${OLD_PID}) を停止して再起動します"
+      kill "$OLD_PID" 2>/dev/null || true
+      sleep 1
     fi
     echo "[portal] Mac ローカルサーバーを起動します (port ${PORT})"
     (sleep 2 && open "http://localhost:${PORT}") &
