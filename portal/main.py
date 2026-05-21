@@ -113,11 +113,17 @@ async def get_logs():
     for log_dir in log_dirs:
         if log_dir.exists():
             for f in sorted(log_dir.rglob("*.log"), key=lambda x: x.stat().st_mtime, reverse=True)[:30]:
+                try:
+                    tail = f.read_bytes()[-512:].decode(errors="replace")
+                    is_done = "[session-end]" in tail
+                except Exception:
+                    is_done = True
                 log_files.append({
                     "name": f.name,
                     "path": str(f.relative_to(ROOT)),
                     "size": f.stat().st_size,
                     "mtime": f.stat().st_mtime,
+                    "is_done": is_done,
                 })
     return JSONResponse({"logs": log_files})
 
@@ -221,6 +227,7 @@ async def get_status_summary():
             "status": status,
             "last_session": last_session,
             "drive_folder_url": drive_folder_url,
+            "lines": lines[-50:],
         })
 
     return JSONResponse({

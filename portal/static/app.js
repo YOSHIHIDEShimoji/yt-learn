@@ -113,13 +113,17 @@ document.addEventListener("DOMContentLoaded", () => {
           ${d.drive_folder_url ? `<a class="channel-link" href="${esc(d.drive_folder_url)}" target="_blank" rel="noopener" style="opacity:1;font-size:12px">↗ Google Drive</a>` : ""}
         </div>`;
 
+      // 直近ログ
+      const logEl = document.getElementById("status-log");
+      if (logEl) renderLog(logEl, d.lines || []);
+
     } catch (e) {
       headerEl.innerHTML = placeholder("⚠️", "読み込み失敗");
     }
   }
 
   window.reloadStatus = function() {
-    ["status-header-card", "status-videos", "status-stats"].forEach(id => {
+    ["status-header-card", "status-videos", "status-stats", "status-log"].forEach(id => {
       const el = document.getElementById(id);
       if (el) el.innerHTML = placeholder("⏳", "更新中…");
     });
@@ -156,7 +160,7 @@ document.addEventListener("DOMContentLoaded", () => {
       if (!logs.length) { el.innerHTML = placeholder("📭", "ログファイルなし"); return; }
       el.innerHTML = logs.map(l => `
         <div class="channel-item log-file-item" data-path="${esc(l.path)}" onclick="openLog(this)">
-          <span class="badge badge-gray">LOG</span>
+          <span class="badge ${l.is_done ? 'badge-gray' : 'badge-blue'}">${l.is_done ? 'done' : 'live'}</span>
           <span class="channel-name">${esc(l.path)}</span>
           <span style="color:var(--text-faint);font-size:11px;flex-shrink:0">${(l.size/1024).toFixed(1)} KB</span>
         </div>`).join("");
