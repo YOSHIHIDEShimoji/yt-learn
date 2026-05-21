@@ -1,10 +1,10 @@
 transcripts/
 !transcripts/*/_index.json
 summaries/
-log/
 logs/loop/
 logs/benchmark/
 logs/autonomous/
+logs/transcribe_*.log
 queue/
 __pycache__/
 *.wav
