@@ -54,24 +54,26 @@
     </div>
 
     <!-- 左右パネル -->
-    <div class="grid-2">
+    <div class="grid-2" style="align-items:start">
       <div class="card">
-        <div class="card-title">最近処理した動画</div>
-        <div id="status-videos"><div class="placeholder"><div class="placeholder-icon">🎞️</div><span>読み込み中…</span></div></div>
+        <div class="card-title-row">
+          <span class="card-title" style="margin-bottom:0">処理済み動画（今セッション）</span>
+          <button class="refresh-btn" onclick="reloadStatus()">↻ 更新</button>
+        </div>
+        <div class="status-videos-scroll" id="status-videos">
+          <div class="placeholder"><div class="placeholder-icon">🎞️</div><span>読み込み中…</span></div>
+        </div>
       </div>
-      <div class="card">
-        <div class="card-title">統計</div>
-        <div id="status-stats"><div class="placeholder"><div class="placeholder-icon">📊</div><span>読み込み中…</span></div></div>
+      <div>
+        <div class="card">
+          <div class="card-title">統計</div>
+          <div id="status-stats"><div class="placeholder"><div class="placeholder-icon">📊</div><span>読み込み中…</span></div></div>
+        </div>
+        <div class="card">
+          <div class="card-title">GPU 使用率</div>
+          <div class="placeholder"><div class="placeholder-icon">🖥️</div><span>Phase 3 で実装予定（リアルタイムグラフ）</span></div>
+        </div>
       </div>
-    </div>
-
-    <!-- ログ末尾 -->
-    <div class="card">
-      <div class="card-title-row">
-        <span class="card-title" style="margin-bottom:0">直近ログ（末尾 50 行）</span>
-        <button class="refresh-btn" onclick="reloadStatus()">↻ 更新</button>
-      </div>
-      <div class="log-output" id="status-log">STATUS タブを開くと読み込みます</div>
     </div>
   </div>
 

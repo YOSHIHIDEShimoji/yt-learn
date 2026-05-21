@@ -315,6 +315,47 @@ body {
   margin-top: 2px;
 }
 
+/* ── STATUS: 動画スクロールコンテナ ── */
+.status-videos-scroll {
+  max-height: 520px;
+  overflow-y: auto;
+}
+
+/* ── Video card outer（more パネル込み） ── */
+.video-card-outer { margin-bottom: 8px; }
+.video-card-outer .video-card { margin-bottom: 0; }
+.video-card-outer.expanded .video-card {
+  border-radius: var(--radius-sm) var(--radius-sm) 0 0;
+}
+
+.video-more {
+  display: none;
+  padding: 8px 14px;
+  background: rgba(255,255,255,0.02);
+  border: 1px solid var(--border);
+  border-top: none;
+  border-radius: 0 0 var(--radius-sm) var(--radius-sm);
+  font-size: 11px;
+  color: var(--text-faint);
+  gap: 16px;
+  align-items: center;
+}
+.video-card-outer.expanded .video-more { display: flex; }
+
+.more-btn {
+  background: transparent;
+  border: 1px solid var(--border);
+  color: var(--text-faint);
+  font-size: 13px;
+  line-height: 1;
+  padding: 3px 8px;
+  border-radius: 4px;
+  cursor: pointer;
+  flex-shrink: 0;
+  transition: background 0.12s, color 0.12s;
+}
+.more-btn:hover { background: var(--surface-hover); color: var(--text); }
+
 /* ── Stats grid (STATUS right panel) ── */
 .stat-grid {
   display: grid;

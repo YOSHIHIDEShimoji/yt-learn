@@ -1,6 +1,7 @@
 import asyncio
 import re
 import shutil
+from datetime import datetime
 from pathlib import Path
 from fastapi import FastAPI, Request
 from fastapi.responses import HTMLResponse, JSONResponse
@@ -14,6 +15,44 @@ app = FastAPI(title="yt-learn Portal")
 
 # rclone link 結果キャッシュ（プロセス内永続）
 _drive_url_cache: dict[str, str] = {}
+
+def _parse_session_videos(lines: list[str]) -> tuple[list[dict], dict | None]:
+    """ログ行から動画イベントを解析。(done_videos newest-first, running_or_None) を返す"""
+    done: list[dict] = []
+    cur: dict | None = None
+
+    for l in lines:
+        ts_m = re.match(r'\[(\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2})\]', l)
+        ts = ts_m.group(1) if ts_m else ""
+
+        if "[drain]" in l:
+            m = re.search(r'\[drain\]\s+(.+)', l)
+            if m:
+                cur = {"title": m.group(1).strip(), "channel": "",
+                       "drain_ts": ts, "drive_ts": ""}
+        elif "[saved]" in l and cur is not None:
+            m = re.search(r'\[saved\]\s+(.+\.md)', l)
+            if m:
+                parts = m.group(1).replace("\\", "/").split("/")
+                cur["channel"] = parts[-2] if len(parts) >= 2 else ""
+        elif "[drive]" in l and cur is not None:
+            cur["drive_ts"] = ts
+            if cur["drain_ts"] and cur["drive_ts"]:
+                try:
+                    t1 = datetime.strptime(cur["drain_ts"], "%Y-%m-%d %H:%M:%S")
+                    t2 = datetime.strptime(cur["drive_ts"], "%Y-%m-%d %H:%M:%S")
+                    cur["processing_sec"] = int((t2 - t1).total_seconds())
+                except ValueError:
+                    cur["processing_sec"] = 0
+            else:
+                cur["processing_sec"] = 0
+            done.append(cur)
+            cur = None
+
+    running = cur  # drain 後 drive 前 → 現在処理中
+    done.reverse()  # 新しい順
+    return done, running
+
 
 async def _rclone_link(path: str) -> str:
     if path in _drive_url_cache:
@@ -116,21 +155,8 @@ async def get_status_summary():
         error_count = sum(1 for l in lines if "[error]" in l)
         rl_count    = sum(1 for l in lines if "rate-limit" in l.lower() or "レートリミット" in l)
 
-        # 最近処理した動画（[saved] 行から抽出）
-        recent_videos = []
-        for l in reversed(lines):
-            if "[saved]" not in l:
-                continue
-            m = re.search(r'\[saved\]\s+(.+\.md)', l)
-            if not m:
-                continue
-            path_str = m.group(1).replace("\\", "/")
-            parts = path_str.split("/")
-            title   = parts[-1].replace(".md", "") if parts else path_str
-            channel = parts[-2] if len(parts) >= 2 else ""
-            recent_videos.append({"title": title, "channel": channel})
-            if len(recent_videos) >= 8:
-                break
+        # 動画イベントを解析（セッション全体）
+        done_videos, running_video = _parse_session_videos(lines)
 
         # 現在のフェーズ（直近の行から推定）
         phase = "アイドル"
@@ -168,15 +194,19 @@ async def get_status_summary():
         queue_count = len(list(queue_dir.glob("*.m4a"))) if queue_dir.exists() else 0
 
         # Google Drive リンクを並列取得（キャッシュ済みなら即返却）
-        unique_channels = list({v["channel"] for v in recent_videos if v.get("channel")})
+        channels_needed = list({v["channel"] for v in done_videos if v.get("channel")})
+        if running_video and running_video.get("channel"):
+            channels_needed = list(set(channels_needed + [running_video["channel"]]))
         drive_results = await asyncio.gather(
             _rclone_link("gdrive:yt-learn"),
-            *[_rclone_link(f"gdrive:yt-learn/transcripts/{ch}") for ch in unique_channels],
+            *[_rclone_link(f"gdrive:yt-learn/transcripts/{ch}") for ch in channels_needed],
         )
         drive_folder_url = drive_results[0]
-        channel_drive = dict(zip(unique_channels, drive_results[1:]))
-        for v in recent_videos:
+        channel_drive = dict(zip(channels_needed, drive_results[1:]))
+        for v in done_videos:
             v["drive_url"] = channel_drive.get(v.get("channel", ""), "")
+        if running_video:
+            running_video["drive_url"] = channel_drive.get(running_video.get("channel", ""), "")
 
         return JSONResponse({
             "log_file": logs[0].name,
@@ -185,11 +215,11 @@ async def get_status_summary():
             "error_count": error_count,
             "rate_limit_count": rl_count,
             "queue_count": queue_count,
-            "recent_videos": recent_videos,
+            "done_videos": done_videos,
+            "running_video": running_video,
             "phase": phase,
             "status": status,
             "last_session": last_session,
-            "lines": lines[-50:],
             "drive_folder_url": drive_folder_url,
         })
 
@@ -197,6 +227,6 @@ async def get_status_summary():
         "error": "ログファイルなし",
         "done_count": 0, "warn_count": 0, "error_count": 0,
         "rate_limit_count": 0, "queue_count": 0,
-        "recent_videos": [], "phase": "—", "status": "不明",
-        "last_session": None, "lines": [], "drive_folder_url": "",
+        "done_videos": [], "running_video": None, "phase": "—", "status": "不明",
+        "last_session": None, "drive_folder_url": "",
     })

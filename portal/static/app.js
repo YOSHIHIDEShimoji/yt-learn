@@ -38,7 +38,6 @@ document.addEventListener("DOMContentLoaded", () => {
     const headerEl = document.getElementById("status-header-card");
     const videosEl = document.getElementById("status-videos");
     const statsEl  = document.getElementById("status-stats");
-    const logEl    = document.getElementById("status-log");
     if (!headerEl) return;
 
     try {
@@ -47,7 +46,7 @@ document.addEventListener("DOMContentLoaded", () => {
       // ヘッダーカード
       const statusCls = d.status === "稼働中" ? "badge-green"
         : d.status === "rate-limit 中" ? "badge-warn"
-        : d.status === "停止" ? "badge-gray" : "badge-gray";
+        : "badge-gray";
       headerEl.innerHTML = `
         <div class="status-header-inner">
           <div class="status-header-left">
@@ -60,20 +59,44 @@ document.addEventListener("DOMContentLoaded", () => {
           </div>
         </div>`;
 
-      // 最近の動画カード
-      if (!d.recent_videos || !d.recent_videos.length) {
-        videosEl.innerHTML = placeholder("🎞️", "処理済み動画なし");
-      } else {
-        videosEl.innerHTML = d.recent_videos.map(v => `
-          <div class="video-card">
-            <span class="badge badge-green" style="flex-shrink:0">done</span>
-            <div class="video-info">
-              <div class="video-title">${esc(v.title)}</div>
-              <div class="video-channel">${esc(v.channel)}</div>
+      // 動画カード（running + done）
+      const cards = [];
+      if (d.running_video) {
+        cards.push(`
+          <div class="video-card-outer">
+            <div class="video-card">
+              <span class="badge badge-blue" style="flex-shrink:0">running</span>
+              <div class="video-info">
+                <div class="video-title">${esc(d.running_video.title)}</div>
+                <div class="video-channel">${esc(d.running_video.channel || "—")}</div>
+              </div>
             </div>
-            ${v.drive_url ? `<a class="channel-link" href="${esc(v.drive_url)}" target="_blank" rel="noopener" style="flex-shrink:0">↗ Drive</a>` : ''}
-          </div>`).join("");
+          </div>`);
       }
+      if (d.done_videos && d.done_videos.length) {
+        d.done_videos.forEach(v => {
+          const timeStr = v.processing_sec > 0 ? `処理時間: ${formatSec(v.processing_sec)}` : "";
+          const driveHtml = v.drive_url
+            ? `<a class="channel-link" href="${esc(v.drive_url)}" target="_blank" rel="noopener">↗ Google Drive</a>`
+            : "";
+          const hasMore = timeStr || driveHtml;
+          cards.push(`
+            <div class="video-card-outer">
+              <div class="video-card">
+                <span class="badge badge-green" style="flex-shrink:0">done</span>
+                <div class="video-info">
+                  <div class="video-title">${esc(v.title)}</div>
+                  <div class="video-channel">${esc(v.channel)}</div>
+                </div>
+                ${hasMore ? `<button class="more-btn" onclick="toggleVideoMore(this)">···</button>` : ""}
+              </div>
+              ${hasMore ? `<div class="video-more">${timeStr ? `<span>${timeStr}</span>` : ""}${driveHtml}</div>` : ""}
+            </div>`);
+        });
+      } else if (!d.running_video) {
+        cards.push(placeholder("🎞️", "処理済み動画なし"));
+      }
+      videosEl.innerHTML = cards.join("");
 
       // 統計パネル
       statsEl.innerHTML = `
@@ -87,11 +110,8 @@ document.addEventListener("DOMContentLoaded", () => {
         </div>
         <div style="margin-top:12px;display:flex;justify-content:space-between;align-items:center;font-size:11px;color:var(--text-faint)">
           <span>参照: ${esc(d.log_file || "—")}</span>
-          ${d.drive_folder_url ? `<a class="channel-link" href="${esc(d.drive_folder_url)}" target="_blank" rel="noopener" style="opacity:1;font-size:12px">↗ Google Drive</a>` : ''}
+          ${d.drive_folder_url ? `<a class="channel-link" href="${esc(d.drive_folder_url)}" target="_blank" rel="noopener" style="opacity:1;font-size:12px">↗ Google Drive</a>` : ""}
         </div>`;
-
-      // ログ末尾
-      renderLog(logEl, d.lines || []);
 
     } catch (e) {
       headerEl.innerHTML = placeholder("⚠️", "読み込み失敗");
@@ -99,12 +119,15 @@ document.addEventListener("DOMContentLoaded", () => {
   }
 
   window.reloadStatus = function() {
-    const els = ["status-header-card","status-videos","status-stats","status-log"];
-    els.forEach(id => {
+    ["status-header-card", "status-videos", "status-stats"].forEach(id => {
       const el = document.getElementById(id);
       if (el) el.innerHTML = placeholder("⏳", "更新中…");
     });
     loadStatus();
+  };
+
+  window.toggleVideoMore = function(btn) {
+    btn.closest(".video-card-outer").classList.toggle("expanded");
   };
 
   // ── README ───────────────────────────────────────────────
@@ -178,6 +201,12 @@ document.addEventListener("DOMContentLoaded", () => {
       return `<span class="${cls}">${esc(l)}</span>`;
     }).join("\n");
     el.scrollTop = el.scrollHeight;
+  }
+
+  function formatSec(sec) {
+    if (sec < 60) return `${sec}秒`;
+    const m = Math.floor(sec / 60), s = sec % 60;
+    return s > 0 ? `${m}分${s}秒` : `${m}分`;
   }
 
   function placeholder(icon, text) {
