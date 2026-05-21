@@ -262,8 +262,8 @@ async def get_logs():
                     tail = f.read_bytes()[-512:].decode(errors="replace")
                     session_ended = "[session-end]" in tail
                     recently_modified = (now - f.stat().st_mtime) < live_threshold
-                    is_done = session_ended or not recently_modified
                     has_error = "[error]" in tail
+                    is_done = session_ended or not recently_modified or has_error
                 except Exception:
                     is_done = True
                     has_error = False
@@ -511,7 +511,8 @@ async def _await_and_close(proc, f, append_session_end: bool = False) -> None:
     try:
         await proc.wait()
         if append_session_end:
-            f.write(b"\n[session-end]\n")
+            ts = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+            f.write(f"\n[session-end] {ts}\n".encode())
     finally:
         f.close()
 

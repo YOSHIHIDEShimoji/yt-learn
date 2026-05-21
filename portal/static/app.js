@@ -242,7 +242,7 @@ document.addEventListener("DOMContentLoaded", () => {
       const { logs } = await api("/api/logs");
       if (!logs.length) { el.innerHTML = placeholder("📭", "ログファイルなし"); return; }
       el.innerHTML = logs.map(l => {
-        const badgeCls = !l.is_done ? "badge-blue" : l.has_error ? "badge-err" : "badge-gray";
+        const badgeCls = !l.is_done ? "badge-blue" : l.has_error ? "badge-err" : "badge-green";
         const badgeText = !l.is_done ? "live" : l.has_error ? "error" : "done";
         return `
         <div class="channel-item log-file-item" data-path="${esc(l.path)}" onclick="openLog(this)">
