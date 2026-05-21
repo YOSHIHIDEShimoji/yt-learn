@@ -110,14 +110,17 @@
   <!-- README -->
   <div id="pane-readme" class="pane">
     <div class="card">
-      <div class="card-title">README.md</div>
+      <div class="card-title-row">
+        <span class="card-title" style="margin-bottom:0">README.md</span>
+        <button class="refresh-btn" onclick="reloadReadme()">↻ 再読み込み</button>
+      </div>
       <div class="markdown-body" id="readme-body">読み込み中…</div>
     </div>
   </div>
 
 </main>
 
-<script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+<script src="/static/marked.min.js"></script>
 <script src="/static/app.js"></script>
 </body>
 </html>

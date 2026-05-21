@@ -169,18 +169,21 @@ document.addEventListener("DOMContentLoaded", () => {
   // ── README ───────────────────────────────────────────────
   async function loadReadme() {
     const el = document.getElementById("readme-body");
-    if (!el || el.dataset.loaded) return;
+    if (!el) return;
+    if (el.dataset.loading) return;
+    el.dataset.loading = "1";
     el.textContent = "読み込み中…";
     try {
       const { content } = await api("/api/readme");
-      if (typeof marked !== "undefined") {
-        el.innerHTML = marked.parse(content);
-      } else {
-        el.textContent = content;
-      }
-      el.dataset.loaded = "1";
-    } catch { el.textContent = "読み込み失敗"; }
+      el.innerHTML = marked.parse(content);
+    } catch {
+      el.textContent = "読み込み失敗";
+    } finally {
+      delete el.dataset.loading;
+    }
   }
+
+  window.reloadReadme = loadReadme;
 
   // ── LOGS ────────────────────────────────────────────────
   async function loadLogs() {
@@ -222,10 +225,16 @@ document.addEventListener("DOMContentLoaded", () => {
   };
 
   // ── utils ────────────────────────────────────────────────
-  async function api(url) {
-    const r = await fetch(url);
-    if (!r.ok) throw new Error(r.status);
-    return r.json();
+  async function api(url, timeoutMs = 10000) {
+    const ctrl = new AbortController();
+    const timer = setTimeout(() => ctrl.abort(), timeoutMs);
+    try {
+      const r = await fetch(url, { signal: ctrl.signal });
+      if (!r.ok) throw new Error(r.status);
+      return r.json();
+    } finally {
+      clearTimeout(timer);
+    }
   }
 
   function renderLog(el, lines) {
