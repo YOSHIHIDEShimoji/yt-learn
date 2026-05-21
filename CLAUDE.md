@@ -88,6 +88,18 @@ grep -v '^#\|^$\|^##\|^ ' logs/benchmark/*.log | sort -t$'\t' -k7 -rn | head -10
 - LLM: Ollama（localhost）or Gemini（フォールバック）
 - `cookies.txt`: gitignore 対象。`python transcribe.py refresh-cookies` で Windows Firefox から自動更新（autonomous.sh 起動時に自動実行）
 
+### tmux セッション起動・再起動
+
+pyenv は `.zshrc` に初期化されているため、tmux は `zsh -ic` で起動すること（`-i` がないと pyenv が読まれず `python: command not found` になる）。
+
+```bash
+# Mac から WSL の tmux セッションを起動
+ssh win "wsl -- bash -c 'cd ~/my-projects/yt-learn && tmux new-session -d -s yt-learn \"zsh -ic ./autonomous.sh\"'"
+
+# 再起動（kill → git pull → 起動）
+ssh win "wsl -- bash -c 'tmux kill-server 2>/dev/null; cd ~/my-projects/yt-learn && git pull && tmux new-session -d -s yt-learn \"zsh -ic ./autonomous.sh\"'"
+```
+
 ---
 
 ## 現在の未解決 issue
