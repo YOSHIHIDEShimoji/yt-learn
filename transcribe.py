@@ -767,10 +767,15 @@ def _generate_core_summary(title: str, text: str) -> tuple[str, str] | tuple[Non
 {text[:4000]}
 ---
 
-タイトルが約束・問いかけていることに対して、この動画が実際に答えている内容をすべて抽出してください。
-「Top 7」「〇〇選」など列挙系タイトルの場合はすべての項目をカバーしてください。
-各点は1〜2行で簡潔にまとめてください。
-マークダウンの装飾（**など）は使わないこと。
+この動画の内容を、文字起こしを読んでいない人が読んでも完全に理解できる箇条書きにしてください。
+
+ルール:
+- 各点は単独で読んで意味が通るよう、主語・対象・文脈を省略しない
+- 「この動画では」「ここでは」のような指示語・参照語は使わない
+- 数値や固有名詞は必ず文脈とセットで書く（例: 「Amazonでは重量物運搬時に2人体制が義務付けられている」）
+- 内容を省略しない。重要な情報はすべて含める（多少長くなっても可）
+- 列挙系タイトル（Top N、〇〇選など）の場合は全項目をカバーする
+- マークダウン装飾（**など）は使わない
 
 出力形式: 「## ポイント」という見出しの後に「- 」始まりの箇条書きのみ。それ以外の文章は一切不要。"""
 
@@ -799,9 +804,10 @@ def _inject_core_summary(md_path: Path) -> None:
     content = md_path.read_text(encoding="utf-8")
     if "## ポイント" in content:
         return
+    raw_transcript = content.split("\n---\n", 1)[-1].strip()
     summary, backend = _generate_core_summary(
         title=re.search(r"^# (.+)", content, re.MULTILINE).group(1) if re.search(r"^# (.+)", content, re.MULTILINE) else "",
-        text=content,
+        text=raw_transcript,
     )
     if not summary:
         return

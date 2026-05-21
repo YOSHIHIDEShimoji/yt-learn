@@ -31,6 +31,12 @@ def _err(msg: str) -> None:
     print(msg, file=sys.stderr)
 
 
+def _extract_points(md_text: str) -> str:
+    """## ポイント セクションの箇条書きのみを返す。なければ空文字。"""
+    m = re.search(r"## ポイント\n((?:- .+\n?)+)", md_text)
+    return m.group(0).strip() if m else ""
+
+
 def _sanitize(name: str) -> str:
     name = re.sub(r'[\\/:*?"<>|]', "_", name)
     name = name.strip()
@@ -228,8 +234,12 @@ def _summarize_channel(channel_name: str, api_key: str, force: bool = False, thr
         _err(f"  [{i}/{len(new_transcripts)}] {t.stem}")
         try:
             transcript_text = t.read_text(encoding="utf-8")
+            points = _extract_points(transcript_text)
+            if not points:
+                _err(f"  [skip] ## ポイント なし: {t.stem}")
+                continue
             video_count = len(processed) + i
-            _update_summary(channel_name, transcript_text, t.stem, api_key, video_count)
+            _update_summary(channel_name, points, t.stem, api_key, video_count)
             _copy_file_to_drive(summary_path)
             processed.add(t.name)
             _save_processed(channel_name, processed)
