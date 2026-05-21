@@ -6,12 +6,17 @@ import time
 from datetime import datetime
 from pathlib import Path
 from fastapi import FastAPI, Request
-from fastapi.responses import HTMLResponse, JSONResponse
+from fastapi.responses import HTMLResponse, JSONResponse, Response
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
+from pydantic import BaseModel
 
 ROOT = Path(__file__).parent.parent
 PORTAL_DIR = Path(__file__).parent
+
+# WSL 環境かどうかを起動時に一度だけ判定
+_proc_version = Path("/proc/version")
+IS_WSL = _proc_version.exists() and "microsoft" in _proc_version.read_text().lower()
 
 
 class _NoCacheStaticFiles(StaticFiles):
@@ -26,6 +31,16 @@ class _NoCacheStaticFiles(StaticFiles):
 app = FastAPI(title="yt-learn Portal")
 app.mount("/static", _NoCacheStaticFiles(directory=PORTAL_DIR / "static"), name="static")
 templates = Jinja2Templates(directory=PORTAL_DIR / "templates")
+
+# docs/ が存在すれば /docs で配信（README 内の画像リンク用）
+_docs_dir = ROOT / "docs"
+if _docs_dir.exists():
+    app.mount("/docs", StaticFiles(directory=_docs_dir), name="docs")
+
+
+@app.get("/favicon.ico")
+async def favicon():
+    return Response(status_code=204)
 
 # ── Drive キャッシュ ──────────────────────────────────────────
 DRIVE_LINK_CACHE_FILE = PORTAL_DIR / "drive_link_cache.json"
@@ -114,7 +129,7 @@ async def _fetch_channel_drive_urls_bg(channel: str) -> None:
     try:
         proc = await asyncio.create_subprocess_exec(
             "rclone", "lsjson", "--files-only",
-            f"gdrive:yt-learn/transcripts/{channel}/",
+            f"gdrive:yt-learn/transcripts/{channel.replace('/', '_')}/",
             stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE,
         )
         stdout, _ = await proc.communicate()  # タイムアウトなし（大フォルダ対応）
@@ -222,7 +237,7 @@ async def get_channel_drive_urls_api():
             parts = [p.strip() for p in line.split("|")]
             if len(parts) >= 2:
                 names.append(parts[0])
-    urls = await asyncio.gather(*[_rclone_link(f"gdrive:yt-learn/transcripts/{n}") for n in names])
+    urls = await asyncio.gather(*[_rclone_link(f"gdrive:yt-learn/transcripts/{n.replace('/', '_')}") for n in names])
     return JSONResponse({"drive_urls": dict(zip(names, urls))})
 
 
@@ -247,15 +262,18 @@ async def get_logs():
                     tail = f.read_bytes()[-512:].decode(errors="replace")
                     session_ended = "[session-end]" in tail
                     recently_modified = (now - f.stat().st_mtime) < live_threshold
-                    is_done = session_ended or not recently_modified
+                    has_error = "[error]" in tail
+                    is_done = session_ended or not recently_modified or has_error
                 except Exception:
                     is_done = True
+                    has_error = False
                 log_files.append({
                     "name": f.name,
                     "path": str(f.relative_to(ROOT)),
                     "size": f.stat().st_size,
                     "mtime": f.stat().st_mtime,
                     "is_done": is_done,
+                    "has_error": has_error,
                 })
 
     # live を先頭、次いで done（両グループ内は mtime 降順）
@@ -298,23 +316,23 @@ async def get_status_summary():
 
         done_videos, running_video = _parse_session_videos(lines)
 
-        phase = "アイドル"
+        phase = "idle"
         for l in reversed(lines[-20:]):
             if "[model]" in l or "[transcribe]" in l:
-                phase = "Whisper 処理中"; break
+                phase = "transcribing"; break
             if "[summary]" in l:
-                phase = "AI 要約中"; break
+                phase = "summarizing"; break
             if "[download]" in l:
-                phase = "ダウンロード中"; break
+                phase = "downloading"; break
 
-        status = "不明"
+        status = "unknown"
         for l in reversed(lines[-30:]):
             if "[session-end]" in l:
-                status = "停止"; break
+                status = "stopped"; break
             if "rate-limit" in l.lower() or "レートリミット" in l:
-                status = "rate-limit 中"; break
+                status = "rate-limit"; break
             if "[done]" in l or "[download]" in l or "[saved]" in l or "[skip]" in l:
-                status = "稼働中"; break
+                status = "running"; break
 
         last_session = next(
             (l for l in reversed(lines) if "=== 開始" in l or "=== Started" in l), None
@@ -353,3 +371,253 @@ async def get_status_summary():
         "done_videos": [], "running_video": None, "phase": "—", "status": "不明",
         "last_session": None, "drive_folder_url": "",
     })
+
+
+# ── Phase 2: チャンネル管理 ──────────────────────────────────────
+
+class ChannelBody(BaseModel):
+    name: str
+    url: str
+    lang: str = "ja"
+
+
+@app.post("/api/channels")
+async def add_channel(body: ChannelBody):
+    name = body.name.strip()
+    url = body.url.strip()
+    lang = body.lang.strip() or "ja"
+    if not name or not url:
+        return JSONResponse({"error": "name と url は必須です"}, status_code=400)
+    channels_file = ROOT / "channels.txt"
+    content = channels_file.read_text(encoding="utf-8") if channels_file.exists() else ""
+    for line in content.splitlines():
+        parts = [p.strip() for p in line.split("|")]
+        if parts and parts[0] == name:
+            return JSONResponse({"error": f"'{name}' は既に登録済みです"}, status_code=409)
+    if content and not content.endswith("\n"):
+        content += "\n"
+    content += f"{name} | {url} | {lang}\n"
+    channels_file.write_text(content, encoding="utf-8")
+    return JSONResponse({"ok": True})
+
+
+@app.delete("/api/channels")
+async def delete_channel(name: str):
+    channels_file = ROOT / "channels.txt"
+    if not channels_file.exists():
+        return JSONResponse({"error": "channels.txt が見つかりません"}, status_code=404)
+    lines = channels_file.read_text(encoding="utf-8").splitlines(keepends=True)
+    new_lines = []
+    found = False
+    for line in lines:
+        stripped = line.strip()
+        if stripped and not stripped.startswith("#"):
+            parts = [p.strip() for p in stripped.split("|")]
+            if parts[0] == name:
+                found = True
+                continue
+        new_lines.append(line)
+    if not found:
+        return JSONResponse({"error": f"'{name}' が見つかりません"}, status_code=404)
+    channels_file.write_text("".join(new_lines), encoding="utf-8")
+    return JSONResponse({"ok": True})
+
+
+# ── Phase 2: 実行管理 ────────────────────────────────────────────
+
+class RunBody(BaseModel):
+    limit: int = 10
+    model: str = "large-v3"
+
+
+_VALID_MODELS = {"tiny", "base", "small", "medium", "large", "large-v2", "large-v3", "large-v3-turbo"}
+_YT_SESSION_PREFIX = "yt-learn_"
+
+
+async def _find_yt_session() -> str | None:
+    """tmux ls から yt-learn_ プレフィックスのセッション名を返す。なければ None。"""
+    try:
+        proc = await asyncio.create_subprocess_exec(
+            "tmux", "ls",
+            stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.DEVNULL,
+        )
+        stdout, _ = await asyncio.wait_for(proc.communicate(), timeout=3)
+        if proc.returncode != 0:
+            return None
+        for line in stdout.decode().splitlines():
+            name = line.split(":")[0]
+            if name.startswith(_YT_SESSION_PREFIX):
+                return name
+        return None
+    except Exception:
+        return None
+
+
+@app.get("/api/env")
+async def get_env():
+    return JSONResponse({"is_wsl": IS_WSL})
+
+
+@app.get("/api/run/status")
+async def run_status():
+    session = await _find_yt_session()
+    return JSONResponse({"running": session is not None, "session": session})
+
+
+@app.post("/api/run")
+async def start_run(body: RunBody):
+    if not IS_WSL:
+        return JSONResponse({"error": "WSL 環境でのみ実行できます"}, status_code=400)
+    existing = await _find_yt_session()
+    if existing:
+        return JSONResponse({"error": f"既に実行中です ({existing})"}, status_code=409)
+    limit   = max(1, min(body.limit, 100))
+    model   = body.model if body.model in _VALID_MODELS else "large-v3"
+    session = f"{_YT_SESSION_PREFIX}{datetime.now().strftime('%Y%m%d_%H%M%S')}"
+    proc = await asyncio.create_subprocess_exec(
+        "tmux", "new-session", "-d", "-s", session,
+        f"zsh -ic './autonomous.sh --limit {limit} --model {model}'",
+        cwd=str(ROOT),
+        stdout=asyncio.subprocess.DEVNULL, stderr=asyncio.subprocess.DEVNULL,
+    )
+    await proc.wait()
+    return JSONResponse({"ok": proc.returncode == 0, "session": session})
+
+
+@app.post("/api/run/stop")
+async def stop_run():
+    if not IS_WSL:
+        return JSONResponse({"error": "WSL 環境でのみ実行できます"}, status_code=400)
+    session = await _find_yt_session()
+    if not session:
+        return JSONResponse({"ok": True, "was_running": False})
+    proc = await asyncio.create_subprocess_exec(
+        "tmux", "kill-session", "-t", session,
+        stdout=asyncio.subprocess.DEVNULL, stderr=asyncio.subprocess.DEVNULL,
+    )
+    await proc.wait()
+    return JSONResponse({"ok": True, "was_running": True, "session": session})
+
+
+# ── Phase 2: URL 処理（複数URL対応） ────────────────────────────
+
+class ProcessUrlBody(BaseModel):
+    urls: list[str]
+    channel: str = "misc"
+    lang: str = "ja"
+
+
+async def _await_and_close(proc, f, append_session_end: bool = False) -> None:
+    try:
+        await proc.wait()
+        if append_session_end:
+            ts = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+            f.write(f"\n[session-end] {ts}\n".encode())
+    finally:
+        f.close()
+
+
+async def _bg_process_urls(urls: list[str], channel: str, lang: str) -> None:
+    log_dir = ROOT / "logs" / "process"
+    log_dir.mkdir(parents=True, exist_ok=True)
+    log_file = log_dir / f"{datetime.now().strftime('%Y%m%d_%H%M%S')}_process.log"
+    try:
+        python = shutil.which("python") or "python3"
+        f = open(log_file, "wb")
+        proc = await asyncio.create_subprocess_exec(
+            python, str(ROOT / "transcribe.py"), "process", *urls,
+            "--channel", channel, "--lang", lang,
+            cwd=str(ROOT),
+            stdout=f, stderr=f,
+        )
+        asyncio.ensure_future(_await_and_close(proc, f, append_session_end=True))
+    except Exception:
+        pass
+
+
+@app.post("/api/process-url")
+async def process_url(body: ProcessUrlBody):
+    urls = [u.strip() for u in body.urls if u.strip()]
+    if not urls:
+        return JSONResponse({"error": "URL は必須です"}, status_code=400)
+    asyncio.ensure_future(_bg_process_urls(urls, body.channel or "misc", body.lang or "ja"))
+    return JSONResponse({"ok": True, "message": f"{len(urls)} 件の処理を開始しました", "count": len(urls)})
+
+
+# ── Phase 2: その他 CLI コマンド ──────────────────────────────────
+
+async def _bg_run_script(args: list[str], log_subdir: str, log_prefix: str) -> None:
+    log_dir = ROOT / "logs" / log_subdir
+    log_dir.mkdir(parents=True, exist_ok=True)
+    log_file = log_dir / f"{datetime.now().strftime('%Y%m%d_%H%M%S')}_{log_prefix}.log"
+    try:
+        f = open(log_file, "wb")
+        proc = await asyncio.create_subprocess_exec(
+            *args, cwd=str(ROOT), stdout=f, stderr=f,
+        )
+        asyncio.ensure_future(_await_and_close(proc, f, append_session_end=True))
+    except Exception:
+        pass
+
+
+class TranscribeChannelBody(BaseModel):
+    channel: str
+    limit: int = 10
+    model: str = "large-v3"
+
+
+class TranscribeAllBody(BaseModel):
+    limit: int = 10
+    model: str = "large-v3"
+
+
+class TranscribeSyncBody(BaseModel):
+    only: str = ""
+
+
+class SummarizeBody(BaseModel):
+    threshold: int = 20
+
+
+@app.post("/api/transcribe/channel")
+async def transcribe_channel(body: TranscribeChannelBody):
+    channel = body.channel.strip()
+    if not channel:
+        return JSONResponse({"error": "channel は必須です"}, status_code=400)
+    limit = max(1, min(body.limit, 100))
+    model = body.model if body.model in _VALID_MODELS else "large-v3"
+    python = shutil.which("python") or "python3"
+    args = [python, str(ROOT / "transcribe.py"), "channel", channel,
+            "--sort", "popular", "--limit", str(limit), "--model", model]
+    asyncio.ensure_future(_bg_run_script(args, "transcribe", f"ch_{channel[:20]}"))
+    return JSONResponse({"ok": True, "message": f"'{channel}' の文字起こしを開始しました"})
+
+
+@app.post("/api/transcribe/all")
+async def transcribe_all(body: TranscribeAllBody):
+    limit = max(1, min(body.limit, 100))
+    model = body.model if body.model in _VALID_MODELS else "large-v3"
+    python = shutil.which("python") or "python3"
+    args = [python, str(ROOT / "transcribe.py"), "all",
+            "--sort", "popular", "--limit", str(limit), "--model", model]
+    asyncio.ensure_future(_bg_run_script(args, "transcribe", "all"))
+    return JSONResponse({"ok": True, "message": "全チャンネルの文字起こしを開始しました"})
+
+
+@app.post("/api/transcribe/sync")
+async def transcribe_sync(body: TranscribeSyncBody):
+    python = shutil.which("python") or "python3"
+    args = [python, str(ROOT / "transcribe.py"), "sync"]
+    if body.only in ("transcripts", "summaries"):
+        args += ["--only", body.only]
+    asyncio.ensure_future(_bg_run_script(args, "transcribe", "sync"))
+    return JSONResponse({"ok": True, "message": "Drive 同期を開始しました"})
+
+
+@app.post("/api/summarize")
+async def summarize_all(body: SummarizeBody):
+    threshold = max(1, min(body.threshold, 1000))
+    python = shutil.which("python") or "python3"
+    args = [python, str(ROOT / "summarize.py"), "all", "--threshold", str(threshold)]
+    asyncio.ensure_future(_bg_run_script(args, "summarize", "all"))
+    return JSONResponse({"ok": True, "message": "要約を開始しました"})

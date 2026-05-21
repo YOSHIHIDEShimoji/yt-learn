@@ -31,7 +31,10 @@
         <div class="card">
           <div class="card-title-row">
             <span class="card-title" style="margin-bottom:0">登録チャンネル</span>
-            <button class="refresh-btn" onclick="reloadChannels()">↻ 更新</button>
+            <div style="display:flex;gap:6px">
+              <button class="refresh-btn" onclick="openAddChannelModal()">+ 追加</button>
+              <button class="refresh-btn" onclick="reloadChannels()">↻ 更新</button>
+            </div>
           </div>
           <div class="channel-list" id="channel-list">
             <div class="placeholder"><div class="placeholder-icon">📡</div><span>読み込み中…</span></div>
@@ -39,13 +42,60 @@
         </div>
       </div>
       <div>
+        <!-- クイック実行 -->
         <div class="card">
-          <div class="card-title">実行パネル</div>
-          <div class="placeholder"><div class="placeholder-icon">🚀</div><span>Phase 2 で実装予定</span></div>
+          <div class="card-title-row">
+            <span class="card-title" style="margin-bottom:0">クイック実行</span>
+            <span id="run-badge" class="badge badge-gray">確認中…</span>
+          </div>
+          <div id="run-wsl-warn" class="run-warn" style="display:none">WSL 環境専用機能です</div>
+          <div class="run-btns" style="margin-top:4px">
+            <button id="run-start-btn" class="btn-primary" onclick="startRun()">▶ 起動</button>
+            <button id="run-stop-btn" class="btn-danger" style="display:none" onclick="stopRun()">■ 停止</button>
+          </div>
         </div>
+
+        <!-- URL 処理 -->
         <div class="card">
-          <div class="card-title">URL 単発処理</div>
-          <div class="placeholder"><div class="placeholder-icon">🎬</div><span>Phase 2 で実装予定</span></div>
+          <div class="card-title">URL 処理</div>
+          <div class="run-form">
+            <div class="form-row">
+              <label class="form-label">YouTube URL（1行1件、複数可）</label>
+              <textarea id="proc-urls" class="form-input form-textarea" rows="3"
+                placeholder="https://www.youtube.com/watch?v=...&#10;https://www.youtube.com/watch?v=..."></textarea>
+            </div>
+            <div class="form-row">
+              <label class="form-label">チャンネル名（保存先）</label>
+              <select id="proc-channel" class="form-input"></select>
+            </div>
+            <div class="form-row">
+              <label class="form-label">言語</label>
+              <select id="proc-lang" class="form-input">
+                <option value="ja">ja</option>
+                <option value="en">en</option>
+              </select>
+            </div>
+          </div>
+          <div class="run-btns">
+            <button id="proc-submit-btn" class="btn-primary" onclick="processUrl()">▶ 処理開始</button>
+          </div>
+          <div id="proc-result" class="proc-result"></div>
+        </div>
+
+        <!-- その他 -->
+        <div class="card">
+          <div class="card-title">その他</div>
+          <div class="run-form">
+            <div class="form-row">
+              <label class="form-label">Threshold（summarize 用、単語数未満をスキップ）</label>
+              <input id="batch-threshold" type="number" class="form-input" value="20" min="1" max="1000">
+            </div>
+          </div>
+          <div class="run-btns" style="flex-wrap:wrap;gap:6px">
+            <button class="btn-primary" onclick="summarizeAll()">▶ Summarize All</button>
+            <button class="btn-primary" onclick="transcribeSync()">↻ Drive Sync</button>
+          </div>
+          <div id="batch-result" class="proc-result"></div>
         </div>
       </div>
     </div>
@@ -125,6 +175,47 @@
   </div>
 
 </main>
+
+<!-- チャンネル追加モーダル -->
+<div id="add-channel-modal" class="modal-backdrop" style="display:none"
+     onclick="if(event.target===this)closeAddChannelModal()">
+  <div class="modal-box">
+    <div class="modal-title">チャンネルを追加</div>
+    <div class="run-form">
+      <div class="form-row">
+        <label class="form-label">チャンネル名</label>
+        <input id="modal-name" type="text" class="form-input" placeholder="ひろゆき">
+      </div>
+      <div class="form-row">
+        <label class="form-label">YouTube URL</label>
+        <input id="modal-url" type="url" class="form-input" placeholder="https://www.youtube.com/@...">
+      </div>
+      <div class="form-row">
+        <label class="form-label">言語</label>
+        <select id="modal-lang" class="form-input">
+          <option value="ja">ja</option>
+          <option value="en">en</option>
+        </select>
+      </div>
+    </div>
+    <div id="modal-error" class="modal-error"></div>
+    <div class="modal-btns">
+      <button class="btn-secondary" onclick="closeAddChannelModal()">キャンセル</button>
+      <button class="btn-primary" onclick="submitAddChannel()">追加</button>
+    </div>
+  </div>
+</div>
+
+<!-- 汎用確認ダイアログ -->
+<div id="confirm-modal" class="modal-backdrop" style="display:none">
+  <div class="modal-box">
+    <div class="modal-title" id="confirm-message"></div>
+    <div class="modal-btns">
+      <button class="btn-secondary" id="confirm-cancel">キャンセル</button>
+      <button class="btn-danger"    id="confirm-ok">削除</button>
+    </div>
+  </div>
+</div>
 
 <script src="/static/marked.min.js"></script>
 <script src="/static/app.js"></script>
