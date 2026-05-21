@@ -129,7 +129,7 @@ async def _fetch_channel_drive_urls_bg(channel: str) -> None:
     try:
         proc = await asyncio.create_subprocess_exec(
             "rclone", "lsjson", "--files-only",
-            f"gdrive:yt-learn/transcripts/{channel}/",
+            f"gdrive:yt-learn/transcripts/{channel.replace('/', '_')}/",
             stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE,
         )
         stdout, _ = await proc.communicate()  # タイムアウトなし（大フォルダ対応）
@@ -237,7 +237,7 @@ async def get_channel_drive_urls_api():
             parts = [p.strip() for p in line.split("|")]
             if len(parts) >= 2:
                 names.append(parts[0])
-    urls = await asyncio.gather(*[_rclone_link(f"gdrive:yt-learn/transcripts/{n}") for n in names])
+    urls = await asyncio.gather(*[_rclone_link(f"gdrive:yt-learn/transcripts/{n.replace('/', '_')}") for n in names])
     return JSONResponse({"drive_urls": dict(zip(names, urls))})
 
 
