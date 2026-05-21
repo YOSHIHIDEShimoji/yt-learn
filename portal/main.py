@@ -30,6 +30,8 @@ templates = Jinja2Templates(directory=PORTAL_DIR / "templates")
 # ── Drive キャッシュ ──────────────────────────────────────────
 _rclone_link_cache: dict[str, str] = {}          # path → url
 _drive_file_cache: dict[str, dict[str, str]] = {}  # channel → {title: url}
+_drive_file_cache_ts: dict[str, float] = {}      # channel → epoch seconds
+DRIVE_FILE_CACHE_TTL = 60.0                       # 秒
 
 
 async def _rclone_link(path: str) -> str:
@@ -74,6 +76,7 @@ async def _fetch_channel_drive_urls_bg(channel: str) -> None:
                 title = name[:-3] if name.endswith(".md") else name
                 result[title] = f"https://drive.google.com/file/d/{file_id}/view"
         _drive_file_cache[channel] = result
+        _drive_file_cache_ts[channel] = time.time()
     except Exception:
         pass  # 失敗してもキャッシュしない → 次回リトライ
     finally:
@@ -81,13 +84,13 @@ async def _fetch_channel_drive_urls_bg(channel: str) -> None:
 
 
 def _get_channel_drive_urls(channel: str) -> dict[str, str]:
-    """キャッシュがあれば返す。なければバックグラウンドフェッチを開始して空を返す。"""
-    if channel in _drive_file_cache:
-        return _drive_file_cache[channel]
-    if channel not in _drive_fetch_running and shutil.which("rclone"):
+    """キャッシュ TTL 60 秒。スタル時は古い値を返しつつバックグラウンドで再取得。"""
+    cached = _drive_file_cache.get(channel)
+    fresh = cached is not None and (time.time() - _drive_file_cache_ts.get(channel, 0)) < DRIVE_FILE_CACHE_TTL
+    if not fresh and channel not in _drive_fetch_running and shutil.which("rclone"):
         _drive_fetch_running.add(channel)
         asyncio.ensure_future(_fetch_channel_drive_urls_bg(channel))
-    return {}
+    return cached if cached is not None else {}
 
 
 # ── ログ解析 ──────────────────────────────────────────────────
