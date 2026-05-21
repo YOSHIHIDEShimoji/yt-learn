@@ -241,12 +241,16 @@ document.addEventListener("DOMContentLoaded", () => {
     try {
       const { logs } = await api("/api/logs");
       if (!logs.length) { el.innerHTML = placeholder("📭", "ログファイルなし"); return; }
-      el.innerHTML = logs.map(l => `
+      el.innerHTML = logs.map(l => {
+        const badgeCls = !l.is_done ? "badge-blue" : l.has_error ? "badge-err" : "badge-gray";
+        const badgeText = !l.is_done ? "live" : l.has_error ? "error" : "done";
+        return `
         <div class="channel-item log-file-item" data-path="${esc(l.path)}" onclick="openLog(this)">
-          <span class="badge ${l.is_done ? 'badge-gray' : 'badge-blue'}">${l.is_done ? 'done' : 'live'}</span>
+          <span class="badge ${badgeCls}">${badgeText}</span>
           <span class="channel-name">${esc(l.path)}</span>
           <span style="color:var(--text-faint);font-size:11px;flex-shrink:0">${(l.size/1024).toFixed(1)} KB</span>
-        </div>`).join("");
+        </div>`;
+      }).join("");
     } catch { el.innerHTML = placeholder("⚠️", "読み込み失敗"); }
   }
 

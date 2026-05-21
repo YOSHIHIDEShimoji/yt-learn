@@ -263,14 +263,17 @@ async def get_logs():
                     session_ended = "[session-end]" in tail
                     recently_modified = (now - f.stat().st_mtime) < live_threshold
                     is_done = session_ended or not recently_modified
+                    has_error = "[error]" in tail
                 except Exception:
                     is_done = True
+                    has_error = False
                 log_files.append({
                     "name": f.name,
                     "path": str(f.relative_to(ROOT)),
                     "size": f.stat().st_size,
                     "mtime": f.stat().st_mtime,
                     "is_done": is_done,
+                    "has_error": has_error,
                 })
 
     # live を先頭、次いで done（両グループ内は mtime 降順）

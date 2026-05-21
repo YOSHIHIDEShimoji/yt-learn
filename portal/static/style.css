@@ -296,6 +296,7 @@ body {
 .badge-green { background: var(--green-dim); color: var(--green); }
 .badge-warn  { background: var(--warn-dim);  color: var(--warn); }
 .badge-gray  { background: var(--surface);   color: var(--text-dim); }
+.badge-err   { background: rgba(255,59,48,.15); color: var(--err); }
 
 /* ── card-title-row (タイトル + ボタン横並び) ── */
 .card-title-row {
