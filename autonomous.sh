@@ -1,14 +1,15 @@
 #!/usr/bin/env bash
-# autonomous.sh — DL/文字起こし自律ループ（rate-limit自動回復）
+# autonomous.sh — DL/文字起こし/要約 自律ループ
 #
 # 使い方:
 #   ./autonomous.sh                          # デフォルト設定で起動
 #   ./autonomous.sh --limit 20 --model large-v3
-#   ./autonomous.sh --dl-sleep 60 --probe-interval 60
 #
 # 動作:
 #   - DLワーカー（バックグラウンド）: チャンネルを巡回して queue/ に音声を蓄積
+#     キュー200件超でDL一時停止 → 100件未満で再開（バックプレッシャー）
 #     rate-limit 検知 → プローブループで解除を能動検知 → 自動再開
+#     全チャンネル一周ごとに summarize.py all を実行
 #   - 文字起こしワーカー（フォアグラウンド）: queue/ を常時ドレイン（GPU常時稼働）
 #   - Ctrl+C で両ワーカーを安全停止 → [session-end] を logs/autonomous/*.log に追記
 

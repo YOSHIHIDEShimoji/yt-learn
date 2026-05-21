@@ -10,6 +10,7 @@
 import argparse
 import json
 import os
+import re
 import shutil
 import sys
 from datetime import date
@@ -31,7 +32,6 @@ def _err(msg: str) -> None:
 
 
 def _sanitize(name: str) -> str:
-    import re
     name = re.sub(r'[\\/:*?"<>|]', "_", name)
     name = name.strip()
     encoded = name.encode("utf-8")
@@ -257,11 +257,10 @@ def main() -> None:
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""\
 ローカルLLM（Ollama）を使う場合:
-  .env に LOCAL_LLM_URL=http://localhost:11434 を設定する。
-  Mac から実行する場合は事前に SSHトンネルが必要:
-    ssh -f -N -L 11434:localhost:11434 win
-  run_summarize.sh 経由では自動でトンネルが張られる。
-  WSL から実行する場合はトンネル不要（自動で Gemini にフォールバック）。
+  .env に LOCAL_LLM_URL と LOCAL_LLM_MODEL を設定する。
+  Mac: LOCAL_LLM_URL=http://<Windows-TailscaleIP>:11434（トンネル不要）
+  WSL: LOCAL_LLM_URL=http://localhost:11434（トンネル不要）
+  未設定または接続失敗時は Gemini にフォールバック。
 
 examples:
   # 特定チャンネルのサマリー更新
