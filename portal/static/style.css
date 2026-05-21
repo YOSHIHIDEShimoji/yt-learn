@@ -6,6 +6,12 @@
   --border-strong: rgba(255, 255, 255, 0.18);
   --blue: #0a84ff;
   --blue-dim: rgba(10, 132, 255, 0.15);
+  --green: #30d158;
+  --green-dim: rgba(48, 209, 88, 0.15);
+  --warn: #ffd60a;
+  --warn-dim: rgba(255, 214, 10, 0.15);
+  --err: #ff453a;
+  --err-dim: rgba(255, 69, 58, 0.15);
   --text: #e8e8ed;
   --text-dim: rgba(232, 232, 237, 0.55);
   --text-faint: rgba(232, 232, 237, 0.30);
@@ -229,9 +235,175 @@ body {
   font-size: 11px;
   font-weight: 600;
 }
-.badge-blue  { background: var(--blue-dim); color: var(--blue); }
-.badge-green { background: rgba(48,209,88,.15); color: #30d158; }
-.badge-gray  { background: var(--surface); color: var(--text-dim); }
+.badge-blue  { background: var(--blue-dim);  color: var(--blue); }
+.badge-green { background: var(--green-dim); color: var(--green); }
+.badge-warn  { background: var(--warn-dim);  color: var(--warn); }
+.badge-gray  { background: var(--surface);   color: var(--text-dim); }
+
+/* ── card-title-row (タイトル + ボタン横並び) ── */
+.card-title-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 16px;
+}
+
+.refresh-btn {
+  background: var(--surface-hover);
+  border: 1px solid var(--border);
+  color: var(--text-dim);
+  font-size: 12px;
+  padding: 4px 10px;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s;
+}
+.refresh-btn:hover { background: var(--blue-dim); color: var(--blue); }
+
+/* ── STATUS header ── */
+.status-header-inner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+.status-script {
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--text);
+}
+.status-session {
+  font-size: 12px;
+  color: var(--text-faint);
+  margin-top: 4px;
+  font-family: "SF Mono", "Menlo", monospace;
+}
+.status-header-right {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.status-phase {
+  font-size: 12px;
+  color: var(--text-dim);
+}
+
+/* ── Video cards (STATUS left panel) ── */
+.video-card {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 10px 12px;
+  border-radius: var(--radius-sm);
+  background: rgba(255,255,255,0.03);
+  border: 1px solid var(--border);
+  margin-bottom: 8px;
+}
+.video-info { min-width: 0; flex: 1; }
+.video-title {
+  font-size: 12.5px;
+  font-weight: 500;
+  color: var(--text);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.video-channel {
+  font-size: 11px;
+  color: var(--text-faint);
+  margin-top: 2px;
+}
+
+/* ── Stats grid (STATUS right panel) ── */
+.stat-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+.stat-item {
+  background: rgba(255,255,255,0.03);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 10px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.stat-label { font-size: 11px; color: var(--text-faint); text-transform: uppercase; letter-spacing: 0.4px; }
+.stat-val   { font-size: 18px; font-weight: 700; color: var(--text); }
+.stat-green { color: var(--green); }
+.stat-warn  { color: var(--warn); }
+.stat-err   { color: var(--err); }
+
+/* ── LOGS: clickable log file ── */
+.log-file-item { cursor: pointer; }
+.log-file-item:hover { background: var(--surface-hover); }
+.log-file-item.active-log {
+  background: var(--blue-dim);
+  border-color: rgba(10,132,255,0.3);
+}
+.log-file-item.active-log .channel-name { color: var(--blue); }
+
+/* ── Markdown (README) ── */
+.markdown-body {
+  color: var(--text);
+  line-height: 1.7;
+  font-size: 14px;
+}
+.markdown-body h1, .markdown-body h2, .markdown-body h3,
+.markdown-body h4, .markdown-body h5, .markdown-body h6 {
+  color: var(--text);
+  font-weight: 600;
+  margin: 1.4em 0 0.5em;
+  padding-bottom: 0.2em;
+}
+.markdown-body h1 { font-size: 1.8em; border-bottom: 1px solid var(--border); }
+.markdown-body h2 { font-size: 1.4em; border-bottom: 1px solid var(--border); }
+.markdown-body h3 { font-size: 1.15em; }
+.markdown-body p  { margin: 0.7em 0; }
+.markdown-body ul, .markdown-body ol { padding-left: 1.6em; margin: 0.5em 0; }
+.markdown-body li { margin: 0.25em 0; }
+.markdown-body a  { color: var(--blue); text-decoration: none; }
+.markdown-body a:hover { text-decoration: underline; }
+.markdown-body code {
+  font-family: "SF Mono", "Menlo", monospace;
+  font-size: 0.875em;
+  background: rgba(255,255,255,0.08);
+  border-radius: 4px;
+  padding: 0.15em 0.4em;
+  color: #e9a07a;
+}
+.markdown-body pre {
+  background: rgba(0,0,0,0.35);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 14px 16px;
+  overflow-x: auto;
+  margin: 0.8em 0;
+}
+.markdown-body pre code {
+  background: transparent;
+  padding: 0;
+  color: var(--text-dim);
+  font-size: 0.8em;
+}
+.markdown-body blockquote {
+  border-left: 3px solid var(--blue);
+  padding-left: 12px;
+  color: var(--text-dim);
+  margin: 0.8em 0;
+}
+.markdown-body table { border-collapse: collapse; width: 100%; margin: 0.8em 0; font-size: 13px; }
+.markdown-body th, .markdown-body td {
+  border: 1px solid var(--border);
+  padding: 6px 12px;
+  text-align: left;
+}
+.markdown-body th { background: rgba(255,255,255,0.05); font-weight: 600; }
+.markdown-body tr:nth-child(even) td { background: rgba(255,255,255,0.02); }
+.markdown-body img { max-width: 100%; border-radius: var(--radius-sm); }
+.markdown-body hr { border: none; border-top: 1px solid var(--border); margin: 1.5em 0; }
 
 /* ── Scrollbar ── */
 ::-webkit-scrollbar { width: 6px; height: 6px; }

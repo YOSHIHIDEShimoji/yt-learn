@@ -29,27 +29,18 @@
         <div class="card">
           <div class="card-title">登録チャンネル</div>
           <div class="channel-list" id="channel-list">
-            <div class="placeholder">
-              <div class="placeholder-icon">📡</div>
-              <span>チャンネルを読み込んでいます…</span>
-            </div>
+            <div class="placeholder"><div class="placeholder-icon">📡</div><span>読み込み中…</span></div>
           </div>
         </div>
       </div>
       <div>
         <div class="card">
           <div class="card-title">実行パネル</div>
-          <div class="placeholder">
-            <div class="placeholder-icon">🚀</div>
-            <span>Phase 2 で実装予定</span>
-          </div>
+          <div class="placeholder"><div class="placeholder-icon">🚀</div><span>Phase 2 で実装予定</span></div>
         </div>
         <div class="card">
           <div class="card-title">URL 単発処理</div>
-          <div class="placeholder">
-            <div class="placeholder-icon">🎬</div>
-            <span>Phase 2 で実装予定</span>
-          </div>
+          <div class="placeholder"><div class="placeholder-icon">🎬</div><span>Phase 2 で実装予定</span></div>
         </div>
       </div>
     </div>
@@ -57,16 +48,30 @@
 
   <!-- STATUS -->
   <div id="pane-status" class="pane">
-    <div class="card">
-      <div class="card-title">autonomous.sh — 直近ログ（末尾 50 行）</div>
-      <div class="log-output" id="status-log">STATUS タブをクリックして読み込みます…</div>
+    <!-- ヘッダー -->
+    <div class="card status-header-card" id="status-header-card">
+      <div class="placeholder"><div class="placeholder-icon">⏳</div><span>読み込み中…</span></div>
     </div>
-    <div class="card">
-      <div class="card-title">リアルタイム監視</div>
-      <div class="placeholder">
-        <div class="placeholder-icon">📡</div>
-        <span>Phase 3 で WebSocket リアルタイム更新を実装予定</span>
+
+    <!-- 左右パネル -->
+    <div class="grid-2">
+      <div class="card">
+        <div class="card-title">最近処理した動画</div>
+        <div id="status-videos"><div class="placeholder"><div class="placeholder-icon">🎞️</div><span>読み込み中…</span></div></div>
       </div>
+      <div class="card">
+        <div class="card-title">統計</div>
+        <div id="status-stats"><div class="placeholder"><div class="placeholder-icon">📊</div><span>読み込み中…</span></div></div>
+      </div>
+    </div>
+
+    <!-- ログ末尾 -->
+    <div class="card">
+      <div class="card-title-row">
+        <span class="card-title" style="margin-bottom:0">直近ログ（末尾 50 行）</span>
+        <button class="refresh-btn" onclick="reloadStatus()">↻ 更新</button>
+      </div>
+      <div class="log-output" id="status-log">STATUS タブを開くと読み込みます</div>
     </div>
   </div>
 
@@ -74,22 +79,25 @@
   <div id="pane-library" class="pane">
     <div class="card">
       <div class="card-title">トランスクリプトライブラリ</div>
-      <div class="placeholder">
-        <div class="placeholder-icon">📚</div>
-        <span>Phase 4 で全文検索付きライブラリを実装予定</span>
-      </div>
+      <div class="placeholder"><div class="placeholder-icon">📚</div><span>Phase 4 で全文検索付きライブラリを実装予定</span></div>
     </div>
   </div>
 
   <!-- LOGS -->
   <div id="pane-logs" class="pane">
-    <div class="card">
-      <div class="card-title">ログファイル一覧</div>
-      <div class="channel-list" id="log-list">
-        <div class="placeholder">
-          <div class="placeholder-icon">📄</div>
-          <span>LOGS タブをクリックして読み込みます…</span>
+    <div class="grid-2" style="align-items:start">
+      <div class="card">
+        <div class="card-title">ログファイル一覧</div>
+        <div class="channel-list" id="log-list">
+          <div class="placeholder"><div class="placeholder-icon">📄</div><span>読み込み中…</span></div>
         </div>
+      </div>
+      <div class="card" id="log-viewer-card" style="display:none">
+        <div class="card-title-row">
+          <span class="card-title" id="log-viewer-title" style="margin-bottom:0"></span>
+          <button class="refresh-btn" onclick="closeLogViewer()">✕ 閉じる</button>
+        </div>
+        <div class="log-output" id="log-viewer-content"></div>
       </div>
     </div>
   </div>
@@ -98,12 +106,13 @@
   <div id="pane-readme" class="pane">
     <div class="card">
       <div class="card-title">README.md</div>
-      <pre class="readme-content" id="readme-body">README タブをクリックして読み込みます…</pre>
+      <div class="markdown-body" id="readme-body">読み込み中…</div>
     </div>
   </div>
 
 </main>
 
+<script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
 <script src="/static/app.js"></script>
 </body>
 </html>

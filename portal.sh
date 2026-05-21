@@ -58,11 +58,15 @@ if [[ "$(uname)" == "Darwin" ]]; then
 elif grep -qi microsoft /proc/version 2>/dev/null; then
   cd "$(dirname "$(realpath "$0")")"
 
+  # WSL IP（Tailscale ミラー）を取得
+  WSL_IP=$(hostname -I | cut -d" " -f1)
+
   # すでにサーバーが動いていればブラウザだけ開く
   if curl -s --max-time 1 "http://localhost:${PORT}/" > /dev/null 2>&1; then
     echo "[portal] サーバーはすでに起動中です"
-    cmd.exe /c start "http://localhost:${PORT}" 2>/dev/null
-    echo "[portal] ブラウザを開きました: http://localhost:${PORT}"
+    powershell.exe -Command "Start-Process 'http://${WSL_IP}:${PORT}'" 2>/dev/null \
+      || cmd.exe /c "start \"\" \"http://${WSL_IP}:${PORT}\"" 2>/dev/null || true
+    echo "[portal] ブラウザを開きました: http://${WSL_IP}:${PORT}"
     echo "[portal] サーバー停止: tmux kill-session -t ${TMUX_SESSION}"
     exit 0
   fi
