@@ -1248,10 +1248,6 @@ AI要約は別スクリプト:
     p_drain = sub.add_parser("drain-queue", help="queue/ の音声を文字起こし（autonomous.sh 用）")
     p_drain.add_argument("--model", default=WHISPER_MODEL,
                          choices=["tiny", "base", "small", "medium", "large", "large-v2", "large-v3", "large-v3-turbo"])
-    p_drain.add_argument("--idle-polls", type=int, default=3,
-                         help="キュー空を何回検知したら終了するか (default: 3)")
-    p_drain.add_argument("--idle-sleep", type=int, default=10,
-                         help="キュー空時の待機秒数 (default: 10)")
 
     sub.add_parser("refresh-cookies", help="Windows Chrome からクッキーを取得して cookies.txt を更新")
 
@@ -1314,7 +1310,7 @@ AI要約は別スクリプト:
             _git_push_cache()
 
     elif args.cmd == "drain-queue":
-        count = _drain_queue_all(args.model, args.idle_polls, args.idle_sleep)
+        count = _drain_queue_all(args.model)
         if count == 0:
             sys.exit(2)
 

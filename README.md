@@ -226,16 +226,21 @@ python transcribe.py all --sort popular --limit 5 --force
 
 ### AI要約
 
-```bash
-# 特定チャンネル（未処理20本未満はスキップ）
-python summarize.py "メンタリスト DaiGo" --threshold 20
+autonomous.sh が全チャンネル一周ごとに自動実行する。手動で実行する場合:
 
+```bash
 # 全チャンネル一括
-python summarize.py all --threshold 20
+python summarize.py all
 
 # 処理済みを無視して全件再生成
 python summarize.py "メンタリスト DaiGo" --force
 ```
+
+| オプション | デフォルト | 説明 |
+|---|---|---|
+| `target` | 必須 | チャンネル名 or `all` |
+| `--force` | false | 処理済みを無視して全件再生成 |
+| `--threshold N` | 0 | N件未満のチャンネルをスキップ |
 
 ### Google Drive 同期
 
@@ -279,6 +284,15 @@ DL（バックグラウンド）と文字起こし（フォアグラウンド）
 
 # Ctrl+C で安全停止 → [session-end] を logs/autonomous/*.log に記録
 ```
+
+**autonomous.sh オプション:**
+
+| オプション | デフォルト | 説明 |
+|---|---|---|
+| `--limit N` | 20 | チャンネルあたりのDL上限 |
+| `--model MODEL` | large-v3 | Whisperモデル |
+| `--dl-sleep N` | 60s | チャンネル間スリープ |
+| `--probe-interval N` | 60s | rate-limit復帰チェック間隔 |
 
 ログ確認:
 

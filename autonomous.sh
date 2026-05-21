@@ -19,7 +19,6 @@ DL_SLEEP=60          # チャンネル間DLスリープ(s)
 LIMIT=20             # チャンネルあたりDL上限
 MODEL=large-v3
 PROBE_INTERVAL=60    # rate-limit中の復帰チェック間隔(s)
-DRAIN_POLL=10        # drain-queue終了後の待機(s)
 QUEUE_HIGH=200       # キューがこの件数以上でDL一時停止
 QUEUE_LOW=100        # キューがこの件数を下回ったらDL再開
 
@@ -36,7 +35,6 @@ DL が全チャンネルを一周するたびに summarize.py を実行。
   --model MODEL        Whisper モデル名 (default: ${MODEL})
   --dl-sleep N         チャンネル間DLスリープ秒数 (default: ${DL_SLEEP}s)
   --probe-interval N   rate-limit 復帰チェック間隔秒数 (default: ${PROBE_INTERVAL}s)
-  --drain-poll N       drain-queue 完了後の待機秒数 (default: ${DRAIN_POLL}s)
   -h, --help           このヘルプを表示
 
 例:
@@ -52,8 +50,7 @@ while [[ $# -gt 0 ]]; do
     --model)          MODEL="$2";          shift 2 ;;
     --dl-sleep)       DL_SLEEP="$2";       shift 2 ;;
     --probe-interval) PROBE_INTERVAL="$2"; shift 2 ;;
-    --drain-poll)     DRAIN_POLL="$2";     shift 2 ;;
-    *) echo "Unknown option: $1"; echo "Usage: $0 [--limit N] [--model MODEL] [--dl-sleep N] [--probe-interval N] [--drain-poll N]"; exit 1 ;;
+    *) echo "Unknown option: $1"; echo "Usage: $0 [--limit N] [--model MODEL] [--dl-sleep N] [--probe-interval N]"; exit 1 ;;
   esac
 done
 
@@ -76,6 +73,29 @@ stamp() {
 
 queue_size() {
   find "$SCRIPT_DIR/queue" \( -name "*.m4a" -o -name "*.webm" -o -name "*.opus" -o -name "*.mp4" \) 2>/dev/null | wc -l
+}
+
+git_push_cache() {
+  local idx_files=()
+  while IFS= read -r f; do
+    idx_files+=("$f")
+  done < <(find "$SCRIPT_DIR/transcripts" -name "_index.json" 2>/dev/null)
+
+  local changed
+  changed=$(git -C "$SCRIPT_DIR" status --porcelain cache/ "${idx_files[@]}" 2>/dev/null)
+  if [[ -z "$changed" ]]; then
+    log "[git] 変更なし、スキップ"
+    return
+  fi
+
+  git -C "$SCRIPT_DIR" add cache/ "${idx_files[@]}"
+  git -C "$SCRIPT_DIR" commit -m "chore: update cache ($(date '+%Y-%m-%d'))" 2>&1 \
+    | stamp | tee -a "$LOG_FILE"
+  git -C "$SCRIPT_DIR" pull --rebase -X ours 2>&1 \
+    | stamp | tee -a "$LOG_FILE" || { log "[git] rebase失敗"; return; }
+  git -C "$SCRIPT_DIR" push 2>&1 \
+    | stamp | tee -a "$LOG_FILE" \
+    && log "[git] push完了" || log "[git] push失敗"
 }
 
 cleanup() {
@@ -146,12 +166,17 @@ dl_worker() {
       sleep "$DL_SLEEP"
     done
 
-    # 全チャンネルを一周したら要約を実行（rate-limit で中断した場合はスキップ）
+    # 全チャンネルを一周したら要約・git pushを実行（rate-limit で中断した場合はスキップ）
     if ! $rate_limited; then
       WORKER="[SUM]"
       log "DL 1周完了 → summarize.py 実行"
       python "$SCRIPT_DIR/summarize.py" all 2>&1 \
         | stamp | tee -a "$LOG_FILE"
+
+      WORKER="[GIT]"
+      log "cache/index を push（WSL優先）"
+      git_push_cache
+
       WORKER="[DL]"
     fi
 
@@ -186,7 +211,7 @@ transcribe_worker() {
   WORKER="[TX]"
   while true; do
     python "$SCRIPT_DIR/transcribe.py" drain-queue \
-      --model "$MODEL" --idle-polls 3 --idle-sleep 10 2>&1 \
+      --model "$MODEL" 2>&1 \
       | stamp | tee -a "$LOG_FILE"
     exit_code=${PIPESTATUS[0]}
 
@@ -194,7 +219,7 @@ transcribe_worker() {
       log "[transcribe] エラー (exit=${exit_code}): 30s 待機後にリトライ..."
       sleep 30
     else
-      sleep "$DRAIN_POLL"
+      sleep 10
     fi
   done
 }
