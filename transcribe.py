@@ -51,7 +51,7 @@ def _setup_log() -> None:
 def _teardown_log() -> None:
     global _log_file
     if _log_file:
-        _log_write(f"=== 終了 {datetime.now().strftime('%Y-%m-%d %H:%M:%S')} {'=' * 30}\n")
+        _log_write(f"[session-end] {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n")
         _log_file.close()
         _log_file = None
 
