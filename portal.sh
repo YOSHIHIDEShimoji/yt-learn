@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # portal.sh — yt-learn Portal 起動スクリプト
-# Mac から実行: WSL でサーバー起動 + SSH トンネル + Mac ブラウザを開く
+# Mac から実行: WSL でサーバー起動 → WSL の Tailscale IP でブラウザを開く
 # WSL から実行: サーバーをローカルで起動 + Windows ブラウザを開く
 
 set -euo pipefail
@@ -13,49 +13,38 @@ TMUX_SESSION="yt-portal"
 # Mac モード
 # ──────────────────────────────────────────
 if [[ "$(uname)" == "Darwin" ]]; then
-  echo "[portal] Mac モード — WSL でサーバーを起動してトンネルを張ります"
+  echo "[portal] Mac モード"
+
+  # WSL の IP を取得（Tailscale ミラーネットワーク）
+  WSL_IP=$(ssh win "wsl -- bash -c 'hostname -I | cut -d\" \" -f1'" 2>/dev/null | tr -d '\r')
+  if [[ -z "$WSL_IP" ]]; then
+    echo "[portal] エラー: WSL の IP を取得できませんでした"
+    exit 1
+  fi
+  echo "[portal] WSL IP: ${WSL_IP}"
 
   # WSL 側でサーバーを tmux セッションで起動
-  # portal-server.sh が pyenv を自前初期化するので zsh -ic 不要
   echo "[portal] WSL: tmux セッション '$TMUX_SESSION' を起動中…"
-  ssh win "wsl -- bash -c 'cd ~/my-projects/${PROJECT} && tmux kill-session -t ${TMUX_SESSION} 2>/dev/null; tmux new-session -d -s ${TMUX_SESSION} ./portal-server.sh'"
+  ssh win "wsl -- bash -c 'cd ~/my-projects/${PROJECT} && tmux kill-session -t ${TMUX_SESSION} 2>/dev/null; tmux new-session -d -s ${TMUX_SESSION} ./portal-server.sh'" 2>/dev/null
 
-  # サーバーが起動するまで待機（最大 15 秒）
+  # サーバー起動待機（最大 15 秒）
   echo "[portal] サーバー起動待機中…"
   for i in $(seq 1 15); do
-    if ssh win "wsl -- bash -c 'curl -s http://localhost:${PORT}/ > /dev/null 2>&1'" 2>/dev/null; then
+    if curl -s --max-time 1 "http://${WSL_IP}:${PORT}/" > /dev/null 2>&1; then
       echo "[portal] サーバー起動確認 (${i}秒)"
       break
     fi
     sleep 1
   done
 
-  # SSH トンネルをバックグラウンドで張る（既存は先に kill）
-  existing=$(pgrep -f "ssh -L ${PORT}:localhost:${PORT} win" 2>/dev/null || true)
-  if [[ -n "$existing" ]]; then
-    kill "$existing" 2>/dev/null || true
-    echo "[portal] 既存トンネルを終了しました"
-  fi
+  # 既存の不要な SSH トンネルを終了
+  pkill -f "ssh -L ${PORT}:localhost:${PORT} win" 2>/dev/null || true
 
-  echo "[portal] SSH トンネル (Mac:${PORT} → Windows → WSL:${PORT}) を起動中…"
-  # -o LogLevel=ERROR で Windows バナーを抑制, 2>/dev/null でも抑制
-  ssh -o LogLevel=ERROR -L "${PORT}:localhost:${PORT}" win -N -f 2>/dev/null
+  echo "[portal] ブラウザを開きます: http://${WSL_IP}:${PORT}"
+  open "http://${WSL_IP}:${PORT}"
 
-  # トンネル経由でサーバーに繋がるか確認
-  sleep 1
-  if curl -s --max-time 3 "http://localhost:${PORT}/" > /dev/null 2>&1; then
-    echo "[portal] トンネル疎通確認 OK"
-  else
-    echo "[portal] 警告: サーバーに繋がりませんでした。WSL側のログを確認してください:"
-    echo "  ssh win \"wsl -- bash -c 'tmux attach -t ${TMUX_SESSION}'\""
-  fi
-
-  echo "[portal] ブラウザを開きます: http://localhost:${PORT}"
-  open "http://localhost:${PORT}"
-
-  echo "[portal] 完了。トンネルはバックグラウンドで動いています。"
-  echo "[portal] 停止するには: pkill -f 'ssh -L ${PORT}:localhost:${PORT} win'"
-  echo "[portal] WSL サーバー停止: ssh win \"wsl -- bash -c 'tmux kill-session -t ${TMUX_SESSION}'\""
+  echo "[portal] 完了"
+  echo "[portal] サーバー停止: ssh win \"wsl -- bash -c 'tmux kill-session -t ${TMUX_SESSION}'\""
 
 # ──────────────────────────────────────────
 # WSL モード
