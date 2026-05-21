@@ -28,13 +28,44 @@ app.mount("/static", _NoCacheStaticFiles(directory=PORTAL_DIR / "static"), name=
 templates = Jinja2Templates(directory=PORTAL_DIR / "templates")
 
 # ── Drive キャッシュ ──────────────────────────────────────────
+DRIVE_LINK_CACHE_FILE = PORTAL_DIR / "drive_link_cache.json"
+
 _rclone_link_cache: dict[str, str] = {}          # path → url
 _rclone_link_cache_ts: dict[str, float] = {}     # path → epoch seconds
 _drive_file_cache: dict[str, dict[str, str]] = {}  # channel → {title: url}
 _drive_file_cache_ts: dict[str, float] = {}      # channel → epoch seconds
 DRIVE_FILE_CACHE_TTL = 60.0                       # 秒
-RCLONE_LINK_EMPTY_TTL = 60.0                      # 空文字キャッシュは短く（フォルダ未作成→作成後の検出用）
+RCLONE_LINK_EMPTY_TTL = 60.0                      # 空文字は短く（フォルダ未作成→作成後の検出用）
 RCLONE_LINK_HIT_TTL = 3600.0                      # URL 取得済みは長く（URL 変化は稀）
+
+
+def _load_drive_link_cache() -> None:
+    """起動時: ファイルから非空 URL を復元。起動直後から Drive リンクを即表示できる。"""
+    if not DRIVE_LINK_CACHE_FILE.exists():
+        return
+    try:
+        data: dict[str, str] = json.loads(DRIVE_LINK_CACHE_FILE.read_text(encoding="utf-8"))
+        now = time.time()
+        for path, url in data.items():
+            if url:  # 空文字は復元しない
+                _rclone_link_cache[path] = url
+                _rclone_link_cache_ts[path] = now  # 起動時点を新鮮扱いに
+    except Exception:
+        pass
+
+
+def _save_drive_link_cache() -> None:
+    """非空 URL のみファイルに保存。asyncio シングルスレッドなので排他制御不要。"""
+    try:
+        data = {path: url for path, url in _rclone_link_cache.items() if url}
+        DRIVE_LINK_CACHE_FILE.write_text(
+            json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8"
+        )
+    except Exception:
+        pass
+
+
+_load_drive_link_cache()  # モジュールロード時（サーバー起動時）に実行
 
 
 async def _rclone_link(path: str) -> str:
@@ -56,6 +87,8 @@ async def _rclone_link(path: str) -> str:
         url = stdout.decode().strip() if proc.returncode == 0 else ""
         _rclone_link_cache[path] = url
         _rclone_link_cache_ts[path] = time.time()
+        if url:
+            _save_drive_link_cache()  # 非空 URL を即ファイル永続化
         return url
     except Exception:
         return cached or ""
