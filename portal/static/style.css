@@ -447,6 +447,15 @@ body {
 .stat-warn  { color: var(--warn); }
 .stat-err   { color: var(--err); }
 
+.stat-clickable {
+  cursor: pointer;
+  transition: background 0.12s, border-color 0.12s;
+}
+.stat-clickable:hover {
+  background: var(--surface-hover);
+  border-color: var(--border-strong);
+}
+
 /* ── LOGS: 等高・1ページ収まりレイアウト ── */
 /* header(56) + tabbar(48) + padding-top(24) + padding-bottom(40) = 168px */
 .logs-grid {
@@ -630,6 +639,12 @@ body {
 .btn-danger:hover    { opacity: 0.85; }
 .btn-danger:disabled { opacity: 0.4; cursor: not-allowed; }
 
+.btn-sm {
+  padding: 4px 10px;
+  font-size: 12px;
+  border-radius: 6px;
+}
+
 .btn-secondary {
   background: var(--surface-hover);
   color: var(--text-dim);
@@ -707,6 +722,41 @@ body {
   box-shadow: 0 28px 64px rgba(0,0,0,0.55);
 }
 
+.modal-box-wide {
+  max-width: 720px;
+  display: flex;
+  flex-direction: column;
+  max-height: 80vh;
+}
+
+.modal-title-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 14px;
+}
+
+.log-filter-output {
+  flex: 1;
+  min-height: 200px;
+  max-height: none;
+}
+.log-ctx {
+  color: var(--text-dim);
+}
+.log-match {
+  font-weight: 600;
+}
+.log-filter-arrow {
+  color: rgba(255, 255, 255, 0.28);
+  user-select: none;
+}
+.log-filter-sep {
+  display: block;
+  border-top: 1px dashed var(--border-strong);
+  margin: 8px 0;
+}
+
 .modal-title {
   font-size: 15px;
   font-weight: 600;
@@ -726,4 +776,108 @@ body {
   justify-content: flex-end;
   gap: 8px;
   margin-top: 16px;
+}
+
+/* ── Env Badge (header) ── */
+.env-badge {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-left: 14px;
+  padding: 4px 11px 4px 8px;
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.10);
+  border-radius: 20px;
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  flex-shrink: 0;
+}
+
+.env-icon {
+  height: 18px;
+  width: auto;
+  display: block;
+}
+
+.env-icon-mac {
+  filter: brightness(0) invert(0.80);
+}
+
+.env-label {
+  font-size: 11px;
+  font-weight: 500;
+  letter-spacing: 0.06em;
+  color: rgba(255, 255, 255, 0.50);
+  text-transform: uppercase;
+}
+
+/* ── Process Tabs ── */
+.process-tabs {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+  margin-bottom: 14px;
+}
+
+.process-tab {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  background: rgba(255,255,255,0.04);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  color: var(--text-dim);
+  font-size: 12px;
+  font-weight: 500;
+  padding: 4px 10px;
+  cursor: pointer;
+  transition: background 0.12s, border-color 0.12s, color 0.12s;
+  white-space: nowrap;
+}
+.process-tab:hover { background: var(--surface-hover); color: var(--text); }
+.process-tab.active {
+  background: var(--blue-dim);
+  border-color: rgba(10,132,255,0.4);
+  color: var(--blue);
+}
+
+.proc-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--green);
+  flex-shrink: 0;
+  animation: proc-pulse 2s ease-in-out infinite;
+}
+@keyframes proc-pulse {
+  0%, 100% { opacity: 1; }
+  50%       { opacity: 0.35; }
+}
+
+/* ── GPU Graph ── */
+.gpu-meta-row {
+  display: flex;
+  align-items: baseline;
+  gap: 16px;
+  margin-bottom: 10px;
+}
+
+.gpu-util-val {
+  font-size: 28px;
+  font-weight: 700;
+  color: var(--blue);
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+}
+
+.gpu-util-unit {
+  font-size: 13px;
+  color: var(--text-dim);
+  margin-left: 2px;
+}
+
+.gpu-meta-item {
+  font-size: 12px;
+  color: var(--text-faint);
+  font-variant-numeric: tabular-nums;
 }

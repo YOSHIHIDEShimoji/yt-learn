@@ -1,12 +1,13 @@
 import asyncio
 import json
+import os
 import re
 import shutil
 import time
 from datetime import datetime
 from pathlib import Path
 from fastapi import FastAPI, Request
-from fastapi.responses import HTMLResponse, JSONResponse, Response
+from fastapi.responses import HTMLResponse, JSONResponse, Response, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from pydantic import BaseModel
@@ -14,7 +15,6 @@ from pydantic import BaseModel
 ROOT = Path(__file__).parent.parent
 PORTAL_DIR = Path(__file__).parent
 
-# WSL 環境かどうかを起動時に一度だけ判定
 _proc_version = Path("/proc/version")
 IS_WSL = _proc_version.exists() and "microsoft" in _proc_version.read_text().lower()
 
@@ -32,7 +32,6 @@ app = FastAPI(title="yt-learn Portal")
 app.mount("/static", _NoCacheStaticFiles(directory=PORTAL_DIR / "static"), name="static")
 templates = Jinja2Templates(directory=PORTAL_DIR / "templates")
 
-# docs/ が存在すれば /docs で配信（README 内の画像リンク用）
 _docs_dir = ROOT / "docs"
 if _docs_dir.exists():
     app.mount("/docs", StaticFiles(directory=_docs_dir), name="docs")
@@ -40,37 +39,36 @@ if _docs_dir.exists():
 
 @app.get("/favicon.ico")
 async def favicon():
-    return Response(status_code=204)
+    from fastapi.responses import RedirectResponse
+    return RedirectResponse(url="/static/logo_transparent.png", status_code=301)
 
 # ── Drive キャッシュ ──────────────────────────────────────────
 DRIVE_LINK_CACHE_FILE = PORTAL_DIR / "drive_link_cache.json"
 
-_rclone_link_cache: dict[str, str] = {}          # path → url
-_rclone_link_cache_ts: dict[str, float] = {}     # path → epoch seconds
-_drive_file_cache: dict[str, dict[str, str]] = {}  # channel → {title: url}
-_drive_file_cache_ts: dict[str, float] = {}      # channel → epoch seconds
-DRIVE_FILE_CACHE_TTL = 60.0                       # 秒
-RCLONE_LINK_EMPTY_TTL = 60.0                      # 空文字は短く（フォルダ未作成→作成後の検出用）
-RCLONE_LINK_HIT_TTL = 3600.0                      # URL 取得済みは長く（URL 変化は稀）
+_rclone_link_cache: dict[str, str] = {}
+_rclone_link_cache_ts: dict[str, float] = {}
+_drive_file_cache: dict[str, dict[str, str]] = {}
+_drive_file_cache_ts: dict[str, float] = {}
+DRIVE_FILE_CACHE_TTL = 60.0
+RCLONE_LINK_EMPTY_TTL = 60.0
+RCLONE_LINK_HIT_TTL = 3600.0
 
 
 def _load_drive_link_cache() -> None:
-    """起動時: ファイルから非空 URL を復元。起動直後から Drive リンクを即表示できる。"""
     if not DRIVE_LINK_CACHE_FILE.exists():
         return
     try:
         data: dict[str, str] = json.loads(DRIVE_LINK_CACHE_FILE.read_text(encoding="utf-8"))
         now = time.time()
         for path, url in data.items():
-            if url:  # 空文字は復元しない
+            if url:
                 _rclone_link_cache[path] = url
-                _rclone_link_cache_ts[path] = now  # 起動時点を新鮮扱いに
+                _rclone_link_cache_ts[path] = now
     except Exception:
         pass
 
 
 def _save_drive_link_cache() -> None:
-    """非空 URL のみファイルに保存。asyncio シングルスレッドなので排他制御不要。"""
     try:
         data = {path: url for path, url in _rclone_link_cache.items() if url}
         DRIVE_LINK_CACHE_FILE.write_text(
@@ -80,22 +78,19 @@ def _save_drive_link_cache() -> None:
         pass
 
 
-_load_drive_link_cache()  # モジュールロード時（サーバー起動時）に実行
+_load_drive_link_cache()
 
-# 同時 rclone 実行数を制限（Google Drive API レートリミット対策）
-# asyncio.Semaphore はイベントループ生成後でないと使えないため起動時に初期化
 _rclone_semaphore: asyncio.Semaphore | None = None
 
 
 def _get_rclone_semaphore() -> asyncio.Semaphore:
     global _rclone_semaphore
     if _rclone_semaphore is None:
-        _rclone_semaphore = asyncio.Semaphore(4)  # 最大 4 並列
+        _rclone_semaphore = asyncio.Semaphore(4)
     return _rclone_semaphore
 
 
 async def _rclone_link(path: str) -> str:
-    """rclone link で URL 取得。空文字は 60 秒、ヒットは 1 時間キャッシュ。"""
     cached = _rclone_link_cache.get(path)
     if cached is not None:
         age = time.time() - _rclone_link_cache_ts.get(path, 0)
@@ -115,7 +110,7 @@ async def _rclone_link(path: str) -> str:
         _rclone_link_cache[path] = url
         _rclone_link_cache_ts[path] = time.time()
         if url:
-            _save_drive_link_cache()  # 非空 URL を即ファイル永続化
+            _save_drive_link_cache()
         return url
     except Exception:
         return cached or ""
@@ -125,14 +120,13 @@ _drive_fetch_running: set[str] = set()
 
 
 async def _fetch_channel_drive_urls_bg(channel: str) -> None:
-    """バックグラウンドで rclone lsjson を実行してキャッシュを埋める（タイムアウトなし）"""
     try:
         proc = await asyncio.create_subprocess_exec(
             "rclone", "lsjson", "--files-only",
             f"gdrive:yt-learn/transcripts/{channel.replace('/', '_')}/",
             stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE,
         )
-        stdout, _ = await proc.communicate()  # タイムアウトなし（大フォルダ対応）
+        stdout, _ = await proc.communicate()
         if proc.returncode != 0:
             return
         items = json.loads(stdout.decode())
@@ -146,13 +140,12 @@ async def _fetch_channel_drive_urls_bg(channel: str) -> None:
         _drive_file_cache[channel] = result
         _drive_file_cache_ts[channel] = time.time()
     except Exception:
-        pass  # 失敗してもキャッシュしない → 次回リトライ
+        pass
     finally:
         _drive_fetch_running.discard(channel)
 
 
 def _get_channel_drive_urls(channel: str) -> dict[str, str]:
-    """キャッシュ TTL 60 秒。スタル時は古い値を返しつつバックグラウンドで再取得。"""
     cached = _drive_file_cache.get(channel)
     fresh = cached is not None and (time.time() - _drive_file_cache_ts.get(channel, 0)) < DRIVE_FILE_CACHE_TTL
     if not fresh and channel not in _drive_fetch_running and shutil.which("rclone"):
@@ -163,7 +156,6 @@ def _get_channel_drive_urls(channel: str) -> dict[str, str]:
 
 # ── ログ解析 ──────────────────────────────────────────────────
 def _parse_session_videos(lines: list[str]) -> tuple[list[dict], dict | None]:
-    """ログ行から動画イベントを解析。(done_videos newest-first, running_or_None) を返す"""
     done: list[dict] = []
     cur: dict | None = None
 
@@ -198,6 +190,386 @@ def _parse_session_videos(lines: list[str]) -> tuple[list[dict], dict | None]:
     running = cur
     done.reverse()
     return done, running
+
+
+# ── ジョブ管理（Phase 3）─────────────────────────────────────
+_active_jobs: dict[str, dict] = {}
+
+
+def _register_job(job_id: str, job_type: str, proc, log_file: Path) -> None:
+    _active_jobs[job_id] = {
+        "id": job_id,
+        "type": job_type,
+        "pid": proc.pid,
+        "started_at": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+        "log_file": str(log_file.relative_to(ROOT)),
+        "proc": proc,
+    }
+
+
+async def _await_and_close(proc, f, job_id: str | None = None, append_session_end: bool = False) -> None:
+    try:
+        await proc.wait()
+        if append_session_end:
+            ts = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+            f.write(f"\n[session-end] {ts}\n".encode())
+    finally:
+        f.close()
+        if job_id:
+            _active_jobs.pop(job_id, None)
+
+
+# ── ジョブラベル ─────────────────────────────────────────────
+_JOB_LABELS: dict[str, str] = {
+    "autonomous": "autonomous.sh",
+    "process":    "URL処理",
+    "summarize":  "summarize",
+    "sync":       "Drive Sync",
+    "transcribe": "transcribe",
+    "loop":       "loop_transcribe",
+    "benchmark":  "benchmark",
+}
+
+# ── 手動起動プロセスの自動検出パターン（WSL 専用）─────────────
+_AUTO_DETECT_PATTERNS: list[tuple[str, str]] = [
+    (r"transcribe\.py\b",      "transcribe"),
+    (r"summarize\.py\b",       "summarize"),
+    (r"loop_transcribe\.sh\b", "loop"),
+    (r"benchmark\.sh\b",       "benchmark"),
+    # autonomous.sh は tmux セッション検出で管理するためここには含めない
+]
+
+
+def _find_log_for_pid(pid: int, job_type: str) -> str:
+    """プロセスが開いている .log ファイルを返す。なければ job_type 専用ディレクトリにフォールバック。"""
+    root_str = str(ROOT.resolve())
+    try:
+        for fd_path in Path(f"/proc/{pid}/fd").iterdir():
+            try:
+                target = os.readlink(str(fd_path))
+                if target.endswith(".log") and target.startswith(root_str):
+                    return target[len(root_str):].lstrip("/")
+            except OSError:
+                pass
+    except OSError:
+        pass
+    # フォールバック: job_type 専用ディレクトリの最新「live」ログ（[session-end] なし）のみ
+    d = ROOT / f"logs/{job_type}"
+    if d.exists():
+        logs = sorted(d.glob("*.log"), key=lambda x: x.stat().st_mtime, reverse=True)
+        for log in logs:
+            try:
+                if "[session-end]" not in log.read_text(encoding="utf-8", errors="replace"):
+                    return str(log.relative_to(ROOT))
+            except OSError:
+                pass
+    return ""
+
+
+async def _detect_manual_processes() -> list[dict]:
+    """ポータル外で手動起動されたスクリプトを /proc スキャンで検出（WSL 専用）。"""
+    if not IS_WSL:
+        return []
+    tracked_pids = {j["pid"] for j in _active_jobs.values()}
+    root_resolved = str(ROOT.resolve())
+    results: list[dict] = []
+    seen_types: set[str] = set()
+    try:
+        proc = await asyncio.create_subprocess_exec(
+            "ps", "axo", "pid=,cmd=",
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.DEVNULL,
+        )
+        stdout, _ = await asyncio.wait_for(proc.communicate(), timeout=3)
+    except Exception:
+        return []
+    for line in stdout.decode().splitlines():
+        parts = line.strip().split(None, 1)
+        if len(parts) < 2:
+            continue
+        try:
+            pid = int(parts[0])
+        except ValueError:
+            continue
+        if pid in tracked_pids:
+            continue
+        cmd = parts[1]
+        try:
+            cwd = str(Path(f"/proc/{pid}/cwd").resolve())
+            if cwd != root_resolved:
+                continue
+        except OSError:
+            continue
+        for pattern, job_type in _AUTO_DETECT_PATTERNS:
+            if not re.search(pattern, cmd):
+                continue
+            if job_type in seen_types:
+                break
+            seen_types.add(job_type)
+            try:
+                started_at = datetime.fromtimestamp(
+                    Path(f"/proc/{pid}").stat().st_mtime
+                ).strftime("%Y-%m-%d %H:%M:%S")
+            except OSError:
+                started_at = ""
+            results.append({
+                "id":          f"{job_type}_ext_{pid}",
+                "type":        job_type,
+                "label":       _JOB_LABELS.get(job_type, job_type),
+                "log_file":    _find_log_for_pid(pid, job_type),
+                "started_at":  started_at,
+                "is_external": True,
+            })
+            break
+    return results
+
+
+# ── summarize ログ解析 ────────────────────────────────────────
+def _parse_summarize_videos(lines: list[str]) -> tuple[list[dict], dict | None]:
+    """[N/M] 行を逐次追跡: 次の [N+1/M] が来た時点で前の動画を done に移す（リアルタイム進捗）。"""
+    done: list[dict] = []
+    running: dict | None = None
+    current_channel = ""
+    current_gpath: dict[str, str] = {}  # channel → gdrive path（[drive] 行から更新）
+    pending_video: dict | None = None   # 現在処理中の動画
+
+    for line in lines:
+        m = re.search(r'\[summarize\]\s+(.+?):', line)
+        if m:
+            current_channel = m.group(1).strip()
+            pending_video = None
+            running = {"title": current_channel, "channel": current_channel, "drive_url": ""}
+            continue
+
+        m = re.match(r'^\s+\[(\d+)/\d+\]\s+(.+)', line)
+        if m and current_channel:
+            if pending_video is not None:
+                # 前の動画が完了（次の動画が始まった）→ done に移す
+                done.append(pending_video)
+            pending_video = {
+                "title": m.group(2).strip(), "channel": current_channel,
+                "drive_url": "", "_gpath": current_gpath.get(current_channel, ""),
+            }
+            running = {"title": m.group(2).strip(), "channel": current_channel, "drive_url": ""}
+            continue
+
+        m = re.search(r'\[drive\]\s+(.+?)\s+→', line)
+        if m and current_channel:
+            gpath = f"gdrive:yt-learn/{m.group(1)}"
+            current_gpath[current_channel] = gpath
+            if pending_video:
+                pending_video["_gpath"] = gpath
+            continue
+
+        if "[done]" in line and current_channel and current_channel in line:
+            if pending_video is not None:
+                done.append(pending_video)
+                pending_video = None
+            running = None
+
+    done.reverse()
+    return done, running
+
+
+# ── アクティブプロセス一覧 ─────────────────────────────────────
+async def _get_active_processes() -> list[dict]:
+    procs = []
+    for j in _active_jobs.values():
+        procs.append({
+            "id": j["id"],
+            "type": j["type"],
+            "label": _JOB_LABELS.get(j["type"], j["type"]),
+            "log_file": j["log_file"],
+            "started_at": j["started_at"],
+            "is_external": False,
+        })
+    procs.extend(await _detect_manual_processes())
+    if IS_WSL:
+        yt_session = await _find_yt_session()
+        if yt_session:
+            log_dir = ROOT / "logs" / "autonomous"
+            log_file = ""
+            if log_dir.exists():
+                logs = sorted(log_dir.glob("*.log"), key=lambda x: x.stat().st_mtime, reverse=True)
+                if logs:
+                    log_file = str(logs[0].relative_to(ROOT))
+            procs.append({
+                "id": f"autonomous_{yt_session}",
+                "type": "autonomous",
+                "label": "autonomous.sh",
+                "log_file": log_file,
+                "started_at": "",
+            })
+    return procs
+
+
+# ── GPU 統計取得（Phase 3）───────────────────────────────────
+async def _get_gpu_stats() -> dict:
+    if IS_WSL:
+        try:
+            proc = await asyncio.create_subprocess_exec(
+                "nvidia-smi",
+                "--query-gpu=utilization.gpu,memory.used,memory.total,temperature.gpu",
+                "--format=csv,noheader,nounits",
+                stdout=asyncio.subprocess.PIPE,
+                stderr=asyncio.subprocess.DEVNULL,
+            )
+            stdout, _ = await asyncio.wait_for(proc.communicate(), timeout=5)
+            if proc.returncode == 0:
+                parts = stdout.decode().strip().split(",")
+                if len(parts) >= 4:
+                    return {
+                        "available": True,
+                        "util": int(parts[0].strip()),
+                        "mem_used": int(parts[1].strip()),
+                        "mem_total": int(parts[2].strip()),
+                        "temp": int(parts[3].strip()),
+                    }
+        except Exception:
+            pass
+    else:
+        try:
+            proc = await asyncio.create_subprocess_exec(
+                "ioreg", "-r", "-d", "1", "-w", "0", "-c", "IOAccelerator",
+                stdout=asyncio.subprocess.PIPE,
+                stderr=asyncio.subprocess.DEVNULL,
+            )
+            stdout, _ = await asyncio.wait_for(proc.communicate(), timeout=5)
+            if proc.returncode == 0:
+                m = re.search(r'"Device Utilization %"\s*=\s*(\d+)', stdout.decode())
+                if m:
+                    return {
+                        "available": True,
+                        "util": int(m.group(1)),
+                        "mem_used": -1,
+                        "mem_total": -1,
+                        "temp": -1,
+                    }
+        except Exception:
+            pass
+    return {"available": False}
+
+
+# ── Status データ構築（SSE / REST 共通）────────────────────────
+async def _build_status_data(log_path: str | None = None) -> dict:
+    # 共通データを先に取得
+    yt_session = await _find_yt_session() if IS_WSL else None
+    gpu        = await _get_gpu_stats()
+    processes  = await _get_active_processes()
+    active_jobs = [
+        {"id": j["id"], "type": j["type"], "pid": j["pid"],
+         "started_at": j["started_at"], "log_file": j["log_file"]}
+        for j in _active_jobs.values()
+    ]
+    queue_dir   = ROOT / "queue"
+    queue_count = len(list(queue_dir.glob("*.m4a"))) if queue_dir.exists() else 0
+    folder_url  = await _rclone_link("gdrive:yt-learn")
+
+    # 対象ログファイルを決定
+    _idle_base = {
+        "done_count": 0, "warn_count": 0, "error_count": 0,
+        "rate_limit_count": 0, "queue_count": queue_count,
+        "done_videos": [], "running_video": None, "phase": "idle", "status": "idle",
+        "drive_folder_url": folder_url, "session_type": "idle",
+        "active_jobs": active_jobs, "yt_session": yt_session, "processes": processes,
+        "log_file": "", "log_file_path": "", "gpu": gpu,
+    }
+
+    # アクティブプロセスなし＆明示的 log_path 指定なし → 過去ログを掘らず idle を返す
+    if not log_path and not processes and not yt_session and not active_jobs:
+        return {**_idle_base, "error": None}
+
+    target_log: Path | None = None
+    if log_path:
+        candidate = (ROOT / log_path).resolve()
+        if (str(candidate).startswith(str(ROOT.resolve()))
+                and candidate.exists() and candidate.suffix == ".log"):
+            target_log = candidate
+    if target_log is None:
+        for log_dir in [ROOT / "logs", ROOT / "log"]:
+            if not log_dir.exists():
+                continue
+            logs = sorted(log_dir.rglob("*.log"), key=lambda x: x.stat().st_mtime, reverse=True)
+            if logs:
+                target_log = logs[0]
+                break
+
+    if target_log is None:
+        return {**_idle_base, "error": "ログファイルなし"}
+
+    text  = target_log.read_text(encoding="utf-8", errors="replace")
+    lines = text.splitlines()
+
+    done_count  = sum(1 for l in lines if "[done]" in l)
+    warn_count  = sum(1 for l in lines if "[warn]" in l)
+    error_count = sum(1 for l in lines if "[error]" in l)
+    rl_count    = sum(1 for l in lines if "rate-limit" in l.lower() or "レートリミット" in l)
+
+    is_summarize = any("[summarize]" in l for l in lines[:50])
+    if is_summarize:
+        done_videos, running_video = _parse_summarize_videos(lines)
+        seen: dict[str, str] = {}
+        for v in done_videos:
+            gpath = v.pop("_gpath", "")
+            if gpath:
+                if gpath not in seen:
+                    seen[gpath] = await _rclone_link(gpath)
+                v["drive_url"] = seen[gpath]
+    else:
+        done_videos, running_video = _parse_session_videos(lines)
+        unique_channels = list({v["channel"] for v in done_videos if v.get("channel")})
+        ch_url_map = {ch: _get_channel_drive_urls(ch) for ch in unique_channels}
+        for v in done_videos:
+            file_map = ch_url_map.get(v.get("channel", ""), {})
+            v["drive_url"] = file_map.get(v.get("title", ""), "")
+
+    phase = "idle"
+    for l in reversed(lines[-20:]):
+        if "[model]" in l or "[transcribe]" in l:
+            phase = "transcribing"; break
+        if "[summary]" in l or "[summarize]" in l:
+            phase = "summarizing"; break
+        if "[download]" in l:
+            phase = "downloading"; break
+
+    status = "unknown"
+    for l in reversed(lines[-30:]):
+        if "[session-end]" in l:
+            status = "stopped"; break
+        if "rate-limit" in l.lower() or "レートリミット" in l:
+            status = "rate-limit"; break
+        if "[done]" in l or "[download]" in l or "[saved]" in l or "[skip]" in l:
+            status = "running"; break
+
+    session_type = "idle"
+    if yt_session:
+        session_type = "autonomous"
+    elif active_jobs:
+        types = [j["type"] for j in active_jobs]
+        if   "process"   in types: session_type = "process"
+        elif "summarize" in types: session_type = "summarize"
+        elif "sync"      in types: session_type = "sync"
+        elif "transcribe" in types: session_type = "transcribe"
+
+    return {
+        "log_file":       target_log.name,
+        "log_file_path":  str(target_log.relative_to(ROOT)),
+        "done_count":     done_count,
+        "warn_count":     warn_count,
+        "error_count":    error_count,
+        "rate_limit_count": rl_count,
+        "queue_count":    queue_count,
+        "done_videos":    done_videos,
+        "running_video":  running_video,
+        "phase":          phase,
+        "status":         status,
+        "drive_folder_url": folder_url,
+        "session_type":   session_type,
+        "active_jobs":    active_jobs,
+        "yt_session":     yt_session,
+        "processes":      processes,
+        "gpu":            gpu,
+    }
 
 
 # ── Routes ───────────────────────────────────────────────────
@@ -253,7 +625,7 @@ async def get_logs():
     log_dirs = [ROOT / "logs", ROOT / "log"]
     log_files = []
     now = time.time()
-    live_threshold = 30 * 60  # 30分以内に更新 + session-end なし → live
+    live_threshold = 30 * 60
 
     for log_dir in log_dirs:
         if log_dir.exists():
@@ -276,7 +648,6 @@ async def get_logs():
                     "has_error": has_error,
                 })
 
-    # live を先頭、次いで done（両グループ内は mtime 降順）
     log_files.sort(key=lambda x: (x["is_done"], -x["mtime"]))
     return JSONResponse({"logs": log_files})
 
@@ -296,84 +667,108 @@ async def get_log_content(path: str):
 
 
 @app.get("/api/status-summary")
-async def get_status_summary():
-    log_dirs = [ROOT / "logs", ROOT / "log"]
-
-    for log_dir in log_dirs:
-        if not log_dir.exists():
-            continue
-        logs = sorted(log_dir.rglob("*.log"), key=lambda x: x.stat().st_mtime, reverse=True)
-        if not logs:
-            continue
-
-        text = logs[0].read_text(encoding="utf-8", errors="replace")
-        lines = text.splitlines()
-
-        done_count  = sum(1 for l in lines if "[done]" in l)
-        warn_count  = sum(1 for l in lines if "[warn]" in l)
-        error_count = sum(1 for l in lines if "[error]" in l)
-        rl_count    = sum(1 for l in lines if "rate-limit" in l.lower() or "レートリミット" in l)
-
-        done_videos, running_video = _parse_session_videos(lines)
-
-        phase = "idle"
-        for l in reversed(lines[-20:]):
-            if "[model]" in l or "[transcribe]" in l:
-                phase = "transcribing"; break
-            if "[summary]" in l:
-                phase = "summarizing"; break
-            if "[download]" in l:
-                phase = "downloading"; break
-
-        status = "unknown"
-        for l in reversed(lines[-30:]):
-            if "[session-end]" in l:
-                status = "stopped"; break
-            if "rate-limit" in l.lower() or "レートリミット" in l:
-                status = "rate-limit"; break
-            if "[done]" in l or "[download]" in l or "[saved]" in l or "[skip]" in l:
-                status = "running"; break
-
-        last_session = next(
-            (l for l in reversed(lines) if "=== 開始" in l or "=== Started" in l), None
-        )
-
-        queue_dir = ROOT / "queue"
-        queue_count = len(list(queue_dir.glob("*.m4a"))) if queue_dir.exists() else 0
-
-        # 個別ファイル Drive URL（バックグラウンドフェッチ済みキャッシュから取得）
-        unique_channels = list({v["channel"] for v in done_videos if v.get("channel")})
-        folder_url = await _rclone_link("gdrive:yt-learn")
-        ch_url_map = {ch: _get_channel_drive_urls(ch) for ch in unique_channels}
-        for v in done_videos:
-            file_map = ch_url_map.get(v.get("channel", ""), {})
-            v["drive_url"] = file_map.get(v.get("title", ""), "")
-
-        return JSONResponse({
-            "log_file": logs[0].name,
-            "done_count": done_count,
-            "warn_count": warn_count,
-            "error_count": error_count,
-            "rate_limit_count": rl_count,
-            "queue_count": queue_count,
-            "done_videos": done_videos,
-            "running_video": running_video,
-            "phase": phase,
-            "status": status,
-            "last_session": last_session,
-            "drive_folder_url": folder_url,
-        })
-
-    return JSONResponse({
-        "error": "ログファイルなし",
-        "done_count": 0, "warn_count": 0, "error_count": 0,
-        "rate_limit_count": 0, "queue_count": 0,
-        "done_videos": [], "running_video": None, "phase": "—", "status": "不明",
-        "last_session": None, "drive_folder_url": "",
-    })
+async def get_status_summary(log: str | None = None):
+    return JSONResponse(await _build_status_data(log_path=log))
 
 
-# ── Phase 2: チャンネル管理 ──────────────────────────────────────
+@app.get("/api/gpu")
+async def get_gpu():
+    return JSONResponse(await _get_gpu_stats())
+
+
+# ── Phase 3: SSE ─────────────────────────────────────────────
+@app.get("/api/events")
+async def status_events(request: Request):
+    async def generate():
+        while True:
+            if await request.is_disconnected():
+                break
+            try:
+                data = await _build_status_data()
+                yield f"data: {json.dumps(data, ensure_ascii=False)}\n\n"
+            except Exception as e:
+                yield f"data: {json.dumps({'error': str(e)})}\n\n"
+            await asyncio.sleep(5)
+    return StreamingResponse(
+        generate(), media_type="text/event-stream",
+        headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
+    )
+
+
+@app.get("/api/log-stream")
+async def log_stream(request: Request, path: str):
+    try:
+        target = (ROOT / path).resolve()
+        if not str(target).startswith(str(ROOT.resolve())):
+            return JSONResponse({"error": "アクセス拒否"}, status_code=403)
+        if target.suffix != ".log":
+            return JSONResponse({"error": "ファイルが見つかりません"}, status_code=404)
+    except Exception:
+        return JSONResponse({"error": "パスエラー"}, status_code=400)
+
+    async def generate():
+        offset = 0
+        try:
+            content = target.read_text(encoding="utf-8", errors="replace")
+            lines = content.splitlines()
+            if lines:
+                yield f"data: {json.dumps({'lines': lines, 'init': True}, ensure_ascii=False)}\n\n"
+                offset = len(lines)
+            tail = content[-512:] if len(content) > 512 else content
+            if "[session-end]" in tail:
+                yield f"data: {json.dumps({'done': True})}\n\n"
+                return
+        except Exception:
+            pass
+
+        while True:
+            if await request.is_disconnected():
+                break
+            await asyncio.sleep(2)
+            try:
+                content = target.read_text(encoding="utf-8", errors="replace")
+                lines = content.splitlines()
+                if len(lines) > offset:
+                    new_lines = lines[offset:]
+                    yield f"data: {json.dumps({'lines': new_lines}, ensure_ascii=False)}\n\n"
+                    offset = len(lines)
+                tail = content[-512:] if len(content) > 512 else content
+                if "[session-end]" in tail:
+                    yield f"data: {json.dumps({'done': True})}\n\n"
+                    break
+            except Exception:
+                pass
+
+    return StreamingResponse(
+        generate(), media_type="text/event-stream",
+        headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
+    )
+
+
+# ── Phase 3: ジョブ管理 API ──────────────────────────────────
+@app.get("/api/jobs")
+async def get_jobs():
+    jobs = [
+        {"id": j["id"], "type": j["type"], "pid": j["pid"],
+         "started_at": j["started_at"], "log_file": j["log_file"]}
+        for j in _active_jobs.values()
+    ]
+    return JSONResponse({"jobs": jobs})
+
+
+@app.post("/api/jobs/{job_id}/stop")
+async def stop_job(job_id: str):
+    job = _active_jobs.get(job_id)
+    if not job:
+        return JSONResponse({"error": "ジョブが見つかりません"}, status_code=404)
+    try:
+        job["proc"].terminate()
+        return JSONResponse({"ok": True})
+    except Exception as e:
+        return JSONResponse({"error": str(e)}, status_code=500)
+
+
+# ── Phase 2: チャンネル管理 ──────────────────────────────────
 
 class ChannelBody(BaseModel):
     name: str
@@ -423,7 +818,7 @@ async def delete_channel(name: str):
     return JSONResponse({"ok": True})
 
 
-# ── Phase 2: 実行管理 ────────────────────────────────────────────
+# ── Phase 2: 実行管理 ────────────────────────────────────────
 
 class RunBody(BaseModel):
     limit: int = 10
@@ -435,7 +830,6 @@ _YT_SESSION_PREFIX = "yt-learn_"
 
 
 async def _find_yt_session() -> str | None:
-    """tmux ls から yt-learn_ プレフィックスのセッション名を返す。なければ None。"""
     try:
         proc = await asyncio.create_subprocess_exec(
             "tmux", "ls",
@@ -499,7 +893,7 @@ async def stop_run():
     return JSONResponse({"ok": True, "was_running": True, "session": session})
 
 
-# ── Phase 2: URL 処理（複数URL対応） ────────────────────────────
+# ── Phase 2: URL 処理 ────────────────────────────────────────
 
 class ProcessUrlBody(BaseModel):
     urls: list[str]
@@ -507,20 +901,12 @@ class ProcessUrlBody(BaseModel):
     lang: str = "ja"
 
 
-async def _await_and_close(proc, f, append_session_end: bool = False) -> None:
-    try:
-        await proc.wait()
-        if append_session_end:
-            ts = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-            f.write(f"\n[session-end] {ts}\n".encode())
-    finally:
-        f.close()
-
-
 async def _bg_process_urls(urls: list[str], channel: str, lang: str) -> None:
     log_dir = ROOT / "logs" / "process"
     log_dir.mkdir(parents=True, exist_ok=True)
-    log_file = log_dir / f"{datetime.now().strftime('%Y%m%d_%H%M%S')}_process.log"
+    ts = datetime.now().strftime('%Y%m%d_%H%M%S')
+    log_file = log_dir / f"{ts}_process.log"
+    job_id = f"process_{ts}"
     try:
         python = shutil.which("python") or "python3"
         f = open(log_file, "wb")
@@ -530,7 +916,8 @@ async def _bg_process_urls(urls: list[str], channel: str, lang: str) -> None:
             cwd=str(ROOT),
             stdout=f, stderr=f,
         )
-        asyncio.ensure_future(_await_and_close(proc, f, append_session_end=True))
+        _register_job(job_id, "process", proc, log_file)
+        asyncio.ensure_future(_await_and_close(proc, f, job_id=job_id, append_session_end=True))
     except Exception:
         pass
 
@@ -544,18 +931,21 @@ async def process_url(body: ProcessUrlBody):
     return JSONResponse({"ok": True, "message": f"{len(urls)} 件の処理を開始しました", "count": len(urls)})
 
 
-# ── Phase 2: その他 CLI コマンド ──────────────────────────────────
+# ── Phase 2: その他 CLI コマンド ──────────────────────────────
 
-async def _bg_run_script(args: list[str], log_subdir: str, log_prefix: str) -> None:
+async def _bg_run_script(args: list[str], log_subdir: str, log_prefix: str, job_type: str = "script") -> None:
     log_dir = ROOT / "logs" / log_subdir
     log_dir.mkdir(parents=True, exist_ok=True)
-    log_file = log_dir / f"{datetime.now().strftime('%Y%m%d_%H%M%S')}_{log_prefix}.log"
+    ts = datetime.now().strftime('%Y%m%d_%H%M%S')
+    log_file = log_dir / f"{ts}_{log_prefix}.log"
+    job_id = f"{job_type}_{ts}"
     try:
         f = open(log_file, "wb")
         proc = await asyncio.create_subprocess_exec(
             *args, cwd=str(ROOT), stdout=f, stderr=f,
         )
-        asyncio.ensure_future(_await_and_close(proc, f, append_session_end=True))
+        _register_job(job_id, job_type, proc, log_file)
+        asyncio.ensure_future(_await_and_close(proc, f, job_id=job_id, append_session_end=True))
     except Exception:
         pass
 
@@ -589,7 +979,7 @@ async def transcribe_channel(body: TranscribeChannelBody):
     python = shutil.which("python") or "python3"
     args = [python, str(ROOT / "transcribe.py"), "channel", channel,
             "--sort", "popular", "--limit", str(limit), "--model", model]
-    asyncio.ensure_future(_bg_run_script(args, "transcribe", f"ch_{channel[:20]}"))
+    asyncio.ensure_future(_bg_run_script(args, "transcribe", f"ch_{channel[:20]}", job_type="transcribe"))
     return JSONResponse({"ok": True, "message": f"'{channel}' の文字起こしを開始しました"})
 
 
@@ -600,7 +990,7 @@ async def transcribe_all(body: TranscribeAllBody):
     python = shutil.which("python") or "python3"
     args = [python, str(ROOT / "transcribe.py"), "all",
             "--sort", "popular", "--limit", str(limit), "--model", model]
-    asyncio.ensure_future(_bg_run_script(args, "transcribe", "all"))
+    asyncio.ensure_future(_bg_run_script(args, "transcribe", "all", job_type="transcribe"))
     return JSONResponse({"ok": True, "message": "全チャンネルの文字起こしを開始しました"})
 
 
@@ -610,7 +1000,7 @@ async def transcribe_sync(body: TranscribeSyncBody):
     args = [python, str(ROOT / "transcribe.py"), "sync"]
     if body.only in ("transcripts", "summaries"):
         args += ["--only", body.only]
-    asyncio.ensure_future(_bg_run_script(args, "transcribe", "sync"))
+    asyncio.ensure_future(_bg_run_script(args, "transcribe", "sync", job_type="sync"))
     return JSONResponse({"ok": True, "message": "Drive 同期を開始しました"})
 
 
@@ -619,5 +1009,53 @@ async def summarize_all(body: SummarizeBody):
     threshold = max(1, min(body.threshold, 1000))
     python = shutil.which("python") or "python3"
     args = [python, str(ROOT / "summarize.py"), "all", "--threshold", str(threshold)]
-    asyncio.ensure_future(_bg_run_script(args, "summarize", "all"))
+    asyncio.ensure_future(_bg_run_script(args, "summarize", "all", job_type="summarize"))
     return JSONResponse({"ok": True, "message": "要約を開始しました"})
+
+
+@app.get("/api/summarize-session")
+async def summarize_session(started: str = ""):
+    """ログなし summarize プロセス用: summaries/ の更新時刻から今セッション処理済みチャンネルを返す。"""
+    summaries_dir = ROOT / "summaries"
+    queue_dir = ROOT / "queue"
+    queue_count = len(list(queue_dir.glob("*.m4a"))) if queue_dir.exists() else 0
+    folder_url = await _rclone_link("gdrive:yt-learn")
+    empty = {
+        "done_videos": [], "running_video": None, "done_count": 0,
+        "warn_count": 0, "error_count": 0, "rate_limit_count": 0,
+        "queue_count": queue_count, "phase": "—", "status": "running",
+        "log_file": "(手動起動 — ログなし)", "log_file_path": "",
+        "drive_folder_url": folder_url,
+    }
+    if not summaries_dir.exists():
+        return JSONResponse(empty)
+
+    start_ts = 0.0
+    if started:
+        try:
+            start_ts = datetime.strptime(started, "%Y-%m-%d %H:%M:%S").timestamp()
+        except ValueError:
+            pass
+
+    done: list[dict] = []
+    seen_gpaths: dict[str, str] = {}
+    for pf in sorted(summaries_dir.glob("*_processed.json"), key=lambda f: f.stat().st_mtime):
+        if start_ts and pf.stat().st_mtime < start_ts:
+            continue
+        channel_name = pf.stem[: -len("_processed")]
+        summary_file = summaries_dir / f"{channel_name}.md"
+        if not summary_file.exists():
+            continue
+        gpath = f"gdrive:yt-learn/summaries/{channel_name}.md"
+        if gpath not in seen_gpaths:
+            seen_gpaths[gpath] = await _rclone_link(gpath)
+        done.append({"title": channel_name, "channel": channel_name,
+                     "drive_url": seen_gpaths[gpath]})
+
+    done.reverse()
+    return JSONResponse({
+        **empty,
+        "done_videos": done,
+        "done_count": len(done),
+        "phase": "summarizing",
+    })

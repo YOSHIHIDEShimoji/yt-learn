@@ -2,27 +2,45 @@ document.addEventListener("DOMContentLoaded", () => {
   const tabs  = document.querySelectorAll(".tab-btn");
   const panes = document.querySelectorAll(".pane");
 
-  // ── 状態変数（switchTab 呼び出し前に初期化、TDZ 回避）─────
+  // ── 状態変数 ─────────────────────────────────────────────
   let _channels = [];
   let _statusData = null;
-  let _statusPollTimer = null;
-  let _isWsl = null;  // null = 未取得
+  let _statusEventSource = null;
+  let _logEventSource = null;
+  let _isWsl = null;
+  let _pendingLogPath = null;
+  const _gpuHistory = [];
+  const GPU_MAX_POINTS = 60;
+  let _gpuPollTimer = null;
+  let _selectedProcessId = null;   // 選択中プロセス id
+  let _latestProcesses = [];       // 最新の processes リスト（SSE 更新）
+
+  const SESSION_TYPE_LABELS = {
+    autonomous: "autonomous.sh",
+    process:    "URL処理",
+    summarize:  "Summarize",
+    sync:       "Drive Sync",
+    transcribe: "文字起こし",
+    idle:       "idle",
+  };
 
   function switchTab(id) {
     tabs.forEach(t  => t.classList.toggle("active", t.dataset.tab === id));
     panes.forEach(p => p.classList.toggle("active", p.id === `pane-${id}`));
     history.replaceState(null, "", `#${id}`);
     if (id === "home")   { loadChannels(); loadRunPanel(); }
-    if (id === "status") { loadStatus(); startStatusPolling(); }
-    else                 stopStatusPolling();
+    if (id === "status") { loadStatus(); startStatusSSE(); }
+    else                 stopStatusSSE();
     if (id === "readme") loadReadme();
     if (id === "logs")   loadLogs();
+    else                 stopLogStream();
   }
 
   tabs.forEach(t => t.addEventListener("click", () => switchTab(t.dataset.tab)));
   window.goHome = () => switchTab("home");
   const initial = location.hash.replace("#", "") || "home";
   switchTab(initial);
+  loadEnvBadge();
 
   // ── HOME: channels ──────────────────────────────────────
   async function loadChannels() {
@@ -85,71 +103,198 @@ document.addEventListener("DOMContentLoaded", () => {
     } catch (e) {}
   }
 
-  // ── STATUS ───────────────────────────────────────────────
-  function startStatusPolling() {
-    if (_statusPollTimer) return;
-    _statusPollTimer = setInterval(pollStatusUpdates, 15000);
-  }
+  // ── STATUS: SSE ─────────────────────────────────────────
+  function startStatusSSE() {
+    if (_statusEventSource) return;
+    _statusEventSource = new EventSource("/api/events");
+    _statusEventSource.onmessage = async e => {
+      try {
+        const d = JSON.parse(e.data);
+        if (d.error) return;
+        _latestProcesses = d.processes || [];
 
-  function stopStatusPolling() {
-    if (_statusPollTimer) { clearInterval(_statusPollTimer); _statusPollTimer = null; }
-  }
-
-  async function pollStatusUpdates() {
-    if (!_statusData) return;
-    try {
-      const d = await api("/api/status-summary");
-      const videoCountChanged = d.done_videos.length !== _statusData.done_videos.length;
-      const runningChanged = (d.running_video?.title ?? null) !== (_statusData.running_video?.title ?? null);
-      const metaChanged = d.status !== _statusData.status
-        || d.phase !== _statusData.phase
-        || d.done_count !== _statusData.done_count
-        || d.drive_folder_url !== _statusData.drive_folder_url;
-
-      if (videoCountChanged || runningChanged || metaChanged) {
-        renderStatusData(d);
-      } else {
-        // Drive リンクだけ外科的に追加
-        d.done_videos.forEach((v, i) => {
-          if (v.drive_url && !(_statusData.done_videos[i]?.drive_url)) {
-            const card = document.querySelector(`#status-videos .video-card[data-idx="${i}"]`);
-            if (card && !card.querySelector(".channel-link")) {
-              const a = document.createElement("a");
-              a.className = "channel-link drive-link-popin";
-              a.href = v.drive_url;
-              a.target = "_blank";
-              a.rel = "noopener";
-              a.style.flexShrink = "0";
-              a.textContent = "↗ Drive";
-              card.appendChild(a);
+        if (_selectedProcessId) {
+          const still = _latestProcesses.find(p => p.id === _selectedProcessId);
+          if (still) {
+            if (still.log_file) {
+              const fresh = await api(`/api/status-summary?log=${encodeURIComponent(still.log_file)}`);
+              renderStatusPanels(fresh);
+              renderProcessHeader(still, fresh);
+              _statusData = fresh;
+            } else if (still.type === "summarize") {
+              const fresh = await api(`/api/summarize-session?started=${encodeURIComponent(still.started_at || "")}`);
+              renderStatusPanels(fresh);
+              renderProcessHeader(still, { status: "running", phase: "summarizing" });
+              _statusData = fresh;
+            } else {
+              renderStatusPanels(_noLogPanels());
+              renderProcessHeader(still, { status: "running", phase: "—" });
             }
+          } else {
+            _selectedProcessId = null;
+            renderStatusData(d);
+            _statusData = d;
           }
-        });
-      }
-      _statusData = d;
-    } catch (e) {}
+        } else {
+          renderStatusData(d);
+          _statusData = d;
+        }
+        renderProcessTabs(_latestProcesses);
+      } catch {}
+    };
+    _statusEventSource.onerror = () => {};
+    startGpuPoll();
   }
 
-  function renderStatusData(d) {
+  function stopStatusSSE() {
+    if (_statusEventSource) {
+      _statusEventSource.close();
+      _statusEventSource = null;
+    }
+    stopGpuPoll();
+  }
+
+  // ── GPU 1秒ポーリング ────────────────────────────────────
+  function startGpuPoll() {
+    if (_gpuPollTimer) return;
+    _pollGpu();
+    _gpuPollTimer = setInterval(_pollGpu, 1000);
+  }
+
+  function stopGpuPoll() {
+    if (_gpuPollTimer) { clearInterval(_gpuPollTimer); _gpuPollTimer = null; }
+  }
+
+  async function _pollGpu() {
+    try {
+      const gpu = await api("/api/gpu", 3000);
+      updateGpuGraph(gpu);
+    } catch {}
+  }
+
+  // ── プロセスタブ描画 ────────────────────────────────────────
+  function renderProcessTabs(procs) {
     const headerEl = document.getElementById("status-header-card");
-    const videosEl = document.getElementById("status-videos");
-    const statsEl  = document.getElementById("status-stats");
     if (!headerEl) return;
 
+    // タブ行を更新（既存のタブ行があれば差し替え）
+    let tabsRow = headerEl.querySelector(".process-tabs");
+    if (!procs || procs.length === 0) {
+      if (tabsRow) tabsRow.remove();
+      return;
+    }
+    if (!tabsRow) {
+      tabsRow = document.createElement("div");
+      tabsRow.className = "process-tabs";
+      headerEl.prepend(tabsRow);
+    }
+    tabsRow.innerHTML = procs.map(p => `
+      <button class="process-tab${_selectedProcessId === p.id ? " active" : ""}"
+              onclick="selectProcess(${JSON.stringify(p).replace(/"/g, '&quot;')})">
+        <span class="proc-dot"></span>${esc(p.label)}
+      </button>`).join("");
+  }
+
+  // ── プロセス選択 ─────────────────────────────────────────────
+  window.selectProcess = async function(proc) {
+    _selectedProcessId = proc.id;
+    renderProcessTabs(_latestProcesses);
+    if (proc.log_file) {
+      try {
+        const d = await api(`/api/status-summary?log=${encodeURIComponent(proc.log_file)}`);
+        renderStatusPanels(d);
+        renderProcessHeader(proc, d);
+        _statusData = d;
+      } catch {}
+    } else if (proc.type === "summarize") {
+      try {
+        const d = await api(`/api/summarize-session?started=${encodeURIComponent(proc.started_at || "")}`);
+        renderStatusPanels(d);
+        renderProcessHeader(proc, { status: "running", phase: "summarizing" });
+        _statusData = d;
+      } catch {}
+    } else {
+      renderStatusPanels(_noLogPanels());
+      renderProcessHeader(proc, { status: "running", phase: "—" });
+    }
+  };
+
+  // ── プロセスヘッダー（選択中プロセスの詳細行）────────────────
+  function renderProcessHeader(proc, d) {
+    const headerEl = document.getElementById("status-header-card");
+    if (!headerEl) return;
+    let detailRow = headerEl.querySelector(".proc-detail-row");
+    if (!detailRow) {
+      detailRow = document.createElement("div");
+      detailRow.className = "status-header-inner proc-detail-row";
+      headerEl.appendChild(detailRow);
+    }
     const statusCls = d.status === "running" ? "badge-green"
-      : d.status === "rate-limit" ? "badge-warn"
-      : "badge-gray";
-    headerEl.innerHTML = `
-      <div class="status-header-inner">
-        <div class="status-header-left">
-          <div class="status-script">autonomous.sh</div>
-          <div class="status-session">${esc(d.last_session || "no session")}</div>
-        </div>
-        <div class="status-header-right">
-          <span class="badge ${statusCls}">${esc(d.status)}</span>
-          <span class="status-phase">${esc(d.phase)}</span>
-        </div>
+      : d.status === "rate-limit" ? "badge-warn" : "badge-gray";
+    const stopBtn = proc.is_external ? ""
+      : proc.type === "autonomous"
+        ? `<button class="btn-danger btn-sm" onclick="stopRun()">■ 停止</button>`
+        : proc.id
+          ? `<button class="btn-danger btn-sm" onclick="stopJob('${esc(proc.id)}')">■ 中止</button>`
+          : "";
+    const startedStr = proc.started_at ? `started: ${proc.started_at.slice(11,16)}` : "";
+    detailRow.innerHTML = `
+      <div class="status-header-left">
+        <div class="status-script">${esc(proc.label)}</div>
+        <div class="status-session">${esc(startedStr)}</div>
+      </div>
+      <div class="status-header-right">
+        <span class="badge ${statusCls}">${esc(d.status)}</span>
+        <span class="status-phase">${esc(d.phase)}</span>
+        ${stopBtn}
       </div>`;
+  }
+
+  // ── ログなし時の空パネルデータ ──────────────────────────────
+  function _noLogPanels() {
+    return { done_videos: [], running_video: null, done_count: 0, warn_count: 0,
+             error_count: 0, rate_limit_count: 0, queue_count: 0,
+             phase: "—", status: "running", log_file: "(手動起動 — ログなし)",
+             log_file_path: "", drive_folder_url: "" };
+  }
+
+  // ── STATUS 全体描画（idle / プロセスなし時）─────────────────
+  function renderStatusData(d) {
+    const headerEl = document.getElementById("status-header-card");
+    if (!headerEl) return;
+
+    const procs = d.processes || [];
+    if (procs.length === 0) {
+      // idle
+      headerEl.innerHTML = `
+        <div class="status-header-inner">
+          <div class="status-header-left">
+            <div class="status-script">idle</div>
+          </div>
+          <div class="status-header-right">
+            <span class="badge badge-gray">${esc(d.status || "idle")}</span>
+            <span class="status-phase">${esc(d.phase)}</span>
+          </div>
+        </div>`;
+      renderStatusPanels(d);
+    } else {
+      // プロセスあり
+      const firstSelect = !_selectedProcessId;
+      if (!_selectedProcessId) _selectedProcessId = procs[0].id;
+      const sel = procs.find(p => p.id === _selectedProcessId) || procs[0];
+      headerEl.innerHTML = `<div class="proc-detail-row status-header-inner"></div>`;
+      renderProcessTabs(procs);
+      renderProcessHeader(sel, { status: "running", phase: "—" });
+      // 初回自動選択時のみ即時フェッチ（それ以降は SSE が更新）
+      if (firstSelect) selectProcess(sel);
+    }
+  }
+
+  // ── 動画・統計パネル描画（プロセス切り替え共通）─────────────
+  function renderStatusPanels(d) {
+    const videosEl = document.getElementById("status-videos");
+    const statsEl  = document.getElementById("status-stats");
+    if (!videosEl || !statsEl) return;
 
     const cards = [];
     if (d.running_video) {
@@ -182,14 +327,22 @@ document.addEventListener("DOMContentLoaded", () => {
     statsEl.innerHTML = `
       <div class="stat-grid">
         <div class="stat-item"><span class="stat-label">queue</span><span class="stat-val">${d.queue_count}</span></div>
-        <div class="stat-item"><span class="stat-label">done</span><span class="stat-val stat-green">${d.done_count}</span></div>
-        <div class="stat-item"><span class="stat-label">warn</span><span class="stat-val stat-warn">${d.warn_count}</span></div>
-        <div class="stat-item"><span class="stat-label">error</span><span class="stat-val stat-err">${d.error_count}</span></div>
-        <div class="stat-item"><span class="stat-label">rate-limit</span><span class="stat-val">${d.rate_limit_count}</span></div>
-        <div class="stat-item"><span class="stat-label">phase</span><span class="stat-val">${esc(d.phase)}</span></div>
+        <div class="stat-item stat-clickable" onclick="showLogFilter('done')" title="ログでフィルタ">
+          <span class="stat-label">done ↗</span><span class="stat-val stat-green">${d.done_count}</span>
+        </div>
+        <div class="stat-item stat-clickable" onclick="showLogFilter('warn')" title="ログでフィルタ">
+          <span class="stat-label">warn ↗</span><span class="stat-val stat-warn">${d.warn_count}</span>
+        </div>
+        <div class="stat-item stat-clickable" onclick="showLogFilter('error')" title="ログでフィルタ">
+          <span class="stat-label">error ↗</span><span class="stat-val stat-err">${d.error_count}</span>
+        </div>
+        <div class="stat-item stat-clickable" onclick="showLogFilter('rate-limit')" title="ログでフィルタ">
+          <span class="stat-label">rate-limit ↗</span><span class="stat-val">${d.rate_limit_count}</span>
+        </div>
+        <div class="stat-item"><span class="stat-label">phase</span><span class="stat-val" style="font-size:13px">${esc(d.phase)}</span></div>
       </div>
       <div style="margin-top:12px;display:flex;justify-content:space-between;align-items:center;font-size:11px;color:var(--text-faint)">
-        <span>参照: ${esc(d.log_file || "—")}</span>
+        <span title="${esc(d.log_file_path || "")}">ログ: ${esc(d.log_file || "—")}</span>
         ${d.drive_folder_url ? `<a class="channel-link" href="${esc(d.drive_folder_url)}" target="_blank" rel="noopener" style="opacity:1;font-size:12px">↗ Google Drive</a>` : ""}
       </div>`;
   }
@@ -213,6 +366,227 @@ document.addEventListener("DOMContentLoaded", () => {
     });
     loadStatus();
   };
+
+  // ── STATUS: ジョブ停止 ───────────────────────────────────
+  window.stopJob = async function(jobId) {
+    const ok = await showConfirm("処理を中止しますか？", "中止");
+    if (!ok) return;
+    try {
+      await api(`/api/jobs/${encodeURIComponent(jobId)}/stop`, 5000, "POST");
+    } catch (e) {
+      await showConfirm(`中止失敗: ${e.message}`, "OK", false);
+    }
+  };
+
+  // ── STATUS: ログフィルタ ─────────────────────────────────
+  function lineColorClass(line) {
+    return line.includes("[error]") || line.includes("ERROR") ? "log-error"
+         : line.includes("[warn]")  || line.includes("WARN")  ? "log-warn"
+         : line.includes("[done]")  || line.includes("Done")  ? "log-done"
+         : line.includes("[info]")                             ? "log-info" : "";
+  }
+
+  window.openLogByPath = function(path) {
+    closeLogFilter();
+    _pendingLogPath = path;
+    switchTab("logs");
+  };
+
+  window.showLogFilter = async function(filterType) {
+    if (!_statusData?.log_file_path) return;
+    const filterMap = {
+      done: "[done]",
+      warn: "[warn]",
+      error: "[error]",
+      "rate-limit": "rate-limit",
+    };
+    const tag = filterMap[filterType];
+    if (!tag) return;
+
+    const logPath = _statusData.log_file_path;
+    const logName = logPath.split("/").pop();
+
+    const modal    = document.getElementById("log-filter-modal");
+    const titleEl  = document.getElementById("log-filter-title");
+    const countEl  = document.getElementById("log-filter-count");
+    const content  = document.getElementById("log-filter-content");
+    const openBtn  = document.getElementById("log-filter-open-btn");
+    if (!modal) return;
+
+    titleEl.textContent = `${filterType} — ${logName}`;
+    countEl.textContent = "";
+    content.textContent = "読み込み中…";
+    if (openBtn) openBtn.onclick = () => openLogByPath(logPath);
+    modal.style.display = "flex";
+
+    try {
+      const d = await api(`/api/log-content?path=${encodeURIComponent(logPath)}`);
+      const allLines = d.content.split("\n");
+      const matchIndices = [];
+      allLines.forEach((line, i) => { if (line.includes(tag)) matchIndices.push(i); });
+
+      countEl.textContent = `${matchIndices.length} 件`;
+      if (!matchIndices.length) { content.textContent = "該当行なし"; return; }
+
+      // ±10行コンテキスト、重複ウィンドウをマージ
+      const CONTEXT = 10;
+      const groups = [];
+      let cur = null;
+      for (const idx of matchIndices) {
+        const s = Math.max(0, idx - CONTEXT);
+        const e = Math.min(allLines.length - 1, idx + CONTEXT);
+        if (!cur || s > cur.e + 1) {
+          cur = { s, e, matches: new Set([idx]) };
+          groups.push(cur);
+        } else {
+          cur.e = Math.max(cur.e, e);
+          cur.matches.add(idx);
+        }
+      }
+
+      content.innerHTML = "";
+      const frag = document.createDocumentFragment();
+      groups.forEach((g, gi) => {
+        if (gi > 0) {
+          const sep = document.createElement("div");
+          sep.className = "log-filter-sep";
+          frag.appendChild(sep);
+        }
+        for (let i = g.s; i <= g.e; i++) {
+          const line = allLines[i];
+          if (i > g.s) frag.appendChild(document.createTextNode("\n"));
+          if (g.matches.has(i)) {
+            const arrow = document.createElement("span");
+            arrow.className = "log-filter-arrow";
+            arrow.textContent = "▸ ";
+            frag.appendChild(arrow);
+            const span = document.createElement("span");
+            const colorCls = lineColorClass(line);
+            span.className = colorCls ? `${colorCls} log-match` : "log-match";
+            span.textContent = line;
+            frag.appendChild(span);
+          } else {
+            const span = document.createElement("span");
+            span.className = "log-ctx";
+            span.textContent = line;
+            frag.appendChild(span);
+          }
+        }
+      });
+      content.appendChild(frag);
+    } catch (e) {
+      content.textContent = `読み込み失敗: ${e.message}`;
+    }
+  };
+
+  window.closeLogFilter = function() {
+    const modal = document.getElementById("log-filter-modal");
+    if (modal) modal.style.display = "none";
+  };
+
+  // ── GPU グラフ ───────────────────────────────────────────
+  function updateGpuGraph(gpu) {
+    const initEl = document.getElementById("gpu-init");
+    const wrapEl = document.getElementById("gpu-canvas-wrap");
+    if (!initEl || !wrapEl) return;
+
+    if (!gpu || !gpu.available) {
+      initEl.style.display = "";
+      initEl.innerHTML = `<div class="placeholder-icon">🖥️</div><span>GPU データ取得不可</span>`;
+      wrapEl.style.display = "none";
+      return;
+    }
+
+    initEl.style.display = "none";
+    wrapEl.style.display = "";
+
+    _gpuHistory.push(gpu.util);
+    if (_gpuHistory.length > GPU_MAX_POINTS) _gpuHistory.shift();
+
+    const metaEl = document.getElementById("gpu-meta-row");
+    if (metaEl) {
+      let html = `<span class="gpu-util-val">${gpu.util}</span><span class="gpu-util-unit">%</span>`;
+      if (gpu.mem_total > 0) {
+        const pct = Math.round(gpu.mem_used / gpu.mem_total * 100);
+        html += `<span class="gpu-meta-item">VRAM ${gpu.mem_used} / ${gpu.mem_total} MiB (${pct}%)</span>`;
+      }
+      if (gpu.temp > 0) {
+        html += `<span class="gpu-meta-item">${gpu.temp}°C</span>`;
+      }
+      metaEl.innerHTML = html;
+    }
+
+    drawGpuSparkline();
+  }
+
+  function drawGpuSparkline() {
+    const canvas = document.getElementById("gpu-canvas");
+    if (!canvas || _gpuHistory.length < 2) return;
+
+    const W = canvas.offsetWidth || 800;
+    const H = 80;
+    if (canvas.width !== W) canvas.width = W;
+    canvas.height = H;
+
+    const ctx = canvas.getContext("2d");
+    ctx.clearRect(0, 0, W, H);
+
+    const padT = 6, padB = 6, padL = 2, padR = 2;
+    const gW = W - padL - padR;
+    const gH = H - padT - padB;
+
+    ctx.strokeStyle = "rgba(255,255,255,0.05)";
+    ctx.lineWidth = 1;
+    [0.25, 0.5, 0.75].forEach(f => {
+      const y = padT + gH * (1 - f);
+      ctx.beginPath();
+      ctx.moveTo(padL, y);
+      ctx.lineTo(padL + gW, y);
+      ctx.stroke();
+    });
+
+    const offset = GPU_MAX_POINTS - _gpuHistory.length;
+    const xOf = i => padL + ((offset + i) / (GPU_MAX_POINTS - 1)) * gW;
+    const yOf = v => padT + gH * (1 - v / 100);
+
+    const grad = ctx.createLinearGradient(0, padT, 0, padT + gH);
+    grad.addColorStop(0, "rgba(10,132,255,0.30)");
+    grad.addColorStop(1, "rgba(10,132,255,0.02)");
+
+    ctx.beginPath();
+    _gpuHistory.forEach((v, i) => {
+      const x = xOf(i), y = yOf(v);
+      i === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y);
+    });
+    ctx.lineTo(xOf(_gpuHistory.length - 1), padT + gH);
+    ctx.lineTo(xOf(0), padT + gH);
+    ctx.closePath();
+    ctx.fillStyle = grad;
+    ctx.fill();
+
+    ctx.beginPath();
+    _gpuHistory.forEach((v, i) => {
+      const x = xOf(i), y = yOf(v);
+      i === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y);
+    });
+    ctx.strokeStyle = "rgba(10,132,255,0.9)";
+    ctx.lineWidth = 1.5;
+    ctx.lineJoin = "round";
+    ctx.stroke();
+
+    const lastV = _gpuHistory[_gpuHistory.length - 1];
+    const dotX = xOf(_gpuHistory.length - 1);
+    const dotY = yOf(lastV);
+    ctx.beginPath();
+    ctx.arc(dotX, dotY, 3, 0, Math.PI * 2);
+    ctx.fillStyle = "rgba(10,132,255,1)";
+    ctx.fill();
+    ctx.strokeStyle = "rgba(255,255,255,0.5)";
+    ctx.lineWidth = 1;
+    ctx.stroke();
+  }
+
+  window.addEventListener("resize", drawGpuSparkline);
 
   // ── README ───────────────────────────────────────────────
   async function loadReadme() {
@@ -245,34 +619,106 @@ document.addEventListener("DOMContentLoaded", () => {
         const badgeCls = !l.is_done ? "badge-blue" : l.has_error ? "badge-err" : "badge-green";
         const badgeText = !l.is_done ? "live" : l.has_error ? "error" : "done";
         return `
-        <div class="channel-item log-file-item" data-path="${esc(l.path)}" onclick="openLog(this)">
-          <span class="badge ${badgeCls}">${badgeText}</span>
+        <div class="channel-item log-file-item" data-path="${esc(l.path)}" data-is-done="${l.is_done}" onclick="openLog(this)">
+          <span class="badge ${badgeCls}" data-live-badge>${badgeText}</span>
           <span class="channel-name">${esc(l.path)}</span>
           <span style="color:var(--text-faint);font-size:11px;flex-shrink:0">${(l.size/1024).toFixed(1)} KB</span>
         </div>`;
       }).join("");
+      if (_pendingLogPath) {
+        const target = el.querySelector(`[data-path="${CSS.escape(_pendingLogPath)}"]`);
+        if (target) { _pendingLogPath = null; openLog(target); }
+        else _pendingLogPath = null;
+      }
     } catch { el.innerHTML = placeholder("⚠️", "読み込み失敗"); }
   }
 
-  window.reloadLogs = function() { loadLogs(); };
+  window.reloadLogs = function() { stopLogStream(); loadLogs(); };
 
   window.openLog = async function(el) {
     document.querySelectorAll(".log-file-item").forEach(e => e.classList.remove("active-log"));
     el.classList.add("active-log");
-    const path = el.dataset.path;
+    const path   = el.dataset.path;
+    const isDone = el.dataset.isDone === "true";
     const card    = document.getElementById("log-viewer-card");
     const titleEl = document.getElementById("log-viewer-title");
     const content = document.getElementById("log-viewer-content");
     card.style.display = "flex";
     titleEl.textContent = path.split("/").pop();
     content.textContent = "読み込み中…";
-    try {
-      const d = await api(`/api/log-content?path=${encodeURIComponent(path)}`);
-      renderLog(content, d.content.split("\n"));
-    } catch { content.textContent = "読み込み失敗"; }
+
+    stopLogStream();
+
+    if (!isDone) {
+      // live ログ: SSE ストリームで tail -f 相当
+      startLogStream(path, content, el);
+    } else {
+      try {
+        const d = await api(`/api/log-content?path=${encodeURIComponent(path)}`);
+        renderLog(content, d.content.split("\n"));
+      } catch { content.textContent = "読み込み失敗"; }
+    }
   };
 
+  function startLogStream(path, contentEl, listEl) {
+    contentEl.textContent = "";
+    const es = new EventSource(`/api/log-stream?path=${encodeURIComponent(path)}`);
+    _logEventSource = es;
+
+    es.onmessage = e => {
+      try {
+        const d = JSON.parse(e.data);
+        if (d.lines) {
+          if (d.init) {
+            renderLog(contentEl, d.lines);
+          } else {
+            appendLogLines(contentEl, d.lines);
+          }
+        }
+        if (d.done) {
+          stopLogStream();
+          // バッジを done に更新
+          if (listEl) {
+            const badge = listEl.querySelector("[data-live-badge]");
+            if (badge) {
+              badge.className = "badge badge-green";
+              badge.textContent = "done";
+            }
+            listEl.dataset.isDone = "true";
+          }
+        }
+      } catch {}
+    };
+    es.onerror = () => {
+      // 接続エラーは自動再接続に任せる
+    };
+  }
+
+  function stopLogStream() {
+    if (_logEventSource) {
+      _logEventSource.close();
+      _logEventSource = null;
+    }
+  }
+
+  function appendLogLines(el, lines) {
+    const fragment = document.createDocumentFragment();
+    lines.forEach(l => {
+      if (!(el.textContent === "" && el.children.length === 0)) {
+        fragment.appendChild(document.createTextNode("\n"));
+      }
+      const span = document.createElement("span");
+      const cls = lineColorClass(l);
+      if (cls) span.className = cls;
+      span.textContent = l;
+      fragment.appendChild(span);
+    });
+    el.appendChild(fragment);
+    el.scrollTop = el.scrollHeight;
+  }
+
   window.closeLogViewer = function() {
+    stopLogStream();
     document.getElementById("log-viewer-card").style.display = "none";
     document.querySelectorAll(".log-file-item").forEach(e => e.classList.remove("active-log"));
   };
@@ -300,13 +746,18 @@ document.addEventListener("DOMContentLoaded", () => {
   }
 
   function renderLog(el, lines) {
-    el.innerHTML = lines.map(l => {
-      const cls = l.includes("[error]") || l.includes("ERROR") ? "log-error"
-        : l.includes("[warn]")  || l.includes("WARN")  ? "log-warn"
-        : l.includes("[done]")  || l.includes("Done")  ? "log-done"
-        : l.includes("[info]")                          ? "log-info" : "";
-      return `<span class="${cls}">${esc(l)}</span>`;
-    }).join("\n");
+    el.innerHTML = "";
+    el.textContent = "";
+    const fragment = document.createDocumentFragment();
+    lines.forEach((l, i) => {
+      if (i > 0) fragment.appendChild(document.createTextNode("\n"));
+      const span = document.createElement("span");
+      const cls = lineColorClass(l);
+      if (cls) span.className = cls;
+      span.textContent = l;
+      fragment.appendChild(span);
+    });
+    el.appendChild(fragment);
     el.scrollTop = el.scrollHeight;
   }
 
@@ -370,18 +821,18 @@ document.addEventListener("DOMContentLoaded", () => {
     const ok = await showConfirm("autonomous.sh を停止しますか？", "停止");
     if (!ok) return;
     const stopBtn = document.getElementById("run-stop-btn");
-    stopBtn.disabled = true;
+    if (stopBtn) stopBtn.disabled = true;
     try {
       await api("/api/run/stop", 10000, "POST");
       await _updateRunBadge();
     } catch (e) {
       await showConfirm(`停止失敗: ${e.message}`, "OK", false);
     } finally {
-      stopBtn.disabled = false;
+      if (stopBtn) stopBtn.disabled = false;
     }
   };
 
-  // ── HOME: URL 処理（複数URL対応） ──────────────────────────
+  // ── HOME: URL 処理 ──────────────────────────────────────
   window.processUrl = async function() {
     const raw     = document.getElementById("proc-urls").value;
     const urls    = raw.split("\n").map(s => s.trim()).filter(Boolean);
@@ -405,7 +856,7 @@ document.addEventListener("DOMContentLoaded", () => {
     }
   };
 
-  // ── HOME: CLI コマンド ──────────────────────────────────────
+  // ── HOME: CLI コマンド ──────────────────────────────────
   async function _runCmd(endpoint, payload, resultId, btnEl) {
     const resultEl = document.getElementById(resultId);
     const origText = btnEl.textContent;
@@ -432,7 +883,7 @@ document.addEventListener("DOMContentLoaded", () => {
     await _runCmd("/api/summarize", { threshold }, "batch-result", btn);
   };
 
-  // ── HOME: チャンネル管理モーダル ────────────────────────────
+  // ── HOME: チャンネル管理モーダル ───────────────────────────
   window.openAddChannelModal = function() {
     document.getElementById("modal-error").textContent = "";
     document.getElementById("add-channel-modal").style.display = "flex";
@@ -495,10 +946,10 @@ document.addEventListener("DOMContentLoaded", () => {
     });
   }
 
-  // Escape キーでモーダルを閉じる
   document.addEventListener("keydown", e => {
     if (e.key === "Escape") {
       closeAddChannelModal();
+      closeLogFilter();
       document.getElementById("confirm-modal").style.display = "none";
     }
   });
@@ -506,5 +957,23 @@ document.addEventListener("DOMContentLoaded", () => {
   function esc(s) {
     return String(s ?? "").replace(/[&<>"']/g, c =>
       ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+  }
+
+  // ── ヘッダー環境バッジ ───────────────────────────────────────
+  async function loadEnvBadge() {
+    try {
+      const { is_wsl } = await api("/api/env");
+      const el = document.getElementById("env-badge");
+      if (!el) return;
+      const img = document.createElement("img");
+      img.src = is_wsl ? "/static/linux.png" : "/static/apple.png";
+      img.className = is_wsl ? "env-icon" : "env-icon env-icon-mac";
+      img.alt = is_wsl ? "WSL" : "Mac";
+      const label = document.createElement("span");
+      label.className = "env-label";
+      label.textContent = is_wsl ? "WSL" : "Mac";
+      el.appendChild(img);
+      el.appendChild(label);
+    } catch {}
   }
 });

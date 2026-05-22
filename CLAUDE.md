@@ -191,7 +191,7 @@ portal.sh             # 起動スクリプト（Mac/WSL 自動判定）
 |-------|------|------|
 | **1** | 骨格 + チャンネル一覧・STATUS・LOGS・README 表示 + Mac ローカルモード | ✅ 完了（2026-05-21） |
 | **2** | HOME タブ機能化（チャンネル追加/削除・実行パネル・URL処理・Summarize/Sync）| ✅ 完了（2026-05-22） |
-| 3 | リアルタイム更新（WebSocket / SSE）+ STATUS 改善 | 未着手 |
+| **3** | SSE リアルタイム更新・ライブログストリーム・ジョブ中止・ログフィルタ | ✅ 完了（2026-05-22） |
 | 4 | LIBRARY タブ（トランスクリプト全文検索）| 未着手 |
 | 5 | Apple liquid glass デザイン精緻化（getdesign 等）| 未着手 |
 | 6 | Tailscale direct アクセス（Windows portproxy）| 未着手 |
@@ -218,22 +218,26 @@ portal.sh             # 起動スクリプト（Mac/WSL 自動判定）
 - favicon 204、docs/ 静的配信
 - **マージルール**: 各フェーズ完了後、`feat/portal-*` → `main` へのマージは**必ずユーザーの承認を得てから**行うこと
 
-### Phase 3 で実装すべきこと
+### Phase 3 で実装したこと（2026-05-22 完了）
 
-**リアルタイム更新**
-- WebSocket または SSE エンドポイント
-- LOGS タブ: live ログを開いているときポーリングで自動更新（tail -f 相当）
-- STATUS タブ: WebSocket でリアルタイム自動更新
-- autonomous.sh の状態（DL中/rate-limit/停止）をバッジ表示
+**リアルタイム更新（SSE）**
+- `GET /api/events`: 5秒ごとにステータスデータをプッシュ（STATUS タブのポーリング廃止）
+- `GET /api/log-stream?path=...`: live ログを 2秒間隔で tail -f 相当配信
+
+**ジョブ管理**
+- `_active_jobs` dict で PID 追跡（process/summarize/sync/transcribe）
+- `GET /api/jobs`: 実行中ジョブ一覧
+- `POST /api/jobs/{job_id}/stop`: ジョブを terminate
 
 **STATUS タブ改善**
-- URL処理の進行状況を STATUS タブで確認可能にする
-  - `transcribe.py process` のログ出力フォーマットを解析して running/done 表示
-  - STATUS ヘッダーを autonomous.sh 固定から「最新セッション種別」に動的切り替え
-  - 処理済み動画パネルに URL処理中の "running" バッジを表示
-- URL処理・Summarize All・Drive Sync の中止ボタン（Ctrl+C 相当）
-  - バックグラウンドプロセスの PID 追跡が必要
-- 統計パネル: queue / done / warn / error のカウントをクリックしてログ内の該当行をフィルタ表示
+- `session_type` フィールドで autonomous/process/summarize/sync/idle を動的判別
+- STATUS ヘッダーに実行中スクリプト名と中止ボタンを表示
+- 統計（done/warn/error/rate-limit）をクリックしてログ行フィルタモーダル表示
+
+**LOGS タブ改善**
+- live ログを選択すると EventSource で自動追従（done 検知でバッジ更新）
+
+### Phase 4 で実装すべきこと
 
 ### 依存関係
 
