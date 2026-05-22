@@ -192,8 +192,9 @@ portal.sh             # 起動スクリプト（Mac/WSL 自動判定）
 | **1** | 骨格 + チャンネル一覧・STATUS・LOGS・README 表示 + Mac ローカルモード | ✅ 完了（2026-05-21） |
 | **2** | HOME タブ機能化（チャンネル追加/削除・実行パネル・URL処理・Summarize/Sync）| ✅ 完了（2026-05-22） |
 | **3** | SSE リアルタイム更新・ライブログストリーム・ジョブ中止・ログフィルタ | ✅ 完了（2026-05-22） |
-| 4 | LIBRARY タブ（トランスクリプト全文検索）| 未着手 |
-| 5 | Apple liquid glass デザイン精緻化（getdesign 等）| 未着手 |
+| **3 ext** | マルチプロセス STATUS・summarize per-video 表示・idle 修正・env バッジ | ✅ 完了（2026-05-22） |
+| **4** | LIBRARY タブ（トランスクリプト全文検索）| 未着手 |
+| 5 | Apple liquid glass デザイン精緻化 | 未着手 |
 | 6 | Tailscale direct アクセス（Windows portproxy）| 未着手 |
 
 ### Phase 1 でできること
@@ -237,7 +238,98 @@ portal.sh             # 起動スクリプト（Mac/WSL 自動判定）
 **LOGS タブ改善**
 - live ログを選択すると EventSource で自動追従（done 検知でバッジ更新）
 
-### Phase 4 で実装すべきこと
+### Phase 3 ext で実装したこと（2026-05-22 完了、feat/portal-multi-process）
+
+**マルチプロセス STATUS**
+- `/proc` スキャンで手動起動プロセス（transcribe.py / summarize.py 直接実行）を自動検出
+- プロセスタブ UI: 複数プロセスを切り替えて各ログ・統計を個別表示
+- `_find_log_for_pid()`: `/proc/<pid>/fd` fd スキャン + `[session-end]` なしログへフォールバック
+- idle 時（active processes なし）に過去ログを表示しない
+
+**summarize 対応**
+- `summarize.py` にログ書き出し追加（`logs/summarize/summarize_YYYYMMDD.log`）
+- `_parse_summarize_videos()`: `[N/M]` 行で per-video リアルタイム追跡（running 動画タイトル表示）
+- ログなし summarize プロセス用 `/api/summarize-session`: `summaries/*_processed.json` mtime から処理済みチャンネル + Drive リンクを返す
+- `[drive]` 正規表現をスペース含みファイル名に対応（`\S+` → `.+?`）
+- done_count を `[done]` 行カウント（チャンネル単位）に統一
+
+**UI**
+- ヘッダー env バッジ: WSL（Tux）/ Mac（Apple）アイコン + frosted pill デザイン
+- favicon: `logo_transparent.png`
+
+### Phase 4 で実装すべきこと（LIBRARY タブ — トランスクリプト全文検索）
+
+**ブランチ**: `feat/portal-phase4`（`main` から切る）
+
+#### 目標
+`transcripts/` 以下に蓄積された Markdown トランスクリプトを全文検索し、
+動画タイトル・チャンネル・内容で絞り込んで閲覧できる UI を作る。
+
+#### データ構造
+```
+transcripts/
+├── チャンネル名/
+│   ├── 動画タイトル.md   ← 各動画の文字起こし（## ポイント セクション含む）
+│   └── _index.json       ← チャンネルのメタデータ（title / url / count 等）
+transcripts/misc/
+│   └── _index.json
+```
+
+`_index.json` は `transcribe.py sync` で更新される。
+
+#### 実装方針
+
+**バックエンド（`portal/main.py`）**
+
+```python
+GET /api/library/search?q=<query>&channel=<ch>&page=<n>&per_page=20
+```
+- `q`: 全文検索クエリ（空なら全件）
+- `channel`: チャンネル名フィルタ（空なら全チャンネル）
+- `page`: ページ番号（1-based）
+- レスポンス: `{results: [{channel, title, excerpt, path}], total, pages}`
+
+検索実装: Python の `re.search` で十分（件数が多くなったら後で SQLite FTS に移行）。
+`## ポイント` セクションのみ検索対象にすることで高速化。
+
+```python
+GET /api/library/channels
+```
+チャンネル名一覧と動画数を返す。
+
+```python
+GET /api/library/transcript?path=<relative_path>
+```
+指定 `.md` ファイルの内容を返す（ビューアー用）。
+
+**フロントエンド（`portal/static/app.js`, `portal/templates/index.html`）**
+
+LIBRARY タブの現在の「Phase 4 で実装予定」プレースホルダーを実装に置き換える。
+
+```
+┌──────────────────────────────────────────────────────┐
+│ 🔍 [検索ボックス]   チャンネル: [select ▼]  [検索]   │
+├──────────────────────────────────────────────────────┤
+│ 結果: 234件                              ← ページネーション → │
+│                                                      │
+│ ┌────────────────────────────────────────────────┐   │
+│ │ チャンネル名 / 動画タイトル                       │   │
+│ │ ...マッチ前後のテキスト抜粋...                    │   │
+│ └────────────────────────────────────────────────┘   │
+│ ┌──────────────────┐                                 │
+│ │ (クリックで全文表示)│                                │
+│ └──────────────────┘                                 │
+└──────────────────────────────────────────────────────┘
+```
+
+クリックでビューアーモーダルを開き、全文（Markdown レンダリング）を表示。
+
+#### 検証手順
+1. `./portal.sh --local` で起動
+2. LIBRARY タブを開く
+3. 検索ボックスに語句を入力 → 結果が表示される
+4. チャンネルフィルタで絞り込み
+5. 結果カードをクリック → ビューアーモーダルで全文確認
 
 ### 依存関係
 
