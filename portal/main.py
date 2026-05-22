@@ -217,6 +217,78 @@ async def _await_and_close(proc, f, job_id: str | None = None, append_session_en
             _active_jobs.pop(job_id, None)
 
 
+# ── ジョブラベル ─────────────────────────────────────────────
+_JOB_LABELS: dict[str, str] = {
+    "autonomous": "autonomous.sh",
+    "process":    "URL処理",
+    "summarize":  "summarize",
+    "sync":       "Drive Sync",
+    "transcribe": "transcribe",
+}
+
+
+# ── summarize ログ解析 ────────────────────────────────────────
+def _parse_summarize_videos(lines: list[str]) -> tuple[list[dict], dict | None]:
+    done: list[dict] = []
+    running: dict | None = None
+    current_channel = ""
+    channel_gpath: dict[str, str] = {}
+
+    for line in lines:
+        m = re.search(r'\[summarize\]\s+(.+?):', line)
+        if m:
+            current_channel = m.group(1).strip()
+            running = {"title": current_channel, "channel": current_channel, "drive_url": ""}
+            continue
+        m = re.match(r'^\s+\[(\d+)/\d+\]\s+(.+)', line)
+        if m and current_channel:
+            done.append({"title": m.group(2).strip(), "channel": current_channel,
+                         "drive_url": "", "_gpath": ""})
+            continue
+        m = re.search(r'\[drive\]\s+(\S+)\s+→', line)
+        if m and current_channel:
+            channel_gpath[current_channel] = f"gdrive:yt-learn/{m.group(1)}"
+            continue
+        if "[done]" in line and "サマリー更新完了" in line:
+            running = None
+
+    for v in done:
+        v["_gpath"] = channel_gpath.get(v["channel"], "")
+
+    done.reverse()
+    return done, running
+
+
+# ── アクティブプロセス一覧 ─────────────────────────────────────
+async def _get_active_processes() -> list[dict]:
+    procs = []
+    for j in _active_jobs.values():
+        procs.append({
+            "id": j["id"],
+            "type": j["type"],
+            "label": _JOB_LABELS.get(j["type"], j["type"]),
+            "log_file": j["log_file"],
+            "started_at": j["started_at"],
+        })
+    if IS_WSL:
+        yt_session = await _find_yt_session()
+        if yt_session:
+            log_dir = ROOT / "logs" / "autonomous"
+            log_file = ""
+            if log_dir.exists():
+                logs = sorted(log_dir.glob("*.log"), key=lambda x: x.stat().st_mtime, reverse=True)
+                if logs:
+                    log_file = str(logs[0].relative_to(ROOT))
+            procs.append({
+                "id": f"autonomous_{yt_session}",
+                "type": "autonomous",
+                "label": "autonomous.sh",
+                "log_file": log_file,
+                "started_at": "",
+            })
+    return procs
+
+
 # ── GPU 統計取得（Phase 3）───────────────────────────────────
 async def _get_gpu_stats() -> dict:
     if IS_WSL:
@@ -265,109 +337,119 @@ async def _get_gpu_stats() -> dict:
 
 
 # ── Status データ構築（SSE / REST 共通）────────────────────────
-async def _build_status_data() -> dict:
-    log_dirs = [ROOT / "logs", ROOT / "log"]
+async def _build_status_data(log_path: str | None = None) -> dict:
+    # 共通データを先に取得
+    yt_session = await _find_yt_session() if IS_WSL else None
+    gpu        = await _get_gpu_stats()
+    processes  = await _get_active_processes()
+    active_jobs = [
+        {"id": j["id"], "type": j["type"], "pid": j["pid"],
+         "started_at": j["started_at"], "log_file": j["log_file"]}
+        for j in _active_jobs.values()
+    ]
+    queue_dir   = ROOT / "queue"
+    queue_count = len(list(queue_dir.glob("*.m4a"))) if queue_dir.exists() else 0
+    folder_url  = await _rclone_link("gdrive:yt-learn")
 
-    for log_dir in log_dirs:
-        if not log_dir.exists():
-            continue
-        logs = sorted(log_dir.rglob("*.log"), key=lambda x: x.stat().st_mtime, reverse=True)
-        if not logs:
-            continue
+    # 対象ログファイルを決定
+    target_log: Path | None = None
+    if log_path:
+        candidate = (ROOT / log_path).resolve()
+        if (str(candidate).startswith(str(ROOT.resolve()))
+                and candidate.exists() and candidate.suffix == ".log"):
+            target_log = candidate
+    if target_log is None:
+        for log_dir in [ROOT / "logs", ROOT / "log"]:
+            if not log_dir.exists():
+                continue
+            logs = sorted(log_dir.rglob("*.log"), key=lambda x: x.stat().st_mtime, reverse=True)
+            if logs:
+                target_log = logs[0]
+                break
 
-        text = logs[0].read_text(encoding="utf-8", errors="replace")
-        lines = text.splitlines()
+    if target_log is None:
+        return {
+            "error": "ログファイルなし",
+            "done_count": 0, "warn_count": 0, "error_count": 0,
+            "rate_limit_count": 0, "queue_count": queue_count,
+            "done_videos": [], "running_video": None, "phase": "idle", "status": "idle",
+            "drive_folder_url": folder_url, "session_type": "idle",
+            "active_jobs": active_jobs, "yt_session": yt_session, "processes": processes,
+            "log_file": "", "log_file_path": "", "gpu": gpu,
+        }
 
-        done_count  = sum(1 for l in lines if "[done]" in l)
-        warn_count  = sum(1 for l in lines if "[warn]" in l)
-        error_count = sum(1 for l in lines if "[error]" in l)
-        rl_count    = sum(1 for l in lines if "rate-limit" in l.lower() or "レートリミット" in l)
+    text  = target_log.read_text(encoding="utf-8", errors="replace")
+    lines = text.splitlines()
 
+    done_count  = sum(1 for l in lines if "[done]" in l)
+    warn_count  = sum(1 for l in lines if "[warn]" in l)
+    error_count = sum(1 for l in lines if "[error]" in l)
+    rl_count    = sum(1 for l in lines if "rate-limit" in l.lower() or "レートリミット" in l)
+
+    is_summarize = any("[summarize]" in l for l in lines[:50])
+    if is_summarize:
+        done_videos, running_video = _parse_summarize_videos(lines)
+        seen: dict[str, str] = {}
+        for v in done_videos:
+            gpath = v.pop("_gpath", "")
+            if gpath:
+                if gpath not in seen:
+                    seen[gpath] = await _rclone_link(gpath)
+                v["drive_url"] = seen[gpath]
+    else:
         done_videos, running_video = _parse_session_videos(lines)
-
-        phase = "idle"
-        for l in reversed(lines[-20:]):
-            if "[model]" in l or "[transcribe]" in l:
-                phase = "transcribing"; break
-            if "[summary]" in l:
-                phase = "summarizing"; break
-            if "[download]" in l:
-                phase = "downloading"; break
-
-        status = "unknown"
-        for l in reversed(lines[-30:]):
-            if "[session-end]" in l:
-                status = "stopped"; break
-            if "rate-limit" in l.lower() or "レートリミット" in l:
-                status = "rate-limit"; break
-            if "[done]" in l or "[download]" in l or "[saved]" in l or "[skip]" in l:
-                status = "running"; break
-
-        last_session = next(
-            (l for l in reversed(lines) if "=== 開始" in l or "=== Started" in l), None
-        )
-
-        queue_dir = ROOT / "queue"
-        queue_count = len(list(queue_dir.glob("*.m4a"))) if queue_dir.exists() else 0
-
-        yt_session = await _find_yt_session() if IS_WSL else None
-        gpu = await _get_gpu_stats()
-        active_jobs = [
-            {"id": j["id"], "type": j["type"], "pid": j["pid"],
-             "started_at": j["started_at"], "log_file": j["log_file"]}
-            for j in _active_jobs.values()
-        ]
-
-        session_type = "idle"
-        if yt_session:
-            session_type = "autonomous"
-        elif active_jobs:
-            types = [j["type"] for j in active_jobs]
-            if "process" in types:
-                session_type = "process"
-            elif "summarize" in types:
-                session_type = "summarize"
-            elif "sync" in types:
-                session_type = "sync"
-            elif "transcribe" in types:
-                session_type = "transcribe"
-
         unique_channels = list({v["channel"] for v in done_videos if v.get("channel")})
-        folder_url = await _rclone_link("gdrive:yt-learn")
         ch_url_map = {ch: _get_channel_drive_urls(ch) for ch in unique_channels}
         for v in done_videos:
             file_map = ch_url_map.get(v.get("channel", ""), {})
             v["drive_url"] = file_map.get(v.get("title", ""), "")
 
-        return {
-            "log_file": logs[0].name,
-            "log_file_path": str(logs[0].relative_to(ROOT)),
-            "done_count": done_count,
-            "warn_count": warn_count,
-            "error_count": error_count,
-            "rate_limit_count": rl_count,
-            "queue_count": queue_count,
-            "done_videos": done_videos,
-            "running_video": running_video,
-            "phase": phase,
-            "status": status,
-            "last_session": last_session,
-            "drive_folder_url": folder_url,
-            "session_type": session_type,
-            "active_jobs": active_jobs,
-            "yt_session": yt_session,
-            "gpu": gpu,
-        }
+    phase = "idle"
+    for l in reversed(lines[-20:]):
+        if "[model]" in l or "[transcribe]" in l:
+            phase = "transcribing"; break
+        if "[summary]" in l or "[summarize]" in l:
+            phase = "summarizing"; break
+        if "[download]" in l:
+            phase = "downloading"; break
+
+    status = "unknown"
+    for l in reversed(lines[-30:]):
+        if "[session-end]" in l:
+            status = "stopped"; break
+        if "rate-limit" in l.lower() or "レートリミット" in l:
+            status = "rate-limit"; break
+        if "[done]" in l or "[download]" in l or "[saved]" in l or "[skip]" in l:
+            status = "running"; break
+
+    session_type = "idle"
+    if yt_session:
+        session_type = "autonomous"
+    elif active_jobs:
+        types = [j["type"] for j in active_jobs]
+        if   "process"   in types: session_type = "process"
+        elif "summarize" in types: session_type = "summarize"
+        elif "sync"      in types: session_type = "sync"
+        elif "transcribe" in types: session_type = "transcribe"
 
     return {
-        "error": "ログファイルなし",
-        "done_count": 0, "warn_count": 0, "error_count": 0,
-        "rate_limit_count": 0, "queue_count": 0,
-        "done_videos": [], "running_video": None, "phase": "—", "status": "不明",
-        "last_session": None, "drive_folder_url": "",
-        "session_type": "idle", "active_jobs": [], "yt_session": None,
-        "log_file": "", "log_file_path": "",
-        "gpu": {"available": False},
+        "log_file":       target_log.name,
+        "log_file_path":  str(target_log.relative_to(ROOT)),
+        "done_count":     done_count,
+        "warn_count":     warn_count,
+        "error_count":    error_count,
+        "rate_limit_count": rl_count,
+        "queue_count":    queue_count,
+        "done_videos":    done_videos,
+        "running_video":  running_video,
+        "phase":          phase,
+        "status":         status,
+        "drive_folder_url": folder_url,
+        "session_type":   session_type,
+        "active_jobs":    active_jobs,
+        "yt_session":     yt_session,
+        "processes":      processes,
+        "gpu":            gpu,
     }
 
 
@@ -466,8 +548,8 @@ async def get_log_content(path: str):
 
 
 @app.get("/api/status-summary")
-async def get_status_summary():
-    return JSONResponse(await _build_status_data())
+async def get_status_summary(log: str | None = None):
+    return JSONResponse(await _build_status_data(log_path=log))
 
 
 @app.get("/api/gpu")

@@ -12,6 +12,8 @@ document.addEventListener("DOMContentLoaded", () => {
   const _gpuHistory = [];
   const GPU_MAX_POINTS = 60;
   let _gpuPollTimer = null;
+  let _selectedProcessId = null;   // 選択中プロセス id
+  let _latestProcesses = [];       // 最新の processes リスト（SSE 更新）
 
   const SESSION_TYPE_LABELS = {
     autonomous: "autonomous.sh",
@@ -38,6 +40,7 @@ document.addEventListener("DOMContentLoaded", () => {
   window.goHome = () => switchTab("home");
   const initial = location.hash.replace("#", "") || "home";
   switchTab(initial);
+  loadEnvBadge();
 
   // ── HOME: channels ──────────────────────────────────────
   async function loadChannels() {
@@ -104,13 +107,32 @@ document.addEventListener("DOMContentLoaded", () => {
   function startStatusSSE() {
     if (_statusEventSource) return;
     _statusEventSource = new EventSource("/api/events");
-    _statusEventSource.onmessage = e => {
+    _statusEventSource.onmessage = async e => {
       try {
         const d = JSON.parse(e.data);
-        if (!d.error) {
+        if (d.error) return;
+        _latestProcesses = d.processes || [];
+
+        // 選択中プロセスが生きているか確認
+        if (_selectedProcessId) {
+          const still = _latestProcesses.find(p => p.id === _selectedProcessId);
+          if (still) {
+            // 選択中プロセスのログを最新取得
+            const fresh = await api(`/api/status-summary?log=${encodeURIComponent(still.log_file)}`);
+            renderStatusPanels(fresh);
+            renderProcessHeader(still, fresh);
+            _statusData = fresh;
+          } else {
+            // プロセスが終了した → 選択解除してデフォルト表示
+            _selectedProcessId = null;
+            renderStatusData(d);
+            _statusData = d;
+          }
+        } else {
           renderStatusData(d);
           _statusData = d;
         }
+        renderProcessTabs(_latestProcesses);
       } catch {}
     };
     _statusEventSource.onerror = () => {};
@@ -143,40 +165,107 @@ document.addEventListener("DOMContentLoaded", () => {
     } catch {}
   }
 
-  function renderStatusData(d) {
+  // ── プロセスタブ描画 ────────────────────────────────────────
+  function renderProcessTabs(procs) {
     const headerEl = document.getElementById("status-header-card");
-    const videosEl = document.getElementById("status-videos");
-    const statsEl  = document.getElementById("status-stats");
     if (!headerEl) return;
 
+    // タブ行を更新（既存のタブ行があれば差し替え）
+    let tabsRow = headerEl.querySelector(".process-tabs");
+    if (!procs || procs.length === 0) {
+      if (tabsRow) tabsRow.remove();
+      return;
+    }
+    if (!tabsRow) {
+      tabsRow = document.createElement("div");
+      tabsRow.className = "process-tabs";
+      headerEl.prepend(tabsRow);
+    }
+    tabsRow.innerHTML = procs.map(p => `
+      <button class="process-tab${_selectedProcessId === p.id ? " active" : ""}"
+              onclick="selectProcess(${JSON.stringify(p).replace(/"/g, '&quot;')})">
+        <span class="proc-dot"></span>${esc(p.label)}
+      </button>`).join("");
+  }
+
+  // ── プロセス選択 ─────────────────────────────────────────────
+  window.selectProcess = async function(proc) {
+    _selectedProcessId = proc.id;
+    renderProcessTabs(_latestProcesses);
+    try {
+      const d = await api(`/api/status-summary?log=${encodeURIComponent(proc.log_file)}`);
+      renderStatusPanels(d);
+      renderProcessHeader(proc, d);
+      _statusData = d;
+    } catch {}
+  };
+
+  // ── プロセスヘッダー（選択中プロセスの詳細行）────────────────
+  function renderProcessHeader(proc, d) {
+    const headerEl = document.getElementById("status-header-card");
+    if (!headerEl) return;
+    let detailRow = headerEl.querySelector(".proc-detail-row");
+    if (!detailRow) {
+      detailRow = document.createElement("div");
+      detailRow.className = "status-header-inner proc-detail-row";
+      headerEl.appendChild(detailRow);
+    }
     const statusCls = d.status === "running" ? "badge-green"
-      : d.status === "rate-limit" ? "badge-warn"
-      : "badge-gray";
-
-    const sessionLabel = SESSION_TYPE_LABELS[d.session_type] || d.session_type || "idle";
-    const sessionActive = d.session_type && d.session_type !== "idle";
-
-    const stopBtns = (d.active_jobs || []).map(job => {
-      const label = SESSION_TYPE_LABELS[job.type] || job.type;
-      return `<button class="btn-danger btn-sm" onclick="stopJob('${esc(job.id)}')">■ ${esc(label)} 中止</button>`;
-    }).join("");
-
-    const ytStopBtn = (d.session_type === "autonomous" && d.yt_session)
-      ? `<button class="btn-danger btn-sm" onclick="stopRun()">■ autonomous 停止</button>`
-      : "";
-
-    headerEl.innerHTML = `
-      <div class="status-header-inner">
-        <div class="status-header-left">
-          <div class="status-script">${esc(sessionLabel)}</div>
-          <div class="status-session">${esc(d.last_session || d.yt_session || "no session")}</div>
-        </div>
-        <div class="status-header-right">
-          <span class="badge ${statusCls}">${esc(d.status)}</span>
-          <span class="status-phase">${esc(d.phase)}</span>
-          ${ytStopBtn}${stopBtns}
-        </div>
+      : d.status === "rate-limit" ? "badge-warn" : "badge-gray";
+    const stopBtn = proc.type === "autonomous"
+      ? `<button class="btn-danger btn-sm" onclick="stopRun()">■ 停止</button>`
+      : proc.id
+        ? `<button class="btn-danger btn-sm" onclick="stopJob('${esc(proc.id)}')">■ 中止</button>`
+        : "";
+    const startedStr = proc.started_at ? `started: ${proc.started_at.slice(11,16)}` : "";
+    detailRow.innerHTML = `
+      <div class="status-header-left">
+        <div class="status-script">${esc(proc.label)}</div>
+        <div class="status-session">${esc(startedStr)}</div>
+      </div>
+      <div class="status-header-right">
+        <span class="badge ${statusCls}">${esc(d.status)}</span>
+        <span class="status-phase">${esc(d.phase)}</span>
+        ${stopBtn}
       </div>`;
+  }
+
+  // ── STATUS 全体描画（idle / プロセスなし時）─────────────────
+  function renderStatusData(d) {
+    const headerEl = document.getElementById("status-header-card");
+    if (!headerEl) return;
+
+    const procs = d.processes || [];
+    if (procs.length === 0) {
+      // idle: シンプルなヘッダー
+      headerEl.innerHTML = `
+        <div class="status-header-inner">
+          <div class="status-header-left">
+            <div class="status-script">idle</div>
+          </div>
+          <div class="status-header-right">
+            <span class="badge badge-gray">${esc(d.status || "idle")}</span>
+            <span class="status-phase">${esc(d.phase)}</span>
+          </div>
+        </div>`;
+    } else {
+      // プロセスあり: タブ + 先頭プロセスの詳細
+      if (!_selectedProcessId) _selectedProcessId = procs[0].id;
+      const sel = procs.find(p => p.id === _selectedProcessId) || procs[0];
+      // ヘッダー骨格（タブ行 + 詳細行）
+      headerEl.innerHTML = `<div class="proc-detail-row status-header-inner"></div>`;
+      renderProcessTabs(procs);
+      renderProcessHeader(sel, d);
+    }
+
+    renderStatusPanels(d);
+  }
+
+  // ── 動画・統計パネル描画（プロセス切り替え共通）─────────────
+  function renderStatusPanels(d) {
+    const videosEl = document.getElementById("status-videos");
+    const statsEl  = document.getElementById("status-stats");
+    if (!videosEl || !statsEl) return;
 
     const cards = [];
     if (d.running_video) {
@@ -839,5 +928,19 @@ document.addEventListener("DOMContentLoaded", () => {
   function esc(s) {
     return String(s ?? "").replace(/[&<>"']/g, c =>
       ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+  }
+
+  // ── ヘッダー環境バッジ ───────────────────────────────────────
+  async function loadEnvBadge() {
+    try {
+      const { is_wsl } = await api("/api/env");
+      const el = document.getElementById("env-badge");
+      if (!el) return;
+      const img = document.createElement("img");
+      img.src = is_wsl ? "/static/linux.png" : "/static/apple.png";
+      img.className = "env-icon";
+      img.alt = is_wsl ? "WSL" : "Mac";
+      el.appendChild(img);
+    } catch {}
   }
 });
