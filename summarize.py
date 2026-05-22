@@ -8,12 +8,13 @@
 """
 
 import argparse
+import atexit
 import json
 import os
 import re
 import shutil
 import sys
-from datetime import date
+from datetime import date, datetime
 from pathlib import Path
 
 BASE_DIR = Path(__file__).parent.resolve()
@@ -26,9 +27,35 @@ OLLAMA_GENERATE_PATH = "/api/generate"
 RCLONE_REMOTE = "gdrive"
 RCLONE_DEST = f"{RCLONE_REMOTE}:yt-learn"
 
+_log_file = None
+
+
+def _setup_log() -> None:
+    global _log_file
+    log_dir = BASE_DIR / "logs" / "summarize"
+    log_dir.mkdir(parents=True, exist_ok=True)
+    log_path = log_dir / f"summarize_{date.today().strftime('%Y%m%d')}.log"
+    _log_file = open(log_path, "a", encoding="utf-8", buffering=1)
+    atexit.register(_teardown_log)
+    _log_write(f"=== 開始 {datetime.now().strftime('%Y-%m-%d %H:%M:%S')} {'=' * 30}")
+
+
+def _teardown_log() -> None:
+    global _log_file
+    if _log_file:
+        _log_write(f"[session-end] {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n")
+        _log_file.close()
+        _log_file = None
+
+
+def _log_write(msg: str) -> None:
+    if _log_file:
+        print(msg, file=_log_file)
+
 
 def _err(msg: str) -> None:
     print(msg, file=sys.stderr)
+    _log_write(msg)
 
 
 def _extract_points(md_text: str) -> str:
@@ -253,6 +280,7 @@ def _summarize_channel(channel_name: str, api_key: str, force: bool = False, thr
 # ── CLI ────────────────────────────────────────────────────────────────────────
 
 def main() -> None:
+    _setup_log()
     _load_env()
 
     api_key = os.environ.get("GEMINI_API_KEY")
