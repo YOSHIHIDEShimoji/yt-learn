@@ -121,6 +121,11 @@ document.addEventListener("DOMContentLoaded", () => {
               renderStatusPanels(fresh);
               renderProcessHeader(still, fresh);
               _statusData = fresh;
+            } else if (still.type === "summarize") {
+              const fresh = await api(`/api/summarize-session?started=${encodeURIComponent(still.started_at || "")}`);
+              renderStatusPanels(fresh);
+              renderProcessHeader(still, { status: "running", phase: "summarizing" });
+              _statusData = fresh;
             } else {
               renderStatusPanels(_noLogPanels());
               renderProcessHeader(still, { status: "running", phase: "—" });
@@ -199,6 +204,13 @@ document.addEventListener("DOMContentLoaded", () => {
         const d = await api(`/api/status-summary?log=${encodeURIComponent(proc.log_file)}`);
         renderStatusPanels(d);
         renderProcessHeader(proc, d);
+        _statusData = d;
+      } catch {}
+    } else if (proc.type === "summarize") {
+      try {
+        const d = await api(`/api/summarize-session?started=${encodeURIComponent(proc.started_at || "")}`);
+        renderStatusPanels(d);
+        renderProcessHeader(proc, { status: "running", phase: "summarizing" });
         _statusData = d;
       } catch {}
     } else {

@@ -997,3 +997,51 @@ async def summarize_all(body: SummarizeBody):
     args = [python, str(ROOT / "summarize.py"), "all", "--threshold", str(threshold)]
     asyncio.ensure_future(_bg_run_script(args, "summarize", "all", job_type="summarize"))
     return JSONResponse({"ok": True, "message": "要約を開始しました"})
+
+
+@app.get("/api/summarize-session")
+async def summarize_session(started: str = ""):
+    """ログなし summarize プロセス用: summaries/ の更新時刻から今セッション処理済みチャンネルを返す。"""
+    summaries_dir = ROOT / "summaries"
+    queue_dir = ROOT / "queue"
+    queue_count = len(list(queue_dir.glob("*.m4a"))) if queue_dir.exists() else 0
+    folder_url = await _rclone_link("gdrive:yt-learn")
+    empty = {
+        "done_videos": [], "running_video": None, "done_count": 0,
+        "warn_count": 0, "error_count": 0, "rate_limit_count": 0,
+        "queue_count": queue_count, "phase": "—", "status": "running",
+        "log_file": "(手動起動 — ログなし)", "log_file_path": "",
+        "drive_folder_url": folder_url,
+    }
+    if not summaries_dir.exists():
+        return JSONResponse(empty)
+
+    start_ts = 0.0
+    if started:
+        try:
+            start_ts = datetime.strptime(started, "%Y-%m-%d %H:%M:%S").timestamp()
+        except ValueError:
+            pass
+
+    done: list[dict] = []
+    seen_gpaths: dict[str, str] = {}
+    for pf in sorted(summaries_dir.glob("*_processed.json"), key=lambda f: f.stat().st_mtime):
+        if start_ts and pf.stat().st_mtime < start_ts:
+            continue
+        channel_name = pf.stem[: -len("_processed")]
+        summary_file = summaries_dir / f"{channel_name}.md"
+        if not summary_file.exists():
+            continue
+        gpath = f"gdrive:yt-learn/summaries/{channel_name}.md"
+        if gpath not in seen_gpaths:
+            seen_gpaths[gpath] = await _rclone_link(gpath)
+        done.append({"title": channel_name, "channel": channel_name,
+                     "drive_url": seen_gpaths[gpath]})
+
+    done.reverse()
+    return JSONResponse({
+        **empty,
+        "done_videos": done,
+        "done_count": len(done),
+        "phase": "summarizing",
+    })
