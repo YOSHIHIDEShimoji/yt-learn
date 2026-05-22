@@ -326,36 +326,45 @@ async def _detect_manual_processes() -> list[dict]:
 
 # ── summarize ログ解析 ────────────────────────────────────────
 def _parse_summarize_videos(lines: list[str]) -> tuple[list[dict], dict | None]:
-    """[done] まで到達したチャンネルの動画のみ done に追加（Drive 転送完了分のみ表示）。"""
+    """[N/M] 行を逐次追跡: 次の [N+1/M] が来た時点で前の動画を done に移す（リアルタイム進捗）。"""
     done: list[dict] = []
     running: dict | None = None
     current_channel = ""
-    channel_gpath: dict[str, str] = {}
-    pending: dict[str, list[dict]] = {}  # channel → videos（[done] 待ち）
+    current_gpath: dict[str, str] = {}  # channel → gdrive path（[drive] 行から更新）
+    pending_video: dict | None = None   # 現在処理中の動画
 
     for line in lines:
         m = re.search(r'\[summarize\]\s+(.+?):', line)
         if m:
             current_channel = m.group(1).strip()
-            pending.setdefault(current_channel, [])
+            pending_video = None
             running = {"title": current_channel, "channel": current_channel, "drive_url": ""}
             continue
+
         m = re.match(r'^\s+\[(\d+)/\d+\]\s+(.+)', line)
         if m and current_channel:
-            pending.setdefault(current_channel, []).append(
-                {"title": m.group(2).strip(), "channel": current_channel,
-                 "drive_url": "", "_gpath": ""}
-            )
+            if pending_video is not None:
+                # 前の動画が完了（次の動画が始まった）→ done に移す
+                done.append(pending_video)
+            pending_video = {
+                "title": m.group(2).strip(), "channel": current_channel,
+                "drive_url": "", "_gpath": current_gpath.get(current_channel, ""),
+            }
+            running = {"title": m.group(2).strip(), "channel": current_channel, "drive_url": ""}
             continue
+
         m = re.search(r'\[drive\]\s+(.+?)\s+→', line)
         if m and current_channel:
-            channel_gpath[current_channel] = f"gdrive:yt-learn/{m.group(1)}"
+            gpath = f"gdrive:yt-learn/{m.group(1)}"
+            current_gpath[current_channel] = gpath
+            if pending_video:
+                pending_video["_gpath"] = gpath
             continue
+
         if "[done]" in line and current_channel and current_channel in line:
-            gpath = channel_gpath.get(current_channel, "")
-            for v in pending.pop(current_channel, []):
-                v["_gpath"] = gpath
-                done.append(v)
+            if pending_video is not None:
+                done.append(pending_video)
+                pending_video = None
             running = None
 
     done.reverse()
@@ -494,6 +503,7 @@ async def _build_status_data(log_path: str | None = None) -> dict:
     is_summarize = any("[summarize]" in l for l in lines[:50])
     if is_summarize:
         done_videos, running_video = _parse_summarize_videos(lines)
+        done_count = len(done_videos)  # 動画単位でカウント
         seen: dict[str, str] = {}
         for v in done_videos:
             gpath = v.pop("_gpath", "")
