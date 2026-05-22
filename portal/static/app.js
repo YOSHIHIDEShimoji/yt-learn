@@ -113,17 +113,19 @@ document.addEventListener("DOMContentLoaded", () => {
         if (d.error) return;
         _latestProcesses = d.processes || [];
 
-        // 選択中プロセスが生きているか確認
         if (_selectedProcessId) {
           const still = _latestProcesses.find(p => p.id === _selectedProcessId);
           if (still) {
-            // 選択中プロセスのログを最新取得
-            const fresh = await api(`/api/status-summary?log=${encodeURIComponent(still.log_file)}`);
-            renderStatusPanels(fresh);
-            renderProcessHeader(still, fresh);
-            _statusData = fresh;
+            if (still.log_file) {
+              const fresh = await api(`/api/status-summary?log=${encodeURIComponent(still.log_file)}`);
+              renderStatusPanels(fresh);
+              renderProcessHeader(still, fresh);
+              _statusData = fresh;
+            } else {
+              renderStatusPanels(_noLogPanels());
+              renderProcessHeader(still, { status: "running", phase: "—" });
+            }
           } else {
-            // プロセスが終了した → 選択解除してデフォルト表示
             _selectedProcessId = null;
             renderStatusData(d);
             _statusData = d;
@@ -192,12 +194,17 @@ document.addEventListener("DOMContentLoaded", () => {
   window.selectProcess = async function(proc) {
     _selectedProcessId = proc.id;
     renderProcessTabs(_latestProcesses);
-    try {
-      const d = await api(`/api/status-summary?log=${encodeURIComponent(proc.log_file)}`);
-      renderStatusPanels(d);
-      renderProcessHeader(proc, d);
-      _statusData = d;
-    } catch {}
+    if (proc.log_file) {
+      try {
+        const d = await api(`/api/status-summary?log=${encodeURIComponent(proc.log_file)}`);
+        renderStatusPanels(d);
+        renderProcessHeader(proc, d);
+        _statusData = d;
+      } catch {}
+    } else {
+      renderStatusPanels(_noLogPanels());
+      renderProcessHeader(proc, { status: "running", phase: "—" });
+    }
   };
 
   // ── プロセスヘッダー（選択中プロセスの詳細行）────────────────
@@ -231,6 +238,14 @@ document.addEventListener("DOMContentLoaded", () => {
       </div>`;
   }
 
+  // ── ログなし時の空パネルデータ ──────────────────────────────
+  function _noLogPanels() {
+    return { done_videos: [], running_video: null, done_count: 0, warn_count: 0,
+             error_count: 0, rate_limit_count: 0, queue_count: 0,
+             phase: "—", status: "running", log_file: "(手動起動 — ログなし)",
+             log_file_path: "", drive_folder_url: "" };
+  }
+
   // ── STATUS 全体描画（idle / プロセスなし時）─────────────────
   function renderStatusData(d) {
     const headerEl = document.getElementById("status-header-card");
@@ -238,7 +253,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
     const procs = d.processes || [];
     if (procs.length === 0) {
-      // idle: シンプルなヘッダー
+      // idle
       headerEl.innerHTML = `
         <div class="status-header-inner">
           <div class="status-header-left">
@@ -249,17 +264,18 @@ document.addEventListener("DOMContentLoaded", () => {
             <span class="status-phase">${esc(d.phase)}</span>
           </div>
         </div>`;
+      renderStatusPanels(d);
     } else {
-      // プロセスあり: タブ + 先頭プロセスの詳細
+      // プロセスあり
+      const firstSelect = !_selectedProcessId;
       if (!_selectedProcessId) _selectedProcessId = procs[0].id;
       const sel = procs.find(p => p.id === _selectedProcessId) || procs[0];
-      // ヘッダー骨格（タブ行 + 詳細行）
       headerEl.innerHTML = `<div class="proc-detail-row status-header-inner"></div>`;
       renderProcessTabs(procs);
-      renderProcessHeader(sel, d);
+      renderProcessHeader(sel, { status: "running", phase: "—" });
+      // 初回自動選択時のみ即時フェッチ（それ以降は SSE が更新）
+      if (firstSelect) selectProcess(sel);
     }
-
-    renderStatusPanels(d);
   }
 
   // ── 動画・統計パネル描画（プロセス切り替え共通）─────────────

@@ -241,7 +241,7 @@ _AUTO_DETECT_PATTERNS: list[tuple[str, str]] = [
 
 
 def _find_log_for_pid(pid: int, job_type: str) -> str:
-    """プロセスが開いている .log ファイルを返す。なければ最新ログにフォールバック。"""
+    """プロセスが開いている .log ファイルを返す。なければ job_type 専用ディレクトリにフォールバック。"""
     root_str = str(ROOT.resolve())
     try:
         for fd_path in Path(f"/proc/{pid}/fd").iterdir():
@@ -253,13 +253,12 @@ def _find_log_for_pid(pid: int, job_type: str) -> str:
                 pass
     except OSError:
         pass
-    # フォールバック: 対応サブディレクトリの最新ログ
-    for subdir in [f"logs/{job_type}", "logs/transcribe", "logs"]:
-        d = ROOT / subdir
-        if d.exists():
-            logs = sorted(d.glob("*.log"), key=lambda x: x.stat().st_mtime, reverse=True)
-            if logs:
-                return str(logs[0].relative_to(ROOT))
+    # フォールバック: job_type 専用ディレクトリの最新ログのみ（他 job_type に流用しない）
+    d = ROOT / f"logs/{job_type}"
+    if d.exists():
+        logs = sorted(d.glob("*.log"), key=lambda x: x.stat().st_mtime, reverse=True)
+        if logs:
+            return str(logs[0].relative_to(ROOT))
     return ""
 
 
