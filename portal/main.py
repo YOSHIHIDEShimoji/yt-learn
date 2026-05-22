@@ -466,6 +466,19 @@ async def _build_status_data(log_path: str | None = None) -> dict:
     folder_url  = await _rclone_link("gdrive:yt-learn")
 
     # 対象ログファイルを決定
+    _idle_base = {
+        "done_count": 0, "warn_count": 0, "error_count": 0,
+        "rate_limit_count": 0, "queue_count": queue_count,
+        "done_videos": [], "running_video": None, "phase": "idle", "status": "idle",
+        "drive_folder_url": folder_url, "session_type": "idle",
+        "active_jobs": active_jobs, "yt_session": yt_session, "processes": processes,
+        "log_file": "", "log_file_path": "", "gpu": gpu,
+    }
+
+    # アクティブプロセスなし＆明示的 log_path 指定なし → 過去ログを掘らず idle を返す
+    if not log_path and not processes and not yt_session and not active_jobs:
+        return {**_idle_base, "error": None}
+
     target_log: Path | None = None
     if log_path:
         candidate = (ROOT / log_path).resolve()
@@ -482,15 +495,7 @@ async def _build_status_data(log_path: str | None = None) -> dict:
                 break
 
     if target_log is None:
-        return {
-            "error": "ログファイルなし",
-            "done_count": 0, "warn_count": 0, "error_count": 0,
-            "rate_limit_count": 0, "queue_count": queue_count,
-            "done_videos": [], "running_video": None, "phase": "idle", "status": "idle",
-            "drive_folder_url": folder_url, "session_type": "idle",
-            "active_jobs": active_jobs, "yt_session": yt_session, "processes": processes,
-            "log_file": "", "log_file_path": "", "gpu": gpu,
-        }
+        return {**_idle_base, "error": "ログファイルなし"}
 
     text  = target_log.read_text(encoding="utf-8", errors="replace")
     lines = text.splitlines()
