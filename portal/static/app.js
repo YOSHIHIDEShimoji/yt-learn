@@ -11,6 +11,7 @@ document.addEventListener("DOMContentLoaded", () => {
   let _pendingLogPath = null;
   const _gpuHistory = [];
   const GPU_MAX_POINTS = 60;
+  let _gpuPollTimer = null;
 
   const SESSION_TYPE_LABELS = {
     autonomous: "autonomous.sh",
@@ -112,9 +113,8 @@ document.addEventListener("DOMContentLoaded", () => {
         }
       } catch {}
     };
-    _statusEventSource.onerror = () => {
-      // EventSource は自動再接続する。明示的な処理不要。
-    };
+    _statusEventSource.onerror = () => {};
+    startGpuPoll();
   }
 
   function stopStatusSSE() {
@@ -122,6 +122,25 @@ document.addEventListener("DOMContentLoaded", () => {
       _statusEventSource.close();
       _statusEventSource = null;
     }
+    stopGpuPoll();
+  }
+
+  // ── GPU 1秒ポーリング ────────────────────────────────────
+  function startGpuPoll() {
+    if (_gpuPollTimer) return;
+    _pollGpu();
+    _gpuPollTimer = setInterval(_pollGpu, 1000);
+  }
+
+  function stopGpuPoll() {
+    if (_gpuPollTimer) { clearInterval(_gpuPollTimer); _gpuPollTimer = null; }
+  }
+
+  async function _pollGpu() {
+    try {
+      const gpu = await api("/api/gpu", 3000);
+      updateGpuGraph(gpu);
+    } catch {}
   }
 
   function renderStatusData(d) {
@@ -208,8 +227,6 @@ document.addEventListener("DOMContentLoaded", () => {
         <span title="${esc(d.log_file_path || "")}">ログ: ${esc(d.log_file || "—")}</span>
         ${d.drive_folder_url ? `<a class="channel-link" href="${esc(d.drive_folder_url)}" target="_blank" rel="noopener" style="opacity:1;font-size:12px">↗ Google Drive</a>` : ""}
       </div>`;
-
-    updateGpuGraph(d.gpu);
   }
 
   async function loadStatus() {

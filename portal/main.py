@@ -470,6 +470,11 @@ async def get_status_summary():
     return JSONResponse(await _build_status_data())
 
 
+@app.get("/api/gpu")
+async def get_gpu():
+    return JSONResponse(await _get_gpu_stats())
+
+
 # ── Phase 3: SSE ─────────────────────────────────────────────
 @app.get("/api/events")
 async def status_events(request: Request):
