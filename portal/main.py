@@ -508,7 +508,6 @@ async def _build_status_data(log_path: str | None = None) -> dict:
     is_summarize = any("[summarize]" in l for l in lines[:50])
     if is_summarize:
         done_videos, running_video = _parse_summarize_videos(lines)
-        done_count = len(done_videos)  # 動画単位でカウント
         seen: dict[str, str] = {}
         for v in done_videos:
             gpath = v.pop("_gpath", "")
