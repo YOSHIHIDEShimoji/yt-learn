@@ -1,5 +1,6 @@
 import asyncio
 import json
+import os
 import re
 import shutil
 import time
@@ -38,7 +39,8 @@ if _docs_dir.exists():
 
 @app.get("/favicon.ico")
 async def favicon():
-    return Response(status_code=204)
+    from fastapi.responses import RedirectResponse
+    return RedirectResponse(url="/static/logo.png", status_code=301)
 
 # ── Drive キャッシュ ──────────────────────────────────────────
 DRIVE_LINK_CACHE_FILE = PORTAL_DIR / "drive_link_cache.json"
@@ -224,7 +226,99 @@ _JOB_LABELS: dict[str, str] = {
     "summarize":  "summarize",
     "sync":       "Drive Sync",
     "transcribe": "transcribe",
+    "loop":       "loop_transcribe",
+    "benchmark":  "benchmark",
 }
+
+# ── 手動起動プロセスの自動検出パターン（WSL 専用）─────────────
+_AUTO_DETECT_PATTERNS: list[tuple[str, str]] = [
+    (r"transcribe\.py\b",      "transcribe"),
+    (r"summarize\.py\b",       "summarize"),
+    (r"loop_transcribe\.sh\b", "loop"),
+    (r"benchmark\.sh\b",       "benchmark"),
+    # autonomous.sh は tmux セッション検出で管理するためここには含めない
+]
+
+
+def _find_log_for_pid(pid: int, job_type: str) -> str:
+    """プロセスが開いている .log ファイルを返す。なければ最新ログにフォールバック。"""
+    root_str = str(ROOT.resolve())
+    try:
+        for fd_path in Path(f"/proc/{pid}/fd").iterdir():
+            try:
+                target = os.readlink(str(fd_path))
+                if target.endswith(".log") and target.startswith(root_str):
+                    return target[len(root_str):].lstrip("/")
+            except OSError:
+                pass
+    except OSError:
+        pass
+    # フォールバック: 対応サブディレクトリの最新ログ
+    for subdir in [f"logs/{job_type}", "logs/transcribe", "logs"]:
+        d = ROOT / subdir
+        if d.exists():
+            logs = sorted(d.glob("*.log"), key=lambda x: x.stat().st_mtime, reverse=True)
+            if logs:
+                return str(logs[0].relative_to(ROOT))
+    return ""
+
+
+async def _detect_manual_processes() -> list[dict]:
+    """ポータル外で手動起動されたスクリプトを /proc スキャンで検出（WSL 専用）。"""
+    if not IS_WSL:
+        return []
+    tracked_pids = {j["pid"] for j in _active_jobs.values()}
+    root_resolved = str(ROOT.resolve())
+    results: list[dict] = []
+    seen_types: set[str] = set()
+    try:
+        proc = await asyncio.create_subprocess_exec(
+            "ps", "axo", "pid=,cmd=",
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.DEVNULL,
+        )
+        stdout, _ = await asyncio.wait_for(proc.communicate(), timeout=3)
+    except Exception:
+        return []
+    for line in stdout.decode().splitlines():
+        parts = line.strip().split(None, 1)
+        if len(parts) < 2:
+            continue
+        try:
+            pid = int(parts[0])
+        except ValueError:
+            continue
+        if pid in tracked_pids:
+            continue
+        cmd = parts[1]
+        try:
+            cwd = str(Path(f"/proc/{pid}/cwd").resolve())
+            if cwd != root_resolved:
+                continue
+        except OSError:
+            continue
+        for pattern, job_type in _AUTO_DETECT_PATTERNS:
+            if not re.search(pattern, cmd):
+                continue
+            if job_type in seen_types:
+                break
+            seen_types.add(job_type)
+            try:
+                started_at = datetime.fromtimestamp(
+                    Path(f"/proc/{pid}").stat().st_mtime
+                ).strftime("%Y-%m-%d %H:%M:%S")
+            except OSError:
+                started_at = ""
+            results.append({
+                "id":          f"{job_type}_ext_{pid}",
+                "type":        job_type,
+                "label":       _JOB_LABELS.get(job_type, job_type),
+                "log_file":    _find_log_for_pid(pid, job_type),
+                "started_at":  started_at,
+                "is_external": True,
+            })
+            break
+    return results
 
 
 # ── summarize ログ解析 ────────────────────────────────────────
@@ -269,7 +363,9 @@ async def _get_active_processes() -> list[dict]:
             "label": _JOB_LABELS.get(j["type"], j["type"]),
             "log_file": j["log_file"],
             "started_at": j["started_at"],
+            "is_external": False,
         })
+    procs.extend(await _detect_manual_processes())
     if IS_WSL:
         yt_session = await _find_yt_session()
         if yt_session:

@@ -212,11 +212,12 @@ document.addEventListener("DOMContentLoaded", () => {
     }
     const statusCls = d.status === "running" ? "badge-green"
       : d.status === "rate-limit" ? "badge-warn" : "badge-gray";
-    const stopBtn = proc.type === "autonomous"
-      ? `<button class="btn-danger btn-sm" onclick="stopRun()">■ 停止</button>`
-      : proc.id
-        ? `<button class="btn-danger btn-sm" onclick="stopJob('${esc(proc.id)}')">■ 中止</button>`
-        : "";
+    const stopBtn = proc.is_external ? ""
+      : proc.type === "autonomous"
+        ? `<button class="btn-danger btn-sm" onclick="stopRun()">■ 停止</button>`
+        : proc.id
+          ? `<button class="btn-danger btn-sm" onclick="stopJob('${esc(proc.id)}')">■ 中止</button>`
+          : "";
     const startedStr = proc.started_at ? `started: ${proc.started_at.slice(11,16)}` : "";
     detailRow.innerHTML = `
       <div class="status-header-left">
