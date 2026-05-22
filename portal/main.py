@@ -217,6 +217,53 @@ async def _await_and_close(proc, f, job_id: str | None = None, append_session_en
             _active_jobs.pop(job_id, None)
 
 
+# ── GPU 統計取得（Phase 3）───────────────────────────────────
+async def _get_gpu_stats() -> dict:
+    if IS_WSL:
+        try:
+            proc = await asyncio.create_subprocess_exec(
+                "nvidia-smi",
+                "--query-gpu=utilization.gpu,memory.used,memory.total,temperature.gpu",
+                "--format=csv,noheader,nounits",
+                stdout=asyncio.subprocess.PIPE,
+                stderr=asyncio.subprocess.DEVNULL,
+            )
+            stdout, _ = await asyncio.wait_for(proc.communicate(), timeout=5)
+            if proc.returncode == 0:
+                parts = stdout.decode().strip().split(",")
+                if len(parts) >= 4:
+                    return {
+                        "available": True,
+                        "util": int(parts[0].strip()),
+                        "mem_used": int(parts[1].strip()),
+                        "mem_total": int(parts[2].strip()),
+                        "temp": int(parts[3].strip()),
+                    }
+        except Exception:
+            pass
+    else:
+        try:
+            proc = await asyncio.create_subprocess_exec(
+                "ioreg", "-r", "-d", "1", "-w", "0", "-c", "IOAccelerator",
+                stdout=asyncio.subprocess.PIPE,
+                stderr=asyncio.subprocess.DEVNULL,
+            )
+            stdout, _ = await asyncio.wait_for(proc.communicate(), timeout=5)
+            if proc.returncode == 0:
+                m = re.search(r'"Device Utilization %"\s*=\s*(\d+)', stdout.decode())
+                if m:
+                    return {
+                        "available": True,
+                        "util": int(m.group(1)),
+                        "mem_used": -1,
+                        "mem_total": -1,
+                        "temp": -1,
+                    }
+        except Exception:
+            pass
+    return {"available": False}
+
+
 # ── Status データ構築（SSE / REST 共通）────────────────────────
 async def _build_status_data() -> dict:
     log_dirs = [ROOT / "logs", ROOT / "log"]
@@ -264,6 +311,7 @@ async def _build_status_data() -> dict:
         queue_count = len(list(queue_dir.glob("*.m4a"))) if queue_dir.exists() else 0
 
         yt_session = await _find_yt_session() if IS_WSL else None
+        gpu = await _get_gpu_stats()
         active_jobs = [
             {"id": j["id"], "type": j["type"], "pid": j["pid"],
              "started_at": j["started_at"], "log_file": j["log_file"]}
@@ -308,6 +356,7 @@ async def _build_status_data() -> dict:
             "session_type": session_type,
             "active_jobs": active_jobs,
             "yt_session": yt_session,
+            "gpu": gpu,
         }
 
     return {
@@ -318,6 +367,7 @@ async def _build_status_data() -> dict:
         "last_session": None, "drive_folder_url": "",
         "session_type": "idle", "active_jobs": [], "yt_session": None,
         "log_file": "", "log_file_path": "",
+        "gpu": {"available": False},
     }
 
 

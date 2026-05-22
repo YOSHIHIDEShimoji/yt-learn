@@ -9,6 +9,8 @@ document.addEventListener("DOMContentLoaded", () => {
   let _logEventSource = null;
   let _isWsl = null;
   let _pendingLogPath = null;
+  const _gpuHistory = [];
+  const GPU_MAX_POINTS = 60;
 
   const SESSION_TYPE_LABELS = {
     autonomous: "autonomous.sh",
@@ -206,6 +208,8 @@ document.addEventListener("DOMContentLoaded", () => {
         <span title="${esc(d.log_file_path || "")}">ログ: ${esc(d.log_file || "—")}</span>
         ${d.drive_folder_url ? `<a class="channel-link" href="${esc(d.drive_folder_url)}" target="_blank" rel="noopener" style="opacity:1;font-size:12px">↗ Google Drive</a>` : ""}
       </div>`;
+
+    updateGpuGraph(d.gpu);
   }
 
   async function loadStatus() {
@@ -344,6 +348,110 @@ document.addEventListener("DOMContentLoaded", () => {
     const modal = document.getElementById("log-filter-modal");
     if (modal) modal.style.display = "none";
   };
+
+  // ── GPU グラフ ───────────────────────────────────────────
+  function updateGpuGraph(gpu) {
+    const initEl = document.getElementById("gpu-init");
+    const wrapEl = document.getElementById("gpu-canvas-wrap");
+    if (!initEl || !wrapEl) return;
+
+    if (!gpu || !gpu.available) {
+      initEl.style.display = "";
+      initEl.innerHTML = `<div class="placeholder-icon">🖥️</div><span>GPU データ取得不可</span>`;
+      wrapEl.style.display = "none";
+      return;
+    }
+
+    initEl.style.display = "none";
+    wrapEl.style.display = "";
+
+    _gpuHistory.push(gpu.util);
+    if (_gpuHistory.length > GPU_MAX_POINTS) _gpuHistory.shift();
+
+    const metaEl = document.getElementById("gpu-meta-row");
+    if (metaEl) {
+      let html = `<span class="gpu-util-val">${gpu.util}</span><span class="gpu-util-unit">%</span>`;
+      if (gpu.mem_total > 0) {
+        const pct = Math.round(gpu.mem_used / gpu.mem_total * 100);
+        html += `<span class="gpu-meta-item">VRAM ${gpu.mem_used} / ${gpu.mem_total} MiB (${pct}%)</span>`;
+      }
+      if (gpu.temp > 0) {
+        html += `<span class="gpu-meta-item">${gpu.temp}°C</span>`;
+      }
+      metaEl.innerHTML = html;
+    }
+
+    drawGpuSparkline();
+  }
+
+  function drawGpuSparkline() {
+    const canvas = document.getElementById("gpu-canvas");
+    if (!canvas || _gpuHistory.length < 2) return;
+
+    const W = canvas.offsetWidth || 800;
+    const H = 80;
+    if (canvas.width !== W) canvas.width = W;
+    canvas.height = H;
+
+    const ctx = canvas.getContext("2d");
+    ctx.clearRect(0, 0, W, H);
+
+    const padT = 6, padB = 6, padL = 2, padR = 2;
+    const gW = W - padL - padR;
+    const gH = H - padT - padB;
+
+    ctx.strokeStyle = "rgba(255,255,255,0.05)";
+    ctx.lineWidth = 1;
+    [0.25, 0.5, 0.75].forEach(f => {
+      const y = padT + gH * (1 - f);
+      ctx.beginPath();
+      ctx.moveTo(padL, y);
+      ctx.lineTo(padL + gW, y);
+      ctx.stroke();
+    });
+
+    const offset = GPU_MAX_POINTS - _gpuHistory.length;
+    const xOf = i => padL + ((offset + i) / (GPU_MAX_POINTS - 1)) * gW;
+    const yOf = v => padT + gH * (1 - v / 100);
+
+    const grad = ctx.createLinearGradient(0, padT, 0, padT + gH);
+    grad.addColorStop(0, "rgba(10,132,255,0.30)");
+    grad.addColorStop(1, "rgba(10,132,255,0.02)");
+
+    ctx.beginPath();
+    _gpuHistory.forEach((v, i) => {
+      const x = xOf(i), y = yOf(v);
+      i === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y);
+    });
+    ctx.lineTo(xOf(_gpuHistory.length - 1), padT + gH);
+    ctx.lineTo(xOf(0), padT + gH);
+    ctx.closePath();
+    ctx.fillStyle = grad;
+    ctx.fill();
+
+    ctx.beginPath();
+    _gpuHistory.forEach((v, i) => {
+      const x = xOf(i), y = yOf(v);
+      i === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y);
+    });
+    ctx.strokeStyle = "rgba(10,132,255,0.9)";
+    ctx.lineWidth = 1.5;
+    ctx.lineJoin = "round";
+    ctx.stroke();
+
+    const lastV = _gpuHistory[_gpuHistory.length - 1];
+    const dotX = xOf(_gpuHistory.length - 1);
+    const dotY = yOf(lastV);
+    ctx.beginPath();
+    ctx.arc(dotX, dotY, 3, 0, Math.PI * 2);
+    ctx.fillStyle = "rgba(10,132,255,1)";
+    ctx.fill();
+    ctx.strokeStyle = "rgba(255,255,255,0.5)";
+    ctx.lineWidth = 1;
+    ctx.stroke();
+  }
+
+  window.addEventListener("resize", drawGpuSparkline);
 
   // ── README ───────────────────────────────────────────────
   async function loadReadme() {

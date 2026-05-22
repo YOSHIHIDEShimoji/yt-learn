@@ -777,3 +777,31 @@ body {
   gap: 8px;
   margin-top: 16px;
 }
+
+/* ── GPU Graph ── */
+.gpu-meta-row {
+  display: flex;
+  align-items: baseline;
+  gap: 16px;
+  margin-bottom: 10px;
+}
+
+.gpu-util-val {
+  font-size: 28px;
+  font-weight: 700;
+  color: var(--blue);
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+}
+
+.gpu-util-unit {
+  font-size: 13px;
+  color: var(--text-dim);
+  margin-left: 2px;
+}
+
+.gpu-meta-item {
+  font-size: 12px;
+  color: var(--text-faint);
+  font-variant-numeric: tabular-nums;
+}

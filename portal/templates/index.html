@@ -128,7 +128,11 @@
     <!-- GPU（下段 full-width） -->
     <div class="card">
       <div class="card-title">GPU 使用率</div>
-      <div class="placeholder"><div class="placeholder-icon">🖥️</div><span>Phase 3 で実装予定（リアルタイムグラフ）</span></div>
+      <div id="gpu-init" class="placeholder"><div class="placeholder-icon">⏳</div><span>読み込み中…</span></div>
+      <div id="gpu-canvas-wrap" style="display:none">
+        <div class="gpu-meta-row" id="gpu-meta-row"></div>
+        <canvas id="gpu-canvas" height="80" style="width:100%;display:block;border-radius:6px"></canvas>
+      </div>
     </div>
 
   </div>
