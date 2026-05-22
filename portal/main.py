@@ -40,7 +40,7 @@ if _docs_dir.exists():
 @app.get("/favicon.ico")
 async def favicon():
     from fastapi.responses import RedirectResponse
-    return RedirectResponse(url="/static/logo.png", status_code=301)
+    return RedirectResponse(url="/static/logo_transparent.png", status_code=301)
 
 # ── Drive キャッシュ ──────────────────────────────────────────
 DRIVE_LINK_CACHE_FILE = PORTAL_DIR / "drive_link_cache.json"
@@ -323,31 +323,37 @@ async def _detect_manual_processes() -> list[dict]:
 
 # ── summarize ログ解析 ────────────────────────────────────────
 def _parse_summarize_videos(lines: list[str]) -> tuple[list[dict], dict | None]:
+    """[done] まで到達したチャンネルの動画のみ done に追加（Drive 転送完了分のみ表示）。"""
     done: list[dict] = []
     running: dict | None = None
     current_channel = ""
     channel_gpath: dict[str, str] = {}
+    pending: dict[str, list[dict]] = {}  # channel → videos（[done] 待ち）
 
     for line in lines:
         m = re.search(r'\[summarize\]\s+(.+?):', line)
         if m:
             current_channel = m.group(1).strip()
+            pending.setdefault(current_channel, [])
             running = {"title": current_channel, "channel": current_channel, "drive_url": ""}
             continue
         m = re.match(r'^\s+\[(\d+)/\d+\]\s+(.+)', line)
         if m and current_channel:
-            done.append({"title": m.group(2).strip(), "channel": current_channel,
-                         "drive_url": "", "_gpath": ""})
+            pending.setdefault(current_channel, []).append(
+                {"title": m.group(2).strip(), "channel": current_channel,
+                 "drive_url": "", "_gpath": ""}
+            )
             continue
         m = re.search(r'\[drive\]\s+(\S+)\s+→', line)
         if m and current_channel:
             channel_gpath[current_channel] = f"gdrive:yt-learn/{m.group(1)}"
             continue
-        if "[done]" in line and "サマリー更新完了" in line:
+        if "[done]" in line and current_channel and current_channel in line:
+            gpath = channel_gpath.get(current_channel, "")
+            for v in pending.pop(current_channel, []):
+                v["_gpath"] = gpath
+                done.append(v)
             running = None
-
-    for v in done:
-        v["_gpath"] = channel_gpath.get(v["channel"], "")
 
     done.reverse()
     return done, running
