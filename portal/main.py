@@ -253,12 +253,16 @@ def _find_log_for_pid(pid: int, job_type: str) -> str:
                 pass
     except OSError:
         pass
-    # フォールバック: job_type 専用ディレクトリの最新ログのみ（他 job_type に流用しない）
+    # フォールバック: job_type 専用ディレクトリの最新「live」ログ（[session-end] なし）のみ
     d = ROOT / f"logs/{job_type}"
     if d.exists():
         logs = sorted(d.glob("*.log"), key=lambda x: x.stat().st_mtime, reverse=True)
-        if logs:
-            return str(logs[0].relative_to(ROOT))
+        for log in logs:
+            try:
+                if "[session-end]" not in log.read_text(encoding="utf-8", errors="replace"):
+                    return str(log.relative_to(ROOT))
+            except OSError:
+                pass
     return ""
 
 
@@ -343,7 +347,7 @@ def _parse_summarize_videos(lines: list[str]) -> tuple[list[dict], dict | None]:
                  "drive_url": "", "_gpath": ""}
             )
             continue
-        m = re.search(r'\[drive\]\s+(\S+)\s+→', line)
+        m = re.search(r'\[drive\]\s+(.+?)\s+→', line)
         if m and current_channel:
             channel_gpath[current_channel] = f"gdrive:yt-learn/{m.group(1)}"
             continue
