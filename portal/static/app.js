@@ -938,9 +938,13 @@ document.addEventListener("DOMContentLoaded", () => {
       if (!el) return;
       const img = document.createElement("img");
       img.src = is_wsl ? "/static/linux.png" : "/static/apple.png";
-      img.className = "env-icon";
+      img.className = is_wsl ? "env-icon" : "env-icon env-icon-mac";
       img.alt = is_wsl ? "WSL" : "Mac";
+      const label = document.createElement("span");
+      label.className = "env-label";
+      label.textContent = is_wsl ? "WSL" : "Mac";
       el.appendChild(img);
+      el.appendChild(label);
     } catch {}
   }
 });
