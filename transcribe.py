@@ -1152,7 +1152,9 @@ def _sync_drive(dirs: list[str] | None = None) -> None:
 
 def main() -> None:
     _load_env()
-    _setup_log()
+    # autonomous.sh 等のパイプ配下では親プロセスがログを管理するためスキップ
+    if sys.stderr.isatty():
+        _setup_log()
     _install_stderr_pipe_filter()
 
     parser = argparse.ArgumentParser(
