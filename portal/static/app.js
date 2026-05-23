@@ -1052,6 +1052,38 @@ document.addEventListener("DOMContentLoaded", () => {
   let _libChatMessages = [];
   let _libFileChatMessages = [];
   let _libCurrentFilePath = "";
+  let _libModelPref = "ollama";
+
+  // ── Gemini レート管理 ──────────────────────────────────────
+  const _GEMINI_LIMIT = 10, _GEMINI_WIN = 3600000;
+  function _gTs() { return (JSON.parse(localStorage.getItem("yt_g_ts")||"[]")).filter(t=>Date.now()-t<_GEMINI_WIN); }
+  function _gRemaining() { return Math.max(0, _GEMINI_LIMIT - _gTs().length); }
+  function _gRecord() { const ts=_gTs(); ts.push(Date.now()); localStorage.setItem("yt_g_ts",JSON.stringify(ts)); _updateGeminiBadge(); }
+  function _updateGeminiBadge() {
+    const b = document.getElementById("lib-gemini-badge");
+    if (!b) return;
+    if (_libModelPref === "gemini") {
+      const rem = _gRemaining();
+      b.textContent = `残り ${rem}/${_GEMINI_LIMIT} 回`;
+      b.style.display = "";
+      b.style.color = rem <= 2 ? "var(--warn)" : "var(--text-faint)";
+    } else { b.style.display = "none"; }
+  }
+  window.setLibModel = function(v) {
+    _libModelPref = v;
+    _updateGeminiBadge();
+  };
+
+  // 重複段落除去（同じ段落が2回出る問題の後処理）
+  function _dedupText(text) {
+    const parts = text.split(/\n\n+/);
+    const seen = new Set(), out = [];
+    for (const p of parts) {
+      const k = p.trim();
+      if (k && !seen.has(k)) { seen.add(k); out.push(p); }
+    }
+    return out.join("\n\n");
+  }
   let _libChatPanelOpen = false;
   let _libChatSSE = null;
   let _libInitialized = false;
@@ -1164,14 +1196,12 @@ document.addEventListener("DOMContentLoaded", () => {
   };
 
   window.libClear = function() {
-    _libSelectedChannels.clear();
-    _libCurrentQuery = "";
-    _libCurrentPage = 1;
     _libCheckedPaths.clear();
-    const input = document.getElementById("lib-search-input");
-    if (input) input.value = "";
-    document.querySelectorAll(".lib-chip").forEach(el => el.classList.remove("selected"));
-    _libClearResults();
+    document.querySelectorAll(".lib-result-card.selected").forEach(card => {
+      card.classList.remove("selected");
+      const cb = card.querySelector(".lib-card-cb");
+      if (cb) cb.checked = false;
+    });
     _updateChatContextLabel();
   };
 
@@ -1180,8 +1210,6 @@ document.addEventListener("DOMContentLoaded", () => {
     if (el) el.innerHTML = "";
     const pg = document.getElementById("lib-pagination");
     if (pg) pg.style.display = "none";
-    const ctrl = document.getElementById("lib-results-controls");
-    if (ctrl) ctrl.style.display = "none";
   }
 
   async function fetchLibResults() {
@@ -1216,21 +1244,27 @@ document.addEventListener("DOMContentLoaded", () => {
 
   function renderLibResults(results) {
     const el = document.getElementById("lib-results");
-    const ctrl = document.getElementById("lib-results-controls");
     if (!el) return;
-    if (!results.length) {
-      el.innerHTML = placeholder("🔍", "結果がありません");
-      if (ctrl) ctrl.style.display = "none";
-      return;
-    }
-    if (ctrl) ctrl.style.display = "flex";
+    if (!results.length) { el.innerHTML = placeholder("🔍", "結果がありません"); return; }
 
     const groups = {};
     results.forEach(r => { if (!groups[r.channel]) groups[r.channel] = []; groups[r.channel].push(r); });
 
+    const BTNS = `<div class="lib-group-btns">
+      <button class="refresh-btn" onclick="selectAllCards()">全選択</button>
+      <button class="refresh-btn" onclick="libClear()">クリア</button>
+    </div>`;
+
     let html = "";
+    let isFirst = true;
     for (const [ch, items] of Object.entries(groups)) {
-      html += `<div class="lib-group-header">${esc(ch)}</div><div class="lib-cards-grid">`;
+      if (isFirst) {
+        html += `<div class="lib-group-header lib-group-header-row"><span>${esc(ch)}</span>${BTNS}</div>`;
+        isFirst = false;
+      } else {
+        html += `<div class="lib-group-header">${esc(ch)}</div>`;
+      }
+      html += `<div class="lib-cards-grid">`;
       items.forEach(r => {
         const isChecked = _libCheckedPaths.has(r.path);
         const pts = (r.points || []).slice(0, 3)
@@ -1410,10 +1444,15 @@ document.addEventListener("DOMContentLoaded", () => {
     bubble.innerHTML = '<span class="lib-typing-dots"><span></span><span></span><span></span></span>';
     let fullText = "";
     try {
+      if (_libModelPref === "gemini" && _gRemaining() <= 0) {
+        bubble.classList.remove("lib-loading");
+        bubble.textContent = "Geminiのレート制限に達しました。1時間後にリセットされます。";
+        return "";
+      }
       const resp = await fetch("/api/library/chat", {
         method: "POST", signal: ctrl.signal,
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ messages, paths }),
+        body: JSON.stringify({ messages, paths, model_pref: _libModelPref }),
       });
       if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
       const reader = resp.body.getReader();
@@ -1446,6 +1485,13 @@ document.addEventListener("DOMContentLoaded", () => {
       if (e.name !== "AbortError") bubble.textContent = `エラー: ${e.message}`;
     } finally {
       _libChatSSE = null;
+    }
+    if (fullText) {
+      const deduped = _dedupText(fullText);
+      if (deduped !== fullText) {
+        fullText = deduped;
+        bubble.innerHTML = typeof marked !== "undefined" ? marked.parse(fullText) : fullText;
+      }
     }
     return fullText;
   }

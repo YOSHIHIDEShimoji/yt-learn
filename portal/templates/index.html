@@ -156,12 +156,21 @@
         </select>
       </div>
       <div id="lib-channel-chips" class="lib-chips"></div>
+      <div class="lib-model-row">
+        <span class="lib-model-label">AI:</span>
+        <label class="lib-model-opt">
+          <input type="radio" name="lib-model" value="ollama" checked onchange="setLibModel('ollama')">
+          qwen2.5:14b (Local)
+        </label>
+        <label class="lib-model-opt">
+          <input type="radio" name="lib-model" value="gemini" onchange="setLibModel('gemini')">
+          Gemini 2.5 Flash Lite
+          <span class="lib-gemini-limit">（1時間に10回まで）</span>
+        </label>
+        <span id="lib-gemini-badge" class="lib-gemini-badge" style="display:none"></span>
+      </div>
     </div>
 
-    <div id="lib-results-controls" class="lib-results-controls" style="display:none">
-      <button class="refresh-btn" onclick="selectAllCards()">全選択</button>
-      <button class="refresh-btn" onclick="libClear()">クリア</button>
-    </div>
     <div id="lib-results"></div>
     <div id="lib-pagination" class="lib-pagination" style="display:none">
       <button class="refresh-btn" onclick="libPagePrev()">← 前へ</button>

@@ -1311,7 +1311,7 @@ async def _stream_ollama_chat(messages: list[dict], model: str, base_url: str):
                     break
 
 
-async def _call_gemini_chat(messages: list[dict], api_key: str) -> str:
+async def _call_gemini_chat(messages: list[dict], api_key: str, model: str = "gemini-2.0-flash") -> str:
     def _sync() -> str:
         import google.genai as genai
         client = genai.Client(api_key=api_key)
@@ -1324,7 +1324,7 @@ async def _call_gemini_chat(messages: list[dict], api_key: str) -> str:
         if system_msgs:
             cfg["system_instruction"] = system_msgs[0]
         response = client.models.generate_content(
-            model="gemini-2.0-flash",
+            model=model,
             contents=contents or [{"role": "user", "parts": [{"text": "Hello"}]}],
             config=cfg or None,
         )
@@ -1352,6 +1352,7 @@ def _build_library_context(messages: list[dict], paths: list[str]) -> str:
             "以下に含まれない動画・チャンネルは存在しないものとして扱い、言及しないでください。"
             "必ず日本語で回答してください。"
             "自己言及・メタコメント・免責事項・「最終回答」「Note:」「If you intended」などの余分な文は一切含めないでください。"
+            "同じ内容・文・段落を繰り返して出力しないでください。"
             "回答は簡潔かつ直接的にしてください。\n\n" + ctx
         )
     else:
@@ -1372,6 +1373,7 @@ def _build_library_context(messages: list[dict], paths: list[str]) -> str:
             "ライブラリに含まれていない情報を尋ねられた場合は「このライブラリには該当する動画がありません」と答えてください。"
             "必ず日本語で回答してください。"
             "自己言及・メタコメント・免責事項・「Note:」「If you intended」などの余分な文は一切含めないでください。"
+            "同じ内容・文・段落を繰り返して出力しないでください。"
             "回答は簡潔かつ直接的にしてください。\n\n" + ctx
         )
 
@@ -1429,9 +1431,14 @@ async def library_transcript(path: str):
         return JSONResponse({"error": str(e)}, status_code=500)
 
 
+_GEMINI_CHAT_MODEL = "gemini-2.5-flash-lite-preview-06-17"
+_OLLAMA_CHAT_MODEL = "qwen2.5:14b"
+
+
 class LibraryChatBody(BaseModel):
     messages: list[dict]
     paths: list[str] = []
+    model_pref: str = "ollama"  # "ollama" | "gemini"
 
 
 @app.post("/api/library/chat")
@@ -1442,14 +1449,16 @@ async def library_chat(request: Request, body: LibraryChatBody):
     async def generate():
         system = _build_library_context(body.messages, body.paths)
         full_msgs = [{"role": "system", "content": system}] + list(body.messages)
-        local_url   = os.environ.get("LOCAL_LLM_URL")
-        local_model = os.environ.get("LOCAL_LLM_MODEL", "qwen3.5:9b")
-        api_key     = os.environ.get("GEMINI_API_KEY")
+        local_url = os.environ.get("LOCAL_LLM_URL")
+        api_key   = os.environ.get("GEMINI_API_KEY")
 
         ok = False
-        if local_url:
+        use_ollama = body.model_pref == "ollama"
+        use_gemini = body.model_pref == "gemini"
+
+        if use_ollama and local_url:
             try:
-                async for chunk in _stream_ollama_chat(full_msgs, local_model, local_url):
+                async for chunk in _stream_ollama_chat(full_msgs, _OLLAMA_CHAT_MODEL, local_url):
                     if await request.is_disconnected():
                         return
                     yield f"data: {json.dumps({'chunk': chunk})}\n\n"
@@ -1457,9 +1466,9 @@ async def library_chat(request: Request, body: LibraryChatBody):
             except Exception:
                 pass
 
-        if not ok and api_key:
+        if use_gemini and api_key:
             try:
-                result = await _call_gemini_chat(full_msgs, api_key)
+                result = await _call_gemini_chat(full_msgs, api_key, _GEMINI_CHAT_MODEL)
                 yield f"data: {json.dumps({'chunk': result})}\n\n"
                 ok = True
             except Exception as e:
