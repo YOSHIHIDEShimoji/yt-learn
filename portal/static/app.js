@@ -244,17 +244,36 @@ document.addEventListener("DOMContentLoaded", () => {
         : proc.id
           ? `<button class="btn-danger btn-sm" onclick="stopJob('${esc(proc.id)}')">■ 中止</button>`
           : "";
-    const startedStr = proc.started_at ? `started: ${proc.started_at.slice(11,16)}` : "";
+    const startedDate = proc.started_at ? proc.started_at.slice(0, 16) : "";
+    const startedStr  = startedDate ? `started: ${startedDate}` : "";
     detailRow.innerHTML = `
       <div class="status-header-left">
         <div class="status-script">${esc(proc.label)}</div>
-        <div class="status-session">${esc(startedStr)}</div>
+        <div class="status-session">
+          ${esc(startedStr)}${proc.started_at ? `<span id="status-elapsed" data-started="${esc(proc.started_at)}"></span>` : ""}
+        </div>
       </div>
       <div class="status-header-right">
         <span class="badge ${statusCls}">${esc(d.status)}</span>
-        <span class="status-phase">${esc(d.phase)}</span>
         ${stopBtn}
       </div>`;
+    _updateElapsed();
+  }
+
+  function _updateElapsed() {
+    const el = document.getElementById("status-elapsed");
+    if (!el) return;
+    const t = el.dataset.started;
+    if (!t) return;
+    const start = new Date(t.replace(" ", "T"));
+    if (isNaN(start)) return;
+    const secs    = Math.floor((Date.now() - start) / 1000);
+    const h       = Math.floor(secs / 3600);
+    const m       = Math.floor((secs % 3600) / 60);
+    el.textContent = h > 0 ? ` (${h}h ${m}m)` : ` (${m}m)`;
+  }
+  if (!window._statusElapsedTimer) {
+    window._statusElapsedTimer = setInterval(_updateElapsed, 60000);
   }
 
   // ── ログなし時の空パネルデータ ──────────────────────────────
@@ -280,15 +299,19 @@ document.addEventListener("DOMContentLoaded", () => {
           </div>
           <div class="status-header-right">
             <span class="badge badge-gray">${esc(d.status || "idle")}</span>
-            <span class="status-phase">${esc(d.phase)}</span>
           </div>
         </div>`;
       renderStatusPanels(d);
     } else {
-      // プロセスあり
+      // プロセスあり — autonomous を優先選択
       const firstSelect = !_selectedProcessId;
-      if (!_selectedProcessId) _selectedProcessId = procs[0].id;
-      const sel = procs.find(p => p.id === _selectedProcessId) || procs[0];
+      if (!_selectedProcessId) {
+        const defProc = procs.find(p => p.type === "autonomous") || procs[0];
+        _selectedProcessId = defProc.id;
+      }
+      const sel = procs.find(p => p.id === _selectedProcessId)
+               || procs.find(p => p.type === "autonomous")
+               || procs[0];
       headerEl.innerHTML = `<div class="proc-detail-row status-header-inner"></div>`;
       renderProcessTabs(procs);
       renderProcessHeader(sel, { status: "running", phase: "—" });
@@ -333,7 +356,9 @@ document.addEventListener("DOMContentLoaded", () => {
 
     statsEl.innerHTML = `
       <div class="stat-grid">
-        <div class="stat-item"><span class="stat-label">queue</span><span class="stat-val">${d.queue_count}</span></div>
+        <div class="stat-item stat-clickable" onclick="showQueueFiles()" title="キュー一覧を表示">
+          <span class="stat-label">queue ↗</span><span class="stat-val">${d.queue_count}</span>
+        </div>
         <div class="stat-item stat-clickable" onclick="showLogFilter('done')" title="ログでフィルタ">
           <span class="stat-label">done ↗</span><span class="stat-val stat-green">${d.done_count}</span>
         </div>
@@ -350,7 +375,7 @@ document.addEventListener("DOMContentLoaded", () => {
       </div>
       <div style="margin-top:12px;display:flex;justify-content:space-between;align-items:center;font-size:11px;color:var(--text-faint)">
         <span title="${esc(d.log_file_path || "")}">ログ: ${esc(d.log_file || "—")}</span>
-        ${d.drive_folder_url ? `<a class="channel-link" href="${esc(d.drive_folder_url)}" target="_blank" rel="noopener" style="opacity:1;font-size:12px">↗ Google Drive</a>` : ""}
+        ${d.log_file_path ? `<button class="refresh-btn" style="font-size:11px;padding:2px 8px" data-log-path="${esc(d.log_file_path)}" onclick="openLogByPath(this.dataset.logPath)">ログを見る →</button>` : ""}
       </div>`;
   }
 
@@ -423,7 +448,7 @@ document.addEventListener("DOMContentLoaded", () => {
     titleEl.textContent = `${filterType} — ${logName}`;
     countEl.textContent = "";
     content.textContent = "読み込み中…";
-    if (openBtn) openBtn.onclick = () => openLogByPath(logPath);
+    if (openBtn) { openBtn.style.display = ""; openBtn.onclick = () => openLogByPath(logPath); }
     modal.style.display = "flex";
 
     try {
@@ -489,6 +514,30 @@ document.addEventListener("DOMContentLoaded", () => {
   window.closeLogFilter = function() {
     const modal = document.getElementById("log-filter-modal");
     if (modal) modal.style.display = "none";
+  };
+
+  window.showQueueFiles = async function() {
+    const modal   = document.getElementById("log-filter-modal");
+    const titleEl = document.getElementById("log-filter-title");
+    const countEl = document.getElementById("log-filter-count");
+    const content = document.getElementById("log-filter-content");
+    const openBtn = document.getElementById("log-filter-open-btn");
+    if (!modal) return;
+
+    titleEl.textContent = "queue";
+    countEl.textContent = "";
+    content.textContent = "読み込み中…";
+    if (openBtn) openBtn.style.display = "none";
+    modal.style.display = "flex";
+
+    try {
+      const d = await api("/api/queue-files");
+      const files = d.files || [];
+      countEl.textContent = `${files.length} 件`;
+      content.textContent = files.length ? files.join("\n") : "キューは空です";
+    } catch (e) {
+      content.textContent = `読み込み失敗: ${e.message}`;
+    }
   };
 
   // ── GPU グラフ ───────────────────────────────────────────

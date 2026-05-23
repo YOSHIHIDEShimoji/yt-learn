@@ -879,6 +879,13 @@ async def get_jobs():
     return JSONResponse({"jobs": jobs})
 
 
+@app.get("/api/queue-files")
+async def get_queue_files():
+    queue_dir = ROOT / "queue"
+    files = sorted(f.name for f in queue_dir.glob("*.m4a")) if queue_dir.exists() else []
+    return JSONResponse({"files": files})
+
+
 @app.post("/api/jobs/{job_id}/stop")
 async def stop_job(job_id: str):
     job = _active_jobs.get(job_id)
