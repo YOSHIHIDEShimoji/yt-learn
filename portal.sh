@@ -82,12 +82,11 @@ elif grep -qi microsoft /proc/version 2>/dev/null; then
       || echo "[portal] 自動起動失敗 — ブラウザで手動で開いてください: ${url}"
   }
 
-  # すでにサーバーが動いていればブラウザだけ開く
+  # 旧サーバーを常に停止して最新コードで再起動
   if curl -s --max-time 1 "http://localhost:${PORT}/" > /dev/null 2>&1; then
-    echo "[portal] サーバーはすでに起動中です"
-    open_browser "http://localhost:${PORT}"
-    echo "[portal] サーバー停止: tmux kill-session -t ${TMUX_SESSION}"
-    exit 0
+    echo "[portal] 旧サーバーを停止して最新コードで再起動します"
+    kill "$(lsof -ti :"${PORT}" 2>/dev/null)" 2>/dev/null || true
+    sleep 1
   fi
 
   echo "[portal] WSL モード — uvicorn を 0.0.0.0:${PORT} で起動します"

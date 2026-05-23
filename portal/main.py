@@ -678,10 +678,18 @@ async def _build_status_data(log_path: str | None = None) -> dict:
 
 
 # ── Routes ───────────────────────────────────────────────────
+def _static_version() -> str:
+    static_dir = PORTAL_DIR / "static"
+    try:
+        return str(int(max(f.stat().st_mtime for f in static_dir.glob("*") if f.is_file())))
+    except Exception:
+        return "0"
+
+
 @app.get("/", response_class=HTMLResponse)
 async def index(request: Request):
     return templates.TemplateResponse(request=request, name="index.html",
-                                      context={"is_wsl": IS_WSL})
+                                      context={"is_wsl": IS_WSL, "sv": _static_version()})
 
 
 @app.get("/api/channels")

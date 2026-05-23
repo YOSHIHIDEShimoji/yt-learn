@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>yt-learn Portal</title>
   <link rel="icon" href="/static/logo_transparent.png" type="image/png">
-  <link rel="stylesheet" href="/static/style.css">
+  <link rel="stylesheet" href="/static/style.css?v={{ sv }}">
 </head>
 <body>
 
@@ -51,10 +51,10 @@
             <span id="run-badge" class="badge badge-gray">確認中…</span>
           </div>
           <div id="run-wsl-warn" class="run-warn" style="display:none">WSL 環境専用機能です</div>
-          <div class="run-btns" style="margin-top:4px">
+          <div class="run-btns" style="margin-top:4px;display:flex;align-items:center;gap:8px">
             <button id="run-start-btn" class="btn-primary" onclick="startRun()">▶ 起動</button>
             <button id="run-stop-btn" class="btn-danger" style="display:none" onclick="stopRun()">■ 停止</button>
-            <button id="run-log-btn" class="refresh-btn" style="display:none;font-size:11px;padding:2px 8px" onclick="openLogByPath(this.dataset.logPath)">ログを見る →</button>
+            <button id="run-log-btn" class="refresh-btn" style="display:none;font-size:11px;padding:2px 8px;margin-left:auto" onclick="openLogByPath(this.dataset.logPath)">ログを見る →</button>
           </div>
         </div>
 
@@ -337,7 +337,7 @@
 </div>
 
 <script src="/static/marked.min.js"></script>
-<script src="/static/app.js"></script>
+<script src="/static/app.js?v={{ sv }}"></script>
 
 <!-- Liquid Glass SVG filter: organic edge distortion for tab capsule -->
 <svg style="position:absolute;width:0;height:0;overflow:hidden" aria-hidden="true">
