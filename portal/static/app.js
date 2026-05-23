@@ -1321,7 +1321,7 @@ document.addEventListener("DOMContentLoaded", () => {
           .map(p => `<div>• ${esc(p.replace(/^- /, ""))}</div>`).join("");
         const safePath = r.path.replace(/'/g, "\\'");
         html += `
-          <div class="lib-result-card${isChecked ? " selected" : ""}" data-path="${safePath}"
+          <div class="lib-result-card${isChecked ? " selected" : ""}" data-path="${esc(r.path)}"
                onclick="openLibViewer('${safePath}')">
             <div class="lib-card-title">${esc(r.title)}</div>
             <div class="lib-card-meta">${esc(r.date || "")}</div>
