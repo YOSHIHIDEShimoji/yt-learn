@@ -1116,14 +1116,22 @@ document.addEventListener("DOMContentLoaded", () => {
   function _gRemaining() { return Math.max(0, _GEMINI_LIMIT - _gTs().length); }
   function _gRecord() { const ts=_gTs(); ts.push(Date.now()); localStorage.setItem("yt_g_ts",JSON.stringify(ts)); _updateGeminiBadge(); }
   function _updateGeminiBadge() {
-    const b = document.getElementById("lib-gemini-badge");
-    if (!b) return;
+    const svg = document.getElementById("lib-gemini-quota");
+    const arc = document.getElementById("lib-gemini-quota-arc");
+    if (!svg) return;
     if (_libModelPref === "gemini") {
-      const rem = _gRemaining();
-      b.textContent = `残り ${rem}/${_GEMINI_LIMIT} 回`;
-      b.style.display = "";
-      b.style.color = rem <= 2 ? "var(--warn)" : "var(--text-faint)";
-    } else { b.style.display = "none"; }
+      const rem   = _gRemaining();
+      const circ  = 2 * Math.PI * 8;  // r=8 の円周
+      const fill  = (rem / _GEMINI_LIMIT) * circ;
+      if (arc) {
+        arc.setAttribute("stroke-dasharray", `${fill.toFixed(2)} ${circ.toFixed(2)}`);
+        arc.setAttribute("stroke", rem === 0 ? "#ef4444" : rem <= 2 ? "#f59e0b" : "#4ade80");
+      }
+      svg.style.display = "";
+      svg.title = `残り ${rem} / ${_GEMINI_LIMIT} 回（1時間）`;
+    } else {
+      svg.style.display = "none";
+    }
   }
   window.setLibModel = function(v) {
     _libModelPref = v;

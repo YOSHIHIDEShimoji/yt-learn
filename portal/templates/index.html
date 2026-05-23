@@ -165,9 +165,14 @@
         <label class="lib-model-opt">
           <input type="radio" name="lib-model" value="gemini" onchange="setLibModel('gemini')">
           Gemini 2.5 Flash Lite
-          <span class="lib-gemini-limit">（1時間に10回まで）</span>
         </label>
-        <span id="lib-gemini-badge" class="lib-gemini-badge" style="display:none"></span>
+        <svg id="lib-gemini-quota" viewBox="0 0 24 24" width="20" height="20"
+             style="display:none;flex-shrink:0;vertical-align:middle;margin-left:4px">
+          <circle cx="12" cy="12" r="8" fill="none" stroke="rgba(255,255,255,0.12)" stroke-width="4"/>
+          <circle id="lib-gemini-quota-arc" cx="12" cy="12" r="8" fill="none"
+                  stroke="#4ade80" stroke-width="4" stroke-linecap="round"
+                  stroke-dasharray="50.27 50.27" transform="rotate(-90 12 12)"/>
+        </svg>
       </div>
     </div>
 
