@@ -1184,8 +1184,6 @@ document.addEventListener("DOMContentLoaded", () => {
     _libFileChatMessages = [];
     const fileChatEl = document.getElementById("lib-file-chat-messages");
     if (fileChatEl) fileChatEl.innerHTML = "";
-    const clearBtn = document.getElementById("lib-file-chat-clear-btn");
-    if (clearBtn) clearBtn.style.display = "none";
 
     contentEl.innerHTML = placeholder("⏳", "読み込み中…");
     modal.style.display = "flex";
@@ -1224,7 +1222,9 @@ document.addEventListener("DOMContentLoaded", () => {
     if (_libChatSSE) { _libChatSSE.abort(); _libChatSSE = null; }
     const ctrl = new AbortController();
     _libChatSSE = ctrl;
-    const bubble = _appendChatBubble("ai", "…", messagesEl);
+    const bubble = _appendChatBubble("ai", "", messagesEl);
+    bubble.classList.add("lib-loading");
+    bubble.innerHTML = '<span class="lib-typing-dots"><span></span><span></span><span></span></span>';
     let fullText = "";
     try {
       const resp = await fetch("/api/library/chat", {
@@ -1244,6 +1244,7 @@ document.addEventListener("DOMContentLoaded", () => {
           try { d = JSON.parse(line.slice(5).trim()); } catch { continue; }
           if (d.chunk) {
             fullText += d.chunk;
+            bubble.classList.remove("lib-loading");
             bubble.innerHTML = typeof marked !== "undefined" ? marked.parse(fullText) : fullText;
             messagesEl.scrollTop = 999999;
           }
@@ -1329,8 +1330,6 @@ document.addEventListener("DOMContentLoaded", () => {
     _libFileChatMessages = [];
     const el = document.getElementById("lib-file-chat-messages");
     if (el) el.innerHTML = "";
-    const clearBtn = document.getElementById("lib-file-chat-clear-btn");
-    if (clearBtn) clearBtn.style.display = "none";
   };
 
   window.libFileChatSend = async function() {
@@ -1342,8 +1341,6 @@ document.addEventListener("DOMContentLoaded", () => {
     const messagesEl = document.getElementById("lib-file-chat-messages");
     _libFileChatMessages.push({ role: "user", content: text });
     _appendChatBubble("user", text, messagesEl);
-    const clearBtn = document.getElementById("lib-file-chat-clear-btn");
-    if (clearBtn) clearBtn.style.display = "";
     const paths = _libCurrentFilePath ? [_libCurrentFilePath] : [];
     const aiText = await _libStreamChat([..._libFileChatMessages], paths, messagesEl);
     if (aiText) _libFileChatMessages.push({ role: "assistant", content: aiText });

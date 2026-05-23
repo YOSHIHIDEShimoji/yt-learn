@@ -1280,6 +1280,9 @@ def _search_library(q: str, channels: list[str], scope: str, page: int = 1, per_
     return {"results": results[start:start + per_page], "total": total, "pages": pages, "page": page}
 
 
+_OLLAMA_SPECIAL = re.compile(r"<\|[^|>]*\|>")
+
+
 async def _stream_ollama_chat(messages: list[dict], model: str, base_url: str):
     import httpx
     async with httpx.AsyncClient(timeout=60) as client:
@@ -1294,7 +1297,7 @@ async def _stream_ollama_chat(messages: list[dict], model: str, base_url: str):
                     data = json.loads(line)
                 except json.JSONDecodeError:
                     continue
-                chunk = data.get("message", {}).get("content", "")
+                chunk = _OLLAMA_SPECIAL.sub("", data.get("message", {}).get("content", ""))
                 if chunk:
                     yield chunk
                 if data.get("done"):
@@ -1349,7 +1352,7 @@ def _build_library_context(messages: list[dict], paths: list[str]) -> str:
             for r in results["results"][:10]:
                 pts = " ".join(r.get("points", [])[:2])
                 snippets.append(f"【{r['channel']}】{r['title']}: {pts}")
-            ctx = "\n".join(snippets)
+            ctx = "\n".join(snippets) if snippets else _get_all_library_titles()
         else:
             ctx = _get_all_library_titles()
         return (

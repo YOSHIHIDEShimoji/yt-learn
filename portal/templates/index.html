@@ -212,9 +212,11 @@
   </div>
   <div id="lib-chat-messages" class="lib-chat-messages"></div>
   <div class="lib-chat-input-row">
-    <input id="lib-chat-input" class="form-input"
+    <textarea id="lib-chat-input" class="form-input lib-chat-textarea"
            placeholder="質問してください..."
-           onkeydown="if(event.key==='Enter'&&!event.shiftKey&&!event.isComposing){event.preventDefault();libChatSend()}">
+           rows="1"
+           onkeydown="if(event.key==='Enter'&&!event.shiftKey&&!event.isComposing){event.preventDefault();libChatSend()}"
+           oninput="this.style.height='auto';this.style.height=Math.min(this.scrollHeight,120)+'px'"></textarea>
     <button class="btn-primary btn-sm" onclick="libChatSend()">送信</button>
   </div>
 </div>
@@ -274,14 +276,13 @@
     </div>
     <div id="lib-viewer-content" class="markdown-body lib-viewer-content"></div>
     <div class="lib-file-chat">
-      <div class="lib-chat-header">
-        <button id="lib-file-chat-clear-btn" class="refresh-btn btn-sm" style="display:none" onclick="libFileChatClear()">クリア</button>
-      </div>
       <div id="lib-file-chat-messages" class="lib-chat-messages lib-chat-messages-sm"></div>
       <div class="lib-chat-input-row">
-        <input id="lib-file-chat-input" class="form-input"
+        <textarea id="lib-file-chat-input" class="form-input lib-chat-textarea"
                placeholder="質問してください..."
-               onkeydown="if(event.key==='Enter'&&!event.shiftKey&&!event.isComposing){event.preventDefault();libFileChatSend()}">
+               rows="1"
+               onkeydown="if(event.key==='Enter'&&!event.shiftKey&&!event.isComposing){event.preventDefault();libFileChatSend()}"
+               oninput="this.style.height='auto';this.style.height=Math.min(this.scrollHeight,120)+'px'"></textarea>
         <button class="btn-primary btn-sm" onclick="libFileChatSend()">送信</button>
       </div>
     </div>
