@@ -13,7 +13,7 @@ from datetime import date, datetime
 from pathlib import Path
 from urllib.parse import parse_qs, urlparse
 
-BASE_DIR = Path(__file__).parent.resolve()
+BASE_DIR = Path(__file__).parent.parent.resolve()
 TRANSCRIPTS_DIR = BASE_DIR / "transcripts"
 CACHE_DIR = BASE_DIR / "cache"
 QUEUE_DIR = BASE_DIR / "queue"

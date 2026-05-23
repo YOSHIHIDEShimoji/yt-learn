@@ -47,7 +47,7 @@ if [[ "$(uname)" == "Darwin" ]]; then
 
   # WSL 側でサーバーを常に最新コードで再起動
   echo "[portal] WSL: tmux セッション '$TMUX_SESSION' を再起動中…"
-  ssh win "wsl -- bash -c 'cd ~/my-projects/${PROJECT} && tmux kill-session -t ${TMUX_SESSION} 2>/dev/null; tmux new-session -d -s ${TMUX_SESSION} ./portal-server.sh'" 2>/dev/null
+  ssh win "wsl -- bash -c 'cd ~/my-projects/${PROJECT} && tmux kill-session -t ${TMUX_SESSION} 2>/dev/null; tmux new-session -d -s ${TMUX_SESSION} ./src/portal-server.sh'" 2>/dev/null
 
   # サーバー起動待機（最大 15 秒）
   echo "[portal] サーバー起動待機中…"

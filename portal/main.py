@@ -1073,7 +1073,7 @@ async def _bg_process_urls(urls: list[str], channel: str, lang: str) -> None:
         python = shutil.which("python") or "python3"
         f = open(log_file, "wb")
         proc = await asyncio.create_subprocess_exec(
-            python, str(ROOT / "transcribe.py"), "process", *urls,
+            python, str(ROOT / "src" / "transcribe.py"), "process", *urls,
             "--channel", channel, "--lang", lang,
             cwd=str(ROOT),
             stdout=f, stderr=f,
@@ -1139,7 +1139,7 @@ async def transcribe_channel(body: TranscribeChannelBody):
     limit = max(1, min(body.limit, 100))
     model = body.model if body.model in _VALID_MODELS else "large-v3"
     python = shutil.which("python") or "python3"
-    args = [python, str(ROOT / "transcribe.py"), "channel", channel,
+    args = [python, str(ROOT / "src" / "transcribe.py"), "channel", channel,
             "--sort", "popular", "--limit", str(limit), "--model", model]
     asyncio.ensure_future(_bg_run_script(args, "transcribe", f"ch_{channel[:20]}", job_type="transcribe"))
     return JSONResponse({"ok": True, "message": f"'{channel}' の文字起こしを開始しました"})
@@ -1150,7 +1150,7 @@ async def transcribe_all(body: TranscribeAllBody):
     limit = max(1, min(body.limit, 100))
     model = body.model if body.model in _VALID_MODELS else "large-v3"
     python = shutil.which("python") or "python3"
-    args = [python, str(ROOT / "transcribe.py"), "all",
+    args = [python, str(ROOT / "src" / "transcribe.py"), "all",
             "--sort", "popular", "--limit", str(limit), "--model", model]
     asyncio.ensure_future(_bg_run_script(args, "transcribe", "all", job_type="transcribe"))
     return JSONResponse({"ok": True, "message": "全チャンネルの文字起こしを開始しました"})
@@ -1159,7 +1159,7 @@ async def transcribe_all(body: TranscribeAllBody):
 @app.post("/api/transcribe/sync")
 async def transcribe_sync(body: TranscribeSyncBody):
     python = shutil.which("python") or "python3"
-    args = [python, str(ROOT / "transcribe.py"), "sync"]
+    args = [python, str(ROOT / "src" / "transcribe.py"), "sync"]
     if body.only in ("transcripts", "summaries"):
         args += ["--only", body.only]
     asyncio.ensure_future(_bg_run_script(args, "transcribe", "sync", job_type="sync"))
@@ -1170,7 +1170,7 @@ async def transcribe_sync(body: TranscribeSyncBody):
 async def summarize_all(body: SummarizeBody):
     threshold = max(1, min(body.threshold, 1000))
     python = shutil.which("python") or "python3"
-    args = [python, str(ROOT / "summarize.py"), "all", "--threshold", str(threshold)]
+    args = [python, str(ROOT / "src" / "summarize.py"), "all", "--threshold", str(threshold)]
     asyncio.ensure_future(_bg_run_script(args, "summarize", "all", job_type="summarize"))
     return JSONResponse({"ok": True, "message": "要約を開始しました"})
 

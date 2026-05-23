@@ -1136,33 +1136,60 @@ document.addEventListener("DOMContentLoaded", () => {
   let _libCurrentFilePath = "";
   let _libModelPref = "ollama";
 
-  // ── Gemini レート管理 ──────────────────────────────────────
-  const _GEMINI_CTX_MAX = 1_048_576;  // gemini-2.5-flash-lite の入力トークン上限
-  let _libLastUsage = null;            // 直近の Gemini usage_metadata
+  // ── Gemini コンテキスト管理 ──────────────────────────────────
+  const _GEMINI_CTX_MAX = 1_048_576;
+  let _libLastUsage  = null;
+  let _homeLastUsage = null;
 
-  function _updateContextChart() {
-    const svg = document.getElementById("lib-gemini-quota");
-    const arc = document.getElementById("lib-gemini-quota-arc");
+  function _buildChartTooltip(usage) {
+    const used = usage.prompt_tokens;
+    const remaining = _GEMINI_CTX_MAX - used;
+    const pct = (used / _GEMINI_CTX_MAX * 100).toFixed(1);
+    return `送信コンテキスト: ${used.toLocaleString()} tokens (${pct}%)\n残り: ${remaining.toLocaleString()} tokens`;
+  }
+
+  function _applyChart(svgId, arcId, usage) {
+    const svg = document.getElementById(svgId);
+    const arc = document.getElementById(arcId);
     if (!svg) return;
-    if (_libModelPref !== "gemini") { svg.style.display = "none"; return; }
     svg.style.display = "";
     const circ = 2 * Math.PI * 8;
-    if (_libLastUsage) {
-      const pct  = Math.min(_libLastUsage.prompt_tokens / _GEMINI_CTX_MAX, 1);
+    if (usage) {
+      const pct  = Math.min(usage.prompt_tokens / _GEMINI_CTX_MAX, 1);
       const fill = pct * circ;
       if (arc) {
         arc.setAttribute("stroke-dasharray", `${fill.toFixed(2)} ${circ.toFixed(2)}`);
         arc.setAttribute("stroke", pct > 0.8 ? "#ef4444" : pct > 0.5 ? "#f59e0b" : "#4ade80");
       }
-      svg.title = `入力: ${_libLastUsage.prompt_tokens.toLocaleString()} / ${_GEMINI_CTX_MAX.toLocaleString()} tokens (${(pct * 100).toFixed(1)}%)`;
+      svg.title = _buildChartTooltip(usage);
     } else {
       if (arc) arc.setAttribute("stroke-dasharray", `0 ${circ.toFixed(2)}`);
       svg.title = "コンテキスト使用量（送信後に更新）";
     }
   }
+
+  function _updateContextChart() {
+    const svg = document.getElementById("lib-gemini-quota");
+    if (!svg) return;
+    if (_libModelPref !== "gemini") { svg.style.display = "none"; return; }
+    _applyChart("lib-gemini-quota", "lib-gemini-quota-arc", _libLastUsage);
+  }
+
+  function _updateHomeChart() {
+    const svg = document.getElementById("home-gemini-quota");
+    if (!svg) return;
+    if (_homeModelPref !== "gemini") { svg.style.display = "none"; return; }
+    _applyChart("home-gemini-quota", "home-gemini-quota-arc", _homeLastUsage);
+  }
+
   window.setLibModel = function(v) {
     _libModelPref = v;
     _updateContextChart();
+  };
+
+  window.setHomeModel = function(v) {
+    _homeModelPref = v;
+    _updateHomeChart();
   };
 
   // 重複段落除去（同じ段落が2回出る問題の後処理）
@@ -1696,6 +1723,7 @@ document.addEventListener("DOMContentLoaded", () => {
             bubble.innerHTML = typeof marked !== "undefined" ? marked.parse(fullText) : fullText;
             messagesEl.scrollTop = 999999;
           }
+          if (d.usage) { _homeLastUsage = d.usage; _updateHomeChart(); }
           if (d.error) { bubble.textContent = `エラー: ${String(d.error)}`; break; }
           if (d.done) break;
         }

@@ -943,7 +943,7 @@ body {
 
 /* ── Library: 右スライドインパネル ── */
 .lib-chat-panel {
-  position: fixed; top: 104px; right: 0; bottom: 0; width: 360px; min-width: 260px; max-width: 60vw;
+  position: fixed; top: 104px; right: 0; bottom: 0; width: 440px; min-width: 300px; max-width: 60vw;
   background: rgba(14, 14, 22, .92);
   backdrop-filter: blur(24px) saturate(2);
   -webkit-backdrop-filter: blur(24px) saturate(2);

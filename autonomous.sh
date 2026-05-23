@@ -134,7 +134,7 @@ dl_worker() {
     rate_limited=false
 
     # チャンネルを1周するごとに cookies を更新
-    python "$SCRIPT_DIR/transcribe.py" refresh-cookies 2>&1 | stamp | tee -a "$LOG_FILE"
+    python "$SCRIPT_DIR/src/transcribe.py" refresh-cookies 2>&1 | stamp | tee -a "$LOG_FILE"
 
     for name in "${CHANNELS[@]}"; do
       # キューが上限を超えていたら下限を下回るまで待機
@@ -148,7 +148,7 @@ dl_worker() {
       fi
 
       tmpout=$(mktemp)
-      python "$SCRIPT_DIR/transcribe.py" channel "$name" \
+      python "$SCRIPT_DIR/src/transcribe.py" channel "$name" \
         --download-only --sort popular --limit "$LIMIT" 2>&1 \
         | stamp | tee -a "$LOG_FILE" | tee "$tmpout"
 
@@ -170,7 +170,7 @@ dl_worker() {
     if ! $rate_limited; then
       WORKER="[SUM]"
       log "DL 1周完了 → summarize.py 実行"
-      python "$SCRIPT_DIR/summarize.py" all 2>&1 \
+      python "$SCRIPT_DIR/src/summarize.py" all 2>&1 \
         | stamp | tee -a "$LOG_FILE"
 
       WORKER="[GIT]"
@@ -187,7 +187,7 @@ dl_worker() {
         sleep "$PROBE_INTERVAL"
 
         probe_out=$(mktemp)
-        python "$SCRIPT_DIR/transcribe.py" channel "${CHANNELS[0]}" \
+        python "$SCRIPT_DIR/src/transcribe.py" channel "${CHANNELS[0]}" \
           --download-only --limit 1 2>&1 \
           | stamp | tee -a "$LOG_FILE" | tee "$probe_out"
 
@@ -210,7 +210,7 @@ dl_worker() {
 transcribe_worker() {
   WORKER="[TX]"
   while true; do
-    python "$SCRIPT_DIR/transcribe.py" drain-queue \
+    python "$SCRIPT_DIR/src/transcribe.py" drain-queue \
       --model "$MODEL" 2>&1 \
       | stamp | tee -a "$LOG_FILE"
     exit_code=${PIPESTATUS[0]}

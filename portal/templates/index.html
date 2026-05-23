@@ -215,17 +215,17 @@
       <input type="radio" name="lib-model" value="ollama" checked onchange="setLibModel('ollama')">
       qwen2.5:14b (Local)
     </label>
-    <label class="lib-model-opt">
+    <label class="lib-model-opt" style="display:flex;align-items:center;gap:5px">
       <input type="radio" name="lib-model" value="gemini" onchange="setLibModel('gemini')">
       Gemini 2.5 Flash Lite
+      <svg id="lib-gemini-quota" viewBox="0 0 24 24" width="18" height="18"
+           style="display:none;flex-shrink:0;cursor:help">
+        <circle cx="12" cy="12" r="8" fill="none" stroke="rgba(255,255,255,0.12)" stroke-width="4"/>
+        <circle id="lib-gemini-quota-arc" cx="12" cy="12" r="8" fill="none"
+                stroke="#4ade80" stroke-width="4" stroke-linecap="round"
+                stroke-dasharray="0 50.27" transform="rotate(-90 12 12)"/>
+      </svg>
     </label>
-    <svg id="lib-gemini-quota" viewBox="0 0 24 24" width="20" height="20"
-         style="display:none;flex-shrink:0;vertical-align:middle;margin-left:4px">
-      <circle cx="12" cy="12" r="8" fill="none" stroke="rgba(255,255,255,0.12)" stroke-width="4"/>
-      <circle id="lib-gemini-quota-arc" cx="12" cy="12" r="8" fill="none"
-              stroke="#4ade80" stroke-width="4" stroke-linecap="round"
-              stroke-dasharray="50.27 50.27" transform="rotate(-90 12 12)"/>
-    </svg>
   </div>
   <div id="lib-chat-messages" class="lib-chat-messages"></div>
   <div class="lib-chat-input-row">
@@ -249,9 +249,16 @@
       <input type="radio" name="home-model" value="ollama" checked onchange="setHomeModel('ollama')">
       qwen2.5:14b (Local)
     </label>
-    <label class="lib-model-opt">
+    <label class="lib-model-opt" style="display:flex;align-items:center;gap:5px">
       <input type="radio" name="home-model" value="gemini" onchange="setHomeModel('gemini')">
       Gemini 2.5 Flash Lite
+      <svg id="home-gemini-quota" viewBox="0 0 24 24" width="18" height="18"
+           style="display:none;flex-shrink:0;cursor:help">
+        <circle cx="12" cy="12" r="8" fill="none" stroke="rgba(255,255,255,0.12)" stroke-width="4"/>
+        <circle id="home-gemini-quota-arc" cx="12" cy="12" r="8" fill="none"
+                stroke="#4ade80" stroke-width="4" stroke-linecap="round"
+                stroke-dasharray="0 50.27" transform="rotate(-90 12 12)"/>
+      </svg>
     </label>
   </div>
   <div id="home-chat-messages" class="lib-chat-messages"></div>

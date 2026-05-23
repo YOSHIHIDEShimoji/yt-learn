@@ -17,7 +17,7 @@ import sys
 from datetime import date, datetime
 from pathlib import Path
 
-BASE_DIR = Path(__file__).parent.resolve()
+BASE_DIR = Path(__file__).parent.parent.resolve()
 TRANSCRIPTS_DIR = BASE_DIR / "transcripts"
 SUMMARIES_DIR = BASE_DIR / "summaries"
 CHANNELS_FILE = BASE_DIR / "channels.txt"
