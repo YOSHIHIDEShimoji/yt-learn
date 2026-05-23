@@ -1521,11 +1521,7 @@ document.addEventListener("DOMContentLoaded", () => {
             messagesEl.scrollTop = 999999;
           }
           if (d.error) {
-            const msg = String(d.error);
-            const short = msg.includes("429") || msg.toLowerCase().includes("resource_exhausted")
-              ? "レート制限（Gemini 429）— しばらくしてから再試行してください"
-              : msg.length > 120 ? msg.slice(0, 120) + "…" : msg;
-            bubble.textContent = `エラー: ${short}`;
+            bubble.textContent = `エラー: ${String(d.error)}`;
             break;
           }
           if (d.done) break;

@@ -1304,6 +1304,8 @@ async def _stream_ollama_chat(messages: list[dict], model: str, base_url: str):
                     data = json.loads(line)
                 except json.JSONDecodeError:
                     continue
+                if data.get("error"):
+                    raise RuntimeError(data["error"])
                 chunk = data.get("message", {}).get("content", "")
                 # 特殊トークン開始を検出したらストリーム終了
                 if "<|" in chunk:
@@ -1438,7 +1440,7 @@ async def library_transcript(path: str):
         return JSONResponse({"error": str(e)}, status_code=500)
 
 
-_GEMINI_CHAT_MODEL = "gemini-2.5-flash-lite-preview-06-17"
+_GEMINI_CHAT_MODEL = "gemini-2.5-flash-lite"
 _OLLAMA_CHAT_MODEL = "qwen2.5:14b"
 
 
@@ -1470,8 +1472,16 @@ async def library_chat(request: Request, body: LibraryChatBody):
                         return
                     yield f"data: {json.dumps({'chunk': chunk})}\n\n"
                 ok = True
+            except RuntimeError as e:
+                err_str = str(e).lower()
+                if any(k in err_str for k in ("context", "too large", "length", "token")):
+                    msg = "コンテキスト上限超過 — 選択ファイルを減らしてください"
+                else:
+                    msg = f"Ollama エラー: {str(e)}"
+                yield f"data: {json.dumps({'error': msg})}\n\n"
+                ok = True
             except Exception:
-                pass
+                pass  # Ollama 未接続 → Gemini にフォールスルー
 
         if use_gemini and api_key:
             try:
@@ -1481,8 +1491,12 @@ async def library_chat(request: Request, body: LibraryChatBody):
             except Exception as e:
                 err_str = str(e)
                 if "429" in err_str or "RESOURCE_EXHAUSTED" in err_str:
-                    err_str = "レート制限（Gemini 429）— しばらくしてから再試行してください"
-                yield f"data: {json.dumps({'error': err_str})}\n\n"
+                    msg = "レート制限（Gemini 429）— しばらくしてから再試行してください"
+                elif any(k in err_str for k in ("token", "too large", "payload", "INVALID_ARGUMENT")):
+                    msg = "コンテキスト上限超過 — 選択ファイルを減らしてください"
+                else:
+                    msg = err_str[:200] if len(err_str) > 200 else err_str
+                yield f"data: {json.dumps({'error': msg})}\n\n"
 
         if not ok:
             yield f"data: {json.dumps({'error': 'LLM未設定（LOCAL_LLM_URL / GEMINI_API_KEY）'})}\n\n"
