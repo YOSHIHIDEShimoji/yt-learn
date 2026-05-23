@@ -154,8 +154,7 @@
           <option value="points">ポイントのみ</option>
           <option value="full">全文</option>
         </select>
-        <button class="refresh-btn" onclick="selectAllLib()">全選択</button>
-        <button class="refresh-btn" onclick="selectAllCards()">全カード選択</button>
+        <button class="refresh-btn" onclick="selectAllCards()">全選択</button>
         <button class="refresh-btn" onclick="libClear()">クリア</button>
       </div>
       <div id="lib-channel-chips" class="lib-chips"></div>
@@ -297,10 +296,26 @@
     <div class="modal-title-row">
       <span class="modal-title" id="log-filter-title" style="margin-bottom:0"></span>
       <span style="font-size:12px;color:var(--text-faint)" id="log-filter-count"></span>
+      <span style="flex:1"></span>
       <button id="log-filter-open-btn" class="refresh-btn">↗ ログを開く</button>
       <button class="refresh-btn" onclick="closeLogFilter()">✕ 閉じる</button>
     </div>
     <div class="log-output log-filter-output" id="log-filter-content"></div>
+  </div>
+</div>
+
+<!-- LIBRARY 選択動画モーダル -->
+<div id="lib-selected-modal" class="modal-backdrop" style="display:none"
+     onclick="if(event.target===this)closeLibSelected()">
+  <div class="modal-box modal-box-wide">
+    <div class="modal-title-row">
+      <span class="modal-title" style="margin-bottom:0">選択中の動画</span>
+      <span id="lib-selected-count" style="font-size:12px;color:var(--text-faint)"></span>
+      <span style="flex:1"></span>
+      <button class="refresh-btn btn-sm" onclick="deselectAllCards()">全解除</button>
+      <button class="refresh-btn" onclick="closeLibSelected()">✕ 閉じる</button>
+    </div>
+    <div id="lib-selected-list" class="lib-selected-list"></div>
   </div>
 </div>
 

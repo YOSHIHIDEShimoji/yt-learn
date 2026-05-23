@@ -959,6 +959,7 @@ document.addEventListener("DOMContentLoaded", () => {
       closeLogFilter();
       closeLibViewer();
       closeLibChat();
+      closeLibSelected();
       document.getElementById("confirm-modal").style.display = "none";
     }
   });
@@ -1233,7 +1234,80 @@ document.addEventListener("DOMContentLoaded", () => {
     if (!label) return;
     const n = _libCheckedPaths.size;
     label.textContent = n > 0 ? `選択 ${n} 件` : "ライブラリ全体";
+    if (n > 0) {
+      label.classList.add("lib-chat-ctx-clickable");
+      label.onclick = () => openLibSelected();
+    } else {
+      label.classList.remove("lib-chat-ctx-clickable");
+      label.onclick = null;
+    }
   }
+
+  window.openLibSelected = function() {
+    if (_libCheckedPaths.size === 0) return;
+    const modal   = document.getElementById("lib-selected-modal");
+    const list    = document.getElementById("lib-selected-list");
+    const countEl = document.getElementById("lib-selected-count");
+    if (!modal || !list) return;
+    countEl.textContent = `${_libCheckedPaths.size} 件`;
+    list.innerHTML = "";
+    [..._libCheckedPaths].forEach(path => {
+      const parts   = path.split("/");
+      const channel = parts[1] || "";
+      const title   = (parts[parts.length - 1] || "").replace(/\.md$/, "");
+      const safePath = path.replace(/'/g, "\\'");
+      const row = document.createElement("div");
+      row.className = "lib-selected-row";
+      row.innerHTML = `
+        <span class="badge badge-blue lib-sel-ch">${esc(channel)}</span>
+        <span class="lib-sel-title" title="${esc(title)}">${esc(title)}</span>
+        <button class="refresh-btn btn-sm" onclick="jumpToLibCard('${safePath}')">↗ 表示</button>
+        <button class="refresh-btn btn-sm" onclick="deselectCard('${safePath}', this)">× 解除</button>`;
+      list.appendChild(row);
+    });
+    modal.style.display = "flex";
+  };
+
+  window.closeLibSelected = function() {
+    const modal = document.getElementById("lib-selected-modal");
+    if (modal) modal.style.display = "none";
+  };
+
+  window.jumpToLibCard = function(path) {
+    closeLibSelected();
+    const card = document.querySelector(`.lib-result-card[data-path="${CSS.escape(path)}"]`);
+    if (card) {
+      card.scrollIntoView({ behavior: "smooth", block: "center" });
+      card.style.outline = "2px solid var(--blue)";
+      setTimeout(() => { card.style.outline = ""; }, 1500);
+    }
+  };
+
+  window.deselectCard = function(path, btn) {
+    _libCheckedPaths.delete(path);
+    const card = document.querySelector(`.lib-result-card[data-path="${CSS.escape(path)}"]`);
+    if (card) {
+      card.classList.remove("selected");
+      const cb = card.querySelector(".lib-card-cb");
+      if (cb) cb.checked = false;
+    }
+    btn.closest(".lib-selected-row")?.remove();
+    const countEl = document.getElementById("lib-selected-count");
+    if (countEl) countEl.textContent = `${_libCheckedPaths.size} 件`;
+    _updateChatContextLabel();
+    if (_libCheckedPaths.size === 0) closeLibSelected();
+  };
+
+  window.deselectAllCards = function() {
+    _libCheckedPaths.clear();
+    document.querySelectorAll(".lib-result-card.selected").forEach(card => {
+      card.classList.remove("selected");
+      const cb = card.querySelector(".lib-card-cb");
+      if (cb) cb.checked = false;
+    });
+    _updateChatContextLabel();
+    closeLibSelected();
+  };
 
   // ── Library: ビューアーモーダル ─────────────────────────────
   window.openLibViewer = async function(path) {

@@ -1012,6 +1012,14 @@ body {
 @keyframes lib-dot { 0%,80%,100%{transform:scale(.7);opacity:.4} 40%{transform:scale(1.1);opacity:1} }
 .lib-bubble-ai.lib-loading { padding: 8px 12px; }
 
+/* 選択動画モーダル */
+.lib-selected-list { display: flex; flex-direction: column; gap: 6px; max-height: 420px; overflow-y: auto; }
+.lib-selected-row { display: flex; align-items: center; gap: 8px; padding: 8px 10px; background: var(--surface); border-radius: 6px; border: 1px solid var(--border); }
+.lib-sel-ch { flex-shrink: 0; font-size: 11px; }
+.lib-sel-title { flex: 1; font-size: 13px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
+.lib-chat-ctx-clickable { cursor: pointer; text-decoration: underline dotted; }
+.lib-chat-ctx-clickable:hover { opacity: .75; }
+
 /* GPU 警告バッジ */
 .lib-gpu-warn {
   display: inline-flex; align-items: center; gap: 5px;
