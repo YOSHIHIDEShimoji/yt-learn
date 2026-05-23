@@ -266,11 +266,60 @@ def _find_log_for_pid(pid: int, job_type: str) -> str:
     return ""
 
 
-async def _detect_manual_processes() -> list[dict]:
+def _get_proc_descendants(root_pid: int) -> set[int]:
+    """root_pid の子孫プロセス PID を全て返す（/proc stat スキャン）。"""
+    children: dict[int, list[int]] = {}
+    try:
+        for p in Path("/proc").iterdir():
+            if not p.name.isdigit():
+                continue
+            try:
+                parts = (p / "stat").read_text().split()
+                pid, ppid = int(parts[0]), int(parts[3])
+                children.setdefault(ppid, []).append(pid)
+            except (OSError, IndexError, ValueError):
+                pass
+    except OSError:
+        pass
+    result: set[int] = set()
+    stack = [root_pid]
+    while stack:
+        p = stack.pop()
+        for c in children.get(p, []):
+            result.add(c)
+            stack.append(c)
+    return result
+
+
+async def _get_tmux_descendant_pids(session: str) -> set[int]:
+    """tmux セッションのペイン PID およびその全子孫 PID を返す。"""
+    try:
+        proc = await asyncio.create_subprocess_exec(
+            "tmux", "list-panes", "-t", session, "-F", "#{pane_pid}",
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.DEVNULL,
+        )
+        stdout, _ = await asyncio.wait_for(proc.communicate(), timeout=3)
+    except Exception:
+        return set()
+    pids: set[int] = set()
+    for line in stdout.decode().splitlines():
+        try:
+            pane_pid = int(line.strip())
+            pids.add(pane_pid)
+            pids.update(_get_proc_descendants(pane_pid))
+        except ValueError:
+            pass
+    return pids
+
+
+async def _detect_manual_processes(excluded_pids: set[int] | None = None) -> list[dict]:
     """ポータル外で手動起動されたスクリプトを /proc スキャンで検出（WSL 専用）。"""
     if not IS_WSL:
         return []
     tracked_pids = {j["pid"] for j in _active_jobs.values()}
+    if excluded_pids:
+        tracked_pids |= excluded_pids
     root_resolved = str(ROOT.resolve())
     results: list[dict] = []
     seen_types: set[str] = set()
@@ -383,23 +432,25 @@ async def _get_active_processes() -> list[dict]:
             "started_at": j["started_at"],
             "is_external": False,
         })
-    procs.extend(await _detect_manual_processes())
-    if IS_WSL:
-        yt_session = await _find_yt_session()
-        if yt_session:
-            log_dir = ROOT / "logs" / "autonomous"
-            log_file = ""
-            if log_dir.exists():
-                logs = sorted(log_dir.glob("*.log"), key=lambda x: x.stat().st_mtime, reverse=True)
-                if logs:
-                    log_file = str(logs[0].relative_to(ROOT))
-            procs.append({
-                "id": f"autonomous_{yt_session}",
-                "type": "autonomous",
-                "label": "autonomous.sh",
-                "log_file": log_file,
-                "started_at": "",
-            })
+    # autonomous.sh が tmux で動いている場合、その子孫 PID を先に取得して
+    # manual detect から除外（transcribe.py 等が二重表示されるのを防ぐ）
+    yt_session = await _find_yt_session() if IS_WSL else None
+    excluded_pids = await _get_tmux_descendant_pids(yt_session) if yt_session else set()
+    procs.extend(await _detect_manual_processes(excluded_pids=excluded_pids))
+    if yt_session:
+        log_dir = ROOT / "logs" / "autonomous"
+        log_file = ""
+        if log_dir.exists():
+            logs = sorted(log_dir.glob("*.log"), key=lambda x: x.stat().st_mtime, reverse=True)
+            if logs:
+                log_file = str(logs[0].relative_to(ROOT))
+        procs.append({
+            "id": f"autonomous_{yt_session}",
+            "type": "autonomous",
+            "label": "autonomous.sh",
+            "log_file": log_file,
+            "started_at": "",
+        })
     return procs
 
 
