@@ -1505,10 +1505,14 @@ document.addEventListener("DOMContentLoaded", () => {
       if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
       const reader = resp.body.getReader();
       const dec = new TextDecoder();
+      let lineBuf = "";
       while (true) {
         const { done, value } = await reader.read();
         if (done) break;
-        for (const line of dec.decode(value, { stream: true }).split("\n")) {
+        lineBuf += dec.decode(value, { stream: true });
+        const lines = lineBuf.split("\n");
+        lineBuf = lines.pop(); // 最後の不完全行を次のチャンクへ持ち越す
+        for (const line of lines) {
           if (!line.startsWith("data:")) continue;
           let d;
           try { d = JSON.parse(line.slice(5).trim()); } catch { continue; }
