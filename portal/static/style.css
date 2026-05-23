@@ -949,7 +949,7 @@ body {
   flex: 1; overflow-y: auto; padding: 12px;
   display: flex; flex-direction: column; gap: 10px;
 }
-.lib-chat-messages-sm { flex: none; max-height: 220px; }
+.lib-chat-messages-sm { flex: 1; min-height: 0; overflow-y: auto; max-height: 220px; }
 
 .lib-bubble { padding: 10px 12px; border-radius: 10px; font-size: 13px; line-height: 1.6; }
 .lib-bubble-user {
@@ -987,7 +987,7 @@ body {
 .lib-viewer-content {
   flex: 1; overflow-y: auto; padding: 16px 0 0 0;
 }
-.lib-file-chat { border-top: 1px solid var(--border); display: flex; flex-direction: column; }
+.lib-file-chat { border-top: 1px solid var(--border); display: flex; flex-direction: column; flex-shrink: 0; }
 .lib-chat-messages-sm:empty { display: none; }
 
 /* リサイズハンドル */

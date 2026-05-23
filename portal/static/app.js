@@ -994,21 +994,29 @@ document.addEventListener("DOMContentLoaded", () => {
     });
   })();
 
-  // ファイルチャットリサイズ（上端ドラッグで高さ変更）
+  // ファイルチャットリサイズ（上端ドラッグで高さ変更、上方向に文字起こし領域を圧縮）
   (function() {
-    const handle = document.getElementById("lib-file-chat-resize-handle");
-    const chat   = document.getElementById("lib-file-chat-messages");
-    if (!handle || !chat) return;
+    const handle   = document.getElementById("lib-file-chat-resize-handle");
+    const fileChat = document.getElementById("lib-file-chat");
+    const msgs     = document.getElementById("lib-file-chat-messages");
+    if (!handle || !fileChat) return;
     let startY = 0, startH = 0;
     handle.addEventListener("mousedown", e => {
       e.preventDefault();
-      startY = e.clientY; startH = chat.offsetHeight;
+      startY = e.clientY;
+      startH = fileChat.offsetHeight;
       handle.classList.add("dragging");
       const move = ev => {
         const newH = startH - (ev.clientY - startY);
-        chat.style.maxHeight = Math.max(60, Math.min(500, newH)) + "px";
+        fileChat.style.height = Math.max(70, Math.min(window.innerHeight * 0.75, newH)) + "px";
+        // 一度ドラッグしたら max-height 制限を外してコンテナに委ねる
+        if (msgs) msgs.style.maxHeight = "none";
       };
-      const up = () => { handle.classList.remove("dragging"); document.removeEventListener("mousemove", move); document.removeEventListener("mouseup", up); };
+      const up = () => {
+        handle.classList.remove("dragging");
+        document.removeEventListener("mousemove", move);
+        document.removeEventListener("mouseup", up);
+      };
       document.addEventListener("mousemove", move);
       document.addEventListener("mouseup", up);
     });
@@ -1331,7 +1339,9 @@ document.addEventListener("DOMContentLoaded", () => {
     _libCurrentFilePath = path;
     _libFileChatMessages = [];
     const fileChatEl = document.getElementById("lib-file-chat-messages");
-    if (fileChatEl) fileChatEl.innerHTML = "";
+    if (fileChatEl) { fileChatEl.innerHTML = ""; fileChatEl.style.maxHeight = ""; }
+    const fileChatDiv = document.getElementById("lib-file-chat");
+    if (fileChatDiv) fileChatDiv.style.height = "";
 
     contentEl.innerHTML = placeholder("⏳", "読み込み中…");
     modal.style.display = "flex";
