@@ -680,7 +680,8 @@ async def _build_status_data(log_path: str | None = None) -> dict:
 # ── Routes ───────────────────────────────────────────────────
 @app.get("/", response_class=HTMLResponse)
 async def index(request: Request):
-    return templates.TemplateResponse(request=request, name="index.html")
+    return templates.TemplateResponse(request=request, name="index.html",
+                                      context={"is_wsl": IS_WSL})
 
 
 @app.get("/api/channels")

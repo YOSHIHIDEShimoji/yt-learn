@@ -7,7 +7,7 @@ document.addEventListener("DOMContentLoaded", () => {
   let _statusData = null;
   let _statusEventSource = null;
   let _logEventSource = null;
-  let _isWsl = null;
+  let _isWsl = document.documentElement.dataset.wsl === "true";
   let _pendingLogPath = null;
   const _gpuHistory = [];
   const GPU_MAX_POINTS = 60;
@@ -829,18 +829,14 @@ document.addEventListener("DOMContentLoaded", () => {
 
   // ── HOME: 実行パネル ────────────────────────────────────────
   async function loadRunPanel() {
-    if (_isWsl === null) {
-      try { const d = await api("/api/env"); _isWsl = d.is_wsl; }
-      catch { _isWsl = false; }
-      if (!_isWsl) {
-        const warn = document.getElementById("run-wsl-warn");
-        if (warn) warn.style.display = "block";
-        const startBtn = document.getElementById("run-start-btn");
-        if (startBtn) startBtn.disabled = true;
-        const badge = document.getElementById("run-badge");
-        if (badge) { badge.className = "badge badge-gray"; badge.textContent = "WSL only"; }
-        return;
-      }
+    if (!_isWsl) {
+      const warn = document.getElementById("run-wsl-warn");
+      if (warn) warn.style.display = "block";
+      const startBtn = document.getElementById("run-start-btn");
+      if (startBtn) startBtn.disabled = true;
+      const badge = document.getElementById("run-badge");
+      if (badge) { badge.className = "badge badge-gray"; badge.textContent = "WSL only"; }
+      return;
     }
     await _updateRunBadge();
   }
@@ -1154,20 +1150,8 @@ document.addEventListener("DOMContentLoaded", () => {
 
   // ── Library: 初期化 ──────────────────────────────────────────
   async function initLibrary() {
-    if (_isWsl === null) {
-      try { const d = await api("/api/env"); _isWsl = d.is_wsl; } catch { _isWsl = false; }
-    }
-    const warn = document.getElementById("lib-wsl-warn");
-    const card = document.getElementById("lib-search-card");
-    const fab  = document.getElementById("lib-chat-fab");
-    if (!_isWsl) {
-      if (warn) warn.style.display = "";
-      if (card) card.style.display = "none";
-      if (fab)  fab.style.display  = "none";
-      return;
-    }
-    if (warn) warn.style.display = "none";
-    if (card) card.style.display = "";
+    const fab = document.getElementById("lib-chat-fab");
+    if (!_isWsl) return;
     if (fab && !_libChatPanelOpen) fab.style.display = "";
     if (!_libInitialized) {
       _libInitialized = true;

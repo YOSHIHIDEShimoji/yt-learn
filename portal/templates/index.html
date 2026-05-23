@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="ja">
+<html lang="ja" data-wsl="{{ 'true' if is_wsl else 'false' }}">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -144,7 +144,7 @@
     <div id="lib-wsl-warn" class="run-warn" style="display:none">WSL 環境専用機能です</div>
     <div id="lib-gpu-warn" class="lib-gpu-warn" style="display:none">GPU 使用中 — Ollama と競合する可能性があります</div>
 
-    <div class="card lib-search-card" id="lib-search-card" style="display:none">
+    <div class="card lib-search-card" id="lib-search-card" style="display:{{ '' if is_wsl else 'none' }}">
       <div class="lib-search-row">
         <input id="lib-search-input" class="form-input lib-search-input"
                placeholder="キーワード検索..."
