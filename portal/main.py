@@ -734,14 +734,24 @@ async def get_logs():
 
     # autonomous.sh 稼働中は transcribe.py が子プロセスとして起動されるため
     # その独自ログ（logs/transcribe/transcribe_YYYYMMDD.log）は autonomous ログと
-    # 内容が重複する。autonomous セッションがある場合はこれらを除外する。
-    yt_session = await _find_yt_session() if IS_WSL else None
+    # 内容が重複する。live な autonomous ログがある場合はこれらを除外する。
+    # （tmux セッション名に依存しない判定）
+    _auto_dir = ROOT / "logs" / "autonomous"
+    _autonomous_live = False
+    if IS_WSL and _auto_dir.exists():
+        for _al in sorted(_auto_dir.glob("*.log"), key=lambda x: x.stat().st_mtime, reverse=True)[:2]:
+            try:
+                if "[session-end]" not in _al.read_bytes()[-512:].decode(errors="replace"):
+                    _autonomous_live = True
+                    break
+            except OSError:
+                pass
     _transcribe_date_pattern = re.compile(r'^transcribe_\d{8}\.log$')
 
     for log_dir in log_dirs:
         if log_dir.exists():
             for f in sorted(log_dir.rglob("*.log"), key=lambda x: x.stat().st_mtime, reverse=True)[:30]:
-                if yt_session and _transcribe_date_pattern.match(f.name):
+                if _autonomous_live and _transcribe_date_pattern.match(f.name):
                     continue
                 try:
                     tail = f.read_bytes()[-512:].decode(errors="replace")
