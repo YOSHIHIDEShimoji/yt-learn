@@ -969,12 +969,14 @@ body {
 .lib-chat-input-row .form-input { flex: 1; font-size: 13px; }
 
 .lib-chat-fab {
-  position: fixed; bottom: 28px; right: 28px; width: 48px; height: 48px;
+  position: fixed; bottom: 28px; right: 28px; width: 56px; height: 56px;
   border-radius: 50%; background: var(--blue); color: #fff;
-  border: none; font-size: 20px; cursor: pointer;
+  border: none; cursor: pointer;
+  display: flex; align-items: center; justify-content: center;
   box-shadow: 0 4px 16px rgba(10, 132, 255, .4);
   transition: transform .15s, box-shadow .15s; z-index: 91;
 }
+.lib-chat-fab img { width: 32px; height: 32px; object-fit: contain; display: block; filter: brightness(0) invert(1); }
 .lib-chat-fab:hover { transform: scale(1.08); box-shadow: 0 6px 20px rgba(10, 132, 255, .5); }
 
 /* ── Library: ビューアーモーダル ── */
