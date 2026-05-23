@@ -1668,8 +1668,6 @@ document.addEventListener("DOMContentLoaded", () => {
   }
   window.closeHomeChat = closeHomeChat;
 
-  window.setHomeModel = function(v) { _homeModelPref = v; };
-
   window.homeChatClear = function() {
     _homeChatMessages = [];
     const el = document.getElementById("home-chat-messages");
