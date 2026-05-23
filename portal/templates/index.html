@@ -154,12 +154,14 @@
           <option value="points">ポイントのみ</option>
           <option value="full">全文</option>
         </select>
-        <button class="refresh-btn" onclick="selectAllCards()">全選択</button>
-        <button class="refresh-btn" onclick="libClear()">クリア</button>
       </div>
       <div id="lib-channel-chips" class="lib-chips"></div>
     </div>
 
+    <div id="lib-results-controls" class="lib-results-controls" style="display:none">
+      <button class="refresh-btn" onclick="selectAllCards()">全選択</button>
+      <button class="refresh-btn" onclick="libClear()">クリア</button>
+    </div>
     <div id="lib-results"></div>
     <div id="lib-pagination" class="lib-pagination" style="display:none">
       <button class="refresh-btn" onclick="libPagePrev()">← 前へ</button>

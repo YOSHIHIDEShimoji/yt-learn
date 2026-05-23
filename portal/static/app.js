@@ -1000,16 +1000,31 @@ document.addEventListener("DOMContentLoaded", () => {
     const fileChat = document.getElementById("lib-file-chat");
     const msgs     = document.getElementById("lib-file-chat-messages");
     if (!handle || !fileChat) return;
-    let startY = 0, startH = 0;
+    let startY = 0, startH = 0, maxH = 0;
     handle.addEventListener("mousedown", e => {
       e.preventDefault();
       startY = e.clientY;
       startH = fileChat.offsetHeight;
+
+      // <hr>（---区切り）の位置を基準に最大高さを計算
+      const viewerContent = document.getElementById("lib-viewer-content");
+      const hr = viewerContent?.querySelector("hr");
+      maxH = window.innerHeight * 0.8;
+      if (hr && viewerContent) {
+        const modalBox = fileChat.closest(".modal-box-viewer");
+        if (modalBox) {
+          const modalRect  = modalBox.getBoundingClientRect();
+          const hrRect     = hr.getBoundingClientRect();
+          // hr の下端からモーダル下端までの距離 = fileChat の最大高さ
+          const fromHrBottom = modalRect.bottom - hrRect.bottom - 8;
+          maxH = Math.max(70, fromHrBottom);
+        }
+      }
+
       handle.classList.add("dragging");
       const move = ev => {
         const newH = startH - (ev.clientY - startY);
-        fileChat.style.height = Math.max(70, Math.min(window.innerHeight * 0.75, newH)) + "px";
-        // 一度ドラッグしたら max-height 制限を外してコンテナに委ねる
+        fileChat.style.height = Math.max(70, Math.min(maxH, newH)) + "px";
         if (msgs) msgs.style.maxHeight = "none";
       };
       const up = () => {
@@ -1152,10 +1167,12 @@ document.addEventListener("DOMContentLoaded", () => {
     _libSelectedChannels.clear();
     _libCurrentQuery = "";
     _libCurrentPage = 1;
+    _libCheckedPaths.clear();
     const input = document.getElementById("lib-search-input");
     if (input) input.value = "";
     document.querySelectorAll(".lib-chip").forEach(el => el.classList.remove("selected"));
     _libClearResults();
+    _updateChatContextLabel();
   };
 
   function _libClearResults() {
@@ -1163,6 +1180,8 @@ document.addEventListener("DOMContentLoaded", () => {
     if (el) el.innerHTML = "";
     const pg = document.getElementById("lib-pagination");
     if (pg) pg.style.display = "none";
+    const ctrl = document.getElementById("lib-results-controls");
+    if (ctrl) ctrl.style.display = "none";
   }
 
   async function fetchLibResults() {
@@ -1197,8 +1216,14 @@ document.addEventListener("DOMContentLoaded", () => {
 
   function renderLibResults(results) {
     const el = document.getElementById("lib-results");
+    const ctrl = document.getElementById("lib-results-controls");
     if (!el) return;
-    if (!results.length) { el.innerHTML = placeholder("🔍", "結果がありません"); return; }
+    if (!results.length) {
+      el.innerHTML = placeholder("🔍", "結果がありません");
+      if (ctrl) ctrl.style.display = "none";
+      return;
+    }
+    if (ctrl) ctrl.style.display = "flex";
 
     const groups = {};
     results.forEach(r => { if (!groups[r.channel]) groups[r.channel] = []; groups[r.channel].push(r); });
