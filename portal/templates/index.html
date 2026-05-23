@@ -148,12 +148,13 @@
       <div class="lib-search-row">
         <input id="lib-search-input" class="form-input lib-search-input"
                placeholder="キーワード検索..."
-               onkeydown="if(event.key==='Enter')libSearch()">
-        <select id="lib-scope" class="form-input lib-scope-select">
+               oninput="libSearchInstant()"
+               onkeydown="if(event.key==='Escape'){this.value='';libSearchInstant()}">
+        <select id="lib-scope" class="form-input lib-scope-select" onchange="libSearchInstant()">
           <option value="points">ポイントのみ</option>
           <option value="full">全文</option>
         </select>
-        <button class="btn-primary btn-sm" onclick="libSearch()">検索</button>
+        <button class="refresh-btn" onclick="selectAllLib()">全選択</button>
         <button class="refresh-btn" onclick="libClear()">クリア</button>
       </div>
       <div id="lib-channel-chips" class="lib-chips"></div>
@@ -213,11 +214,13 @@
   <div class="lib-chat-input-row">
     <input id="lib-chat-input" class="form-input"
            placeholder="質問してください..."
-           onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();libChatSend()}">
+           onkeydown="if(event.key==='Enter'&&!event.shiftKey&&!event.isComposing){event.preventDefault();libChatSend()}">
     <button class="btn-primary btn-sm" onclick="libChatSend()">送信</button>
   </div>
 </div>
-<button id="lib-chat-fab" class="lib-chat-fab" onclick="toggleLibChat()" style="display:none">💬</button>
+<button id="lib-chat-fab" class="lib-chat-fab" onclick="toggleLibChat()" style="display:none">
+  <img src="/static/chat_icon.png" style="width:28px;height:28px;object-fit:contain;display:block">
+</button>
 
 <!-- チャンネル追加モーダル -->
 <div id="add-channel-modal" class="modal-backdrop" style="display:none"
@@ -266,21 +269,19 @@
   <div class="modal-box modal-box-viewer">
     <div class="modal-title-row">
       <span id="lib-viewer-ch" class="badge badge-blue"></span>
-      <span id="lib-viewer-title" class="modal-title" style="margin:0;flex:1;font-size:14px"></span>
       <a id="lib-viewer-yt" href="#" target="_blank" class="refresh-btn">↗ YouTube</a>
       <button class="refresh-btn" onclick="closeLibViewer()">✕ 閉じる</button>
     </div>
     <div id="lib-viewer-content" class="markdown-body lib-viewer-content"></div>
     <div class="lib-file-chat">
       <div class="lib-chat-header">
-        <span class="lib-chat-ctx">この動画について質問</span>
-        <button class="refresh-btn btn-sm" onclick="libFileChatClear()">クリア</button>
+        <button id="lib-file-chat-clear-btn" class="refresh-btn btn-sm" style="display:none" onclick="libFileChatClear()">クリア</button>
       </div>
       <div id="lib-file-chat-messages" class="lib-chat-messages lib-chat-messages-sm"></div>
       <div class="lib-chat-input-row">
         <input id="lib-file-chat-input" class="form-input"
                placeholder="質問してください..."
-               onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();libFileChatSend()}">
+               onkeydown="if(event.key==='Enter'&&!event.shiftKey&&!event.isComposing){event.preventDefault();libFileChatSend()}">
         <button class="btn-primary btn-sm" onclick="libFileChatSend()">送信</button>
       </div>
     </div>

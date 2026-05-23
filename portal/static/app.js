@@ -34,11 +34,10 @@ document.addEventListener("DOMContentLoaded", () => {
     if (id === "readme") loadReadme();
     if (id === "logs")   loadLogs();
     else                 stopLogStream();
-    const fab = document.getElementById("lib-chat-fab");
     if (id === "library") {
       initLibrary();
-      if (fab) fab.style.display = "";
     } else {
+      const fab = document.getElementById("lib-chat-fab");
       if (fab) fab.style.display = "none";
       closeLibChat();
     }
@@ -989,17 +988,19 @@ document.addEventListener("DOMContentLoaded", () => {
     }
     const warn = document.getElementById("lib-wsl-warn");
     const card = document.getElementById("lib-search-card");
+    const fab  = document.getElementById("lib-chat-fab");
     if (!_isWsl) {
       if (warn) warn.style.display = "";
       if (card) card.style.display = "none";
+      if (fab)  fab.style.display  = "none";
       return;
     }
     if (warn) warn.style.display = "none";
     if (card) card.style.display = "";
+    if (fab && !_libChatPanelOpen) fab.style.display = "";
     if (!_libInitialized) {
       _libInitialized = true;
       await loadLibraryChannels();
-      await fetchLibResults();
     }
     _updateGpuWarn();
   }
@@ -1032,17 +1033,31 @@ document.addEventListener("DOMContentLoaded", () => {
       el.classList.toggle("selected", _libSelectedChannels.has(el.dataset.channel));
     });
     _libCurrentPage = 1;
-    fetchLibResults();
+    if (_libCurrentQuery || _libSelectedChannels.size > 0) fetchLibResults();
+    else _libClearResults();
   }
 
-  // ── Library: 検索・結果描画 ──────────────────────────────────
-  window.libSearch = async function() {
+  let _libSearchTimer = null;
+  window.libSearchInstant = function() {
     const input = document.getElementById("lib-search-input");
     const scope = document.getElementById("lib-scope");
     _libCurrentQuery = input ? input.value.trim() : "";
     _libCurrentScope = scope ? scope.value : "points";
     _libCurrentPage = 1;
-    await fetchLibResults();
+    clearTimeout(_libSearchTimer);
+    if (!_libCurrentQuery && _libSelectedChannels.size === 0) { _libClearResults(); return; }
+    _libSearchTimer = setTimeout(fetchLibResults, 300);
+  };
+
+  window.libSearch = window.libSearchInstant;
+
+  window.selectAllLib = function() {
+    document.querySelectorAll(".lib-chip").forEach(btn => {
+      _libSelectedChannels.add(btn.dataset.channel);
+      btn.classList.add("selected");
+    });
+    _libCurrentPage = 1;
+    if (_libSelectedChannels.size > 0) fetchLibResults();
   };
 
   window.libClear = function() {
@@ -1052,10 +1067,18 @@ document.addEventListener("DOMContentLoaded", () => {
     const input = document.getElementById("lib-search-input");
     if (input) input.value = "";
     document.querySelectorAll(".lib-chip").forEach(el => el.classList.remove("selected"));
-    fetchLibResults();
+    _libClearResults();
   };
 
+  function _libClearResults() {
+    const el = document.getElementById("lib-results");
+    if (el) el.innerHTML = "";
+    const pg = document.getElementById("lib-pagination");
+    if (pg) pg.style.display = "none";
+  }
+
   async function fetchLibResults() {
+    if (!_libCurrentQuery && _libSelectedChannels.size === 0) { _libClearResults(); return; }
     const resultsEl = document.getElementById("lib-results");
     const paginEl = document.getElementById("lib-pagination");
     if (!resultsEl) return;
@@ -1153,7 +1176,6 @@ document.addEventListener("DOMContentLoaded", () => {
   window.openLibViewer = async function(path) {
     const modal = document.getElementById("lib-viewer-modal");
     const contentEl = document.getElementById("lib-viewer-content");
-    const titleEl = document.getElementById("lib-viewer-title");
     const chEl = document.getElementById("lib-viewer-ch");
     const ytEl = document.getElementById("lib-viewer-yt");
     if (!modal || !contentEl) return;
@@ -1162,22 +1184,28 @@ document.addEventListener("DOMContentLoaded", () => {
     _libFileChatMessages = [];
     const fileChatEl = document.getElementById("lib-file-chat-messages");
     if (fileChatEl) fileChatEl.innerHTML = "";
+    const clearBtn = document.getElementById("lib-file-chat-clear-btn");
+    if (clearBtn) clearBtn.style.display = "none";
 
     contentEl.innerHTML = placeholder("⏳", "読み込み中…");
     modal.style.display = "flex";
 
     try {
       const data = await api(`/api/library/transcript?path=${encodeURIComponent(path)}`, 15000);
-      if (titleEl) titleEl.textContent = data.title || "";
       if (chEl) chEl.textContent = data.meta?.channel || path.split("/")[1] || "";
       if (ytEl) {
         if (data.meta?.url) { ytEl.href = data.meta.url; ytEl.style.display = ""; }
         else ytEl.style.display = "none";
       }
+      const content = (data.content || "")
+        .replace(/^(チャンネル:.*)$/m, "$1  ")
+        .replace(/^(URL:.*)$/m, "$1  ")
+        .replace(/^(モデル:.*)$/m, "$1  ")
+        .replace(/^(処理日時:.*)$/m, "$1  ");
       if (typeof marked !== "undefined") {
-        contentEl.innerHTML = marked.parse(data.content || "");
+        contentEl.innerHTML = marked.parse(content);
       } else {
-        contentEl.textContent = data.content || "";
+        contentEl.textContent = content;
       }
     } catch (e) {
       contentEl.innerHTML = placeholder("❌", `エラー: ${e.message}`);
@@ -1196,7 +1224,7 @@ document.addEventListener("DOMContentLoaded", () => {
     if (_libChatSSE) { _libChatSSE.abort(); _libChatSSE = null; }
     const ctrl = new AbortController();
     _libChatSSE = ctrl;
-    const bubble = _appendChatBubble("ai", "", messagesEl);
+    const bubble = _appendChatBubble("ai", "…", messagesEl);
     let fullText = "";
     try {
       const resp = await fetch("/api/library/chat", {
@@ -1219,7 +1247,14 @@ document.addEventListener("DOMContentLoaded", () => {
             bubble.innerHTML = typeof marked !== "undefined" ? marked.parse(fullText) : fullText;
             messagesEl.scrollTop = 999999;
           }
-          if (d.error) { bubble.textContent = `エラー: ${d.error}`; break; }
+          if (d.error) {
+            const msg = String(d.error);
+            const short = msg.includes("429") || msg.toLowerCase().includes("resource_exhausted")
+              ? "レート制限（Gemini 429）— しばらくしてから再試行してください"
+              : msg.length > 120 ? msg.slice(0, 120) + "…" : msg;
+            bubble.textContent = `エラー: ${short}`;
+            break;
+          }
           if (d.done) break;
         }
       }
@@ -1248,9 +1283,11 @@ document.addEventListener("DOMContentLoaded", () => {
   // ── Library: 右パネル（全体チャット） ───────────────────────
   window.toggleLibChat = function() {
     const panel = document.getElementById("lib-chat-panel");
+    const fab   = document.getElementById("lib-chat-fab");
     if (!panel) return;
     _libChatPanelOpen = !_libChatPanelOpen;
     panel.classList.toggle("open", _libChatPanelOpen);
+    if (fab) fab.style.display = _libChatPanelOpen ? "none" : "";
     if (_libChatPanelOpen) {
       const input = document.getElementById("lib-chat-input");
       if (input) input.focus();
@@ -1259,7 +1296,9 @@ document.addEventListener("DOMContentLoaded", () => {
 
   function closeLibChat() {
     const panel = document.getElementById("lib-chat-panel");
+    const fab   = document.getElementById("lib-chat-fab");
     if (panel) panel.classList.remove("open");
+    if (fab && _isWsl) fab.style.display = "";
     _libChatPanelOpen = false;
   }
   window.closeLibChat = closeLibChat;
@@ -1290,6 +1329,8 @@ document.addEventListener("DOMContentLoaded", () => {
     _libFileChatMessages = [];
     const el = document.getElementById("lib-file-chat-messages");
     if (el) el.innerHTML = "";
+    const clearBtn = document.getElementById("lib-file-chat-clear-btn");
+    if (clearBtn) clearBtn.style.display = "none";
   };
 
   window.libFileChatSend = async function() {
@@ -1301,6 +1342,8 @@ document.addEventListener("DOMContentLoaded", () => {
     const messagesEl = document.getElementById("lib-file-chat-messages");
     _libFileChatMessages.push({ role: "user", content: text });
     _appendChatBubble("user", text, messagesEl);
+    const clearBtn = document.getElementById("lib-file-chat-clear-btn");
+    if (clearBtn) clearBtn.style.display = "";
     const paths = _libCurrentFilePath ? [_libCurrentFilePath] : [];
     const aiText = await _libStreamChat([..._libFileChatMessages], paths, messagesEl);
     if (aiText) _libFileChatMessages.push({ role: "assistant", content: aiText });

@@ -1338,7 +1338,8 @@ def _build_library_context(messages: list[dict], paths: list[str]) -> str:
         ctx = "\n\n".join(parts)
         return (
             "あなたは YouTube 動画のトランスクリプトを解析するアシスタントです。"
-            "以下の動画内容に基づいて質問に答えてください。\n\n" + ctx
+            "以下に示す動画のトランスクリプト内容のみを根拠として質問に答えてください。"
+            "以下に含まれない動画・チャンネルは存在しないものとして扱い、言及しないでください。\n\n" + ctx
         )
     else:
         last_msg = next((m["content"] for m in reversed(messages) if m.get("role") == "user"), "")
@@ -1353,7 +1354,9 @@ def _build_library_context(messages: list[dict], paths: list[str]) -> str:
             ctx = _get_all_library_titles()
         return (
             "あなたは YouTube 動画のトランスクリプトライブラリのアシスタントです。"
-            "以下のライブラリ情報に基づいて質問に答えてください。\n\n" + ctx
+            "以下に示すライブラリ（実際に文字起こしされた動画の一覧）の情報のみを根拠として質問に答えてください。"
+            "一覧に存在しないチャンネルや動画は絶対に言及しないでください。"
+            "ライブラリに含まれていない情報を尋ねられた場合は「このライブラリには該当する動画がありません」と答えてください。\n\n" + ctx
         )
 
 
@@ -1444,7 +1447,10 @@ async def library_chat(request: Request, body: LibraryChatBody):
                 yield f"data: {json.dumps({'chunk': result})}\n\n"
                 ok = True
             except Exception as e:
-                yield f"data: {json.dumps({'error': str(e)})}\n\n"
+                err_str = str(e)
+                if "429" in err_str or "RESOURCE_EXHAUSTED" in err_str:
+                    err_str = "レート制限（Gemini 429）— しばらくしてから再試行してください"
+                yield f"data: {json.dumps({'error': err_str})}\n\n"
 
         if not ok:
             yield f"data: {json.dumps({'error': 'LLM未設定（LOCAL_LLM_URL / GEMINI_API_KEY）'})}\n\n"
