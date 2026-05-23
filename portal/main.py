@@ -266,9 +266,10 @@ def _find_log_for_pid(pid: int, job_type: str) -> str:
     return ""
 
 
-def _get_proc_descendants(root_pid: int) -> set[int]:
-    """root_pid の子孫プロセス PID を全て返す（/proc stat スキャン）。"""
-    children: dict[int, list[int]] = {}
+def _read_proc_maps() -> tuple[dict[int, int], dict[int, list[int]]]:
+    """全プロセスの (pid→ppid, ppid→[pid]) マップを一度のスキャンで返す。"""
+    ppid_map: dict[int, int] = {}
+    children_map: dict[int, list[int]] = {}
     try:
         for p in Path("/proc").iterdir():
             if not p.name.isdigit():
@@ -276,19 +277,37 @@ def _get_proc_descendants(root_pid: int) -> set[int]:
             try:
                 parts = (p / "stat").read_text().split()
                 pid, ppid = int(parts[0]), int(parts[3])
-                children.setdefault(ppid, []).append(pid)
+                ppid_map[pid] = ppid
+                children_map.setdefault(ppid, []).append(pid)
             except (OSError, IndexError, ValueError):
                 pass
     except OSError:
         pass
+    return ppid_map, children_map
+
+
+def _get_proc_descendants(root_pid: int, children_map: dict[int, list[int]] | None = None) -> set[int]:
+    """root_pid の子孫プロセス PID を全て返す。children_map を渡すと再スキャンを省略できる。"""
+    if children_map is None:
+        _, children_map = _read_proc_maps()
     result: set[int] = set()
     stack = [root_pid]
     while stack:
         p = stack.pop()
-        for c in children.get(p, []):
+        for c in children_map.get(p, []):
             result.add(c)
             stack.append(c)
     return result
+
+
+def _has_candidate_ancestor(pid: int, candidate_pids: set[int], ppid_map: dict[int, int]) -> bool:
+    """pid の祖先に candidate_pids のいずれかが含まれるか確認する。"""
+    current = ppid_map.get(pid)
+    while current and current > 1:
+        if current in candidate_pids:
+            return True
+        current = ppid_map.get(current)
+    return False
 
 
 async def _get_tmux_descendant_pids(session: str) -> set[int]:
@@ -302,12 +321,13 @@ async def _get_tmux_descendant_pids(session: str) -> set[int]:
         stdout, _ = await asyncio.wait_for(proc.communicate(), timeout=3)
     except Exception:
         return set()
+    _, children_map = _read_proc_maps()
     pids: set[int] = set()
     for line in stdout.decode().splitlines():
         try:
             pane_pid = int(line.strip())
             pids.add(pane_pid)
-            pids.update(_get_proc_descendants(pane_pid))
+            pids.update(_get_proc_descendants(pane_pid, children_map))
         except ValueError:
             pass
     return pids
@@ -321,8 +341,7 @@ async def _detect_manual_processes(excluded_pids: set[int] | None = None) -> lis
     if excluded_pids:
         tracked_pids |= excluded_pids
     root_resolved = str(ROOT.resolve())
-    results: list[dict] = []
-    seen_types: set[str] = set()
+
     try:
         proc = await asyncio.create_subprocess_exec(
             "ps", "axo", "pid=,cmd=",
@@ -332,6 +351,10 @@ async def _detect_manual_processes(excluded_pids: set[int] | None = None) -> lis
         stdout, _ = await asyncio.wait_for(proc.communicate(), timeout=3)
     except Exception:
         return []
+
+    # 1st pass: 候補 (pid, job_type) を収集（同 type は先着 1 件）
+    candidates: list[tuple[int, str]] = []
+    seen_types: set[str] = set()
     for line in stdout.decode().splitlines():
         parts = line.strip().split(None, 1)
         if len(parts) < 2:
@@ -355,21 +378,38 @@ async def _detect_manual_processes(excluded_pids: set[int] | None = None) -> lis
             if job_type in seen_types:
                 break
             seen_types.add(job_type)
-            try:
-                started_at = datetime.fromtimestamp(
-                    Path(f"/proc/{pid}").stat().st_mtime
-                ).strftime("%Y-%m-%d %H:%M:%S")
-            except OSError:
-                started_at = ""
-            results.append({
-                "id":          f"{job_type}_ext_{pid}",
-                "type":        job_type,
-                "label":       _JOB_LABELS.get(job_type, job_type),
-                "log_file":    _find_log_for_pid(pid, job_type),
-                "started_at":  started_at,
-                "is_external": True,
-            })
+            candidates.append((pid, job_type))
             break
+
+    if not candidates:
+        return []
+
+    # 2nd pass: 候補同士の親子関係を確認し、別候補の子孫になっているものを除外
+    # （例: loop_transcribe.sh → transcribe.py の二重表示防止）
+    if len(candidates) > 1:
+        ppid_map, _ = _read_proc_maps()
+        candidate_pids = {pid for pid, _ in candidates}
+        candidates = [
+            (pid, jt) for pid, jt in candidates
+            if not _has_candidate_ancestor(pid, candidate_pids, ppid_map)
+        ]
+
+    results: list[dict] = []
+    for pid, job_type in candidates:
+        try:
+            started_at = datetime.fromtimestamp(
+                Path(f"/proc/{pid}").stat().st_mtime
+            ).strftime("%Y-%m-%d %H:%M:%S")
+        except OSError:
+            started_at = ""
+        results.append({
+            "id":          f"{job_type}_ext_{pid}",
+            "type":        job_type,
+            "label":       _JOB_LABELS.get(job_type, job_type),
+            "log_file":    _find_log_for_pid(pid, job_type),
+            "started_at":  started_at,
+            "is_external": True,
+        })
     return results
 
 
