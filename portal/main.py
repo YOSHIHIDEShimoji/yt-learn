@@ -732,9 +732,17 @@ async def get_logs():
     now = time.time()
     live_threshold = 30 * 60
 
+    # autonomous.sh 稼働中は transcribe.py が子プロセスとして起動されるため
+    # その独自ログ（logs/transcribe/transcribe_YYYYMMDD.log）は autonomous ログと
+    # 内容が重複する。autonomous セッションがある場合はこれらを除外する。
+    yt_session = await _find_yt_session() if IS_WSL else None
+    _transcribe_date_pattern = re.compile(r'^transcribe_\d{8}\.log$')
+
     for log_dir in log_dirs:
         if log_dir.exists():
             for f in sorted(log_dir.rglob("*.log"), key=lambda x: x.stat().st_mtime, reverse=True)[:30]:
+                if yt_session and _transcribe_date_pattern.match(f.name):
+                    continue
                 try:
                     tail = f.read_bytes()[-512:].decode(errors="replace")
                     session_ended = "[session-end]" in tail
