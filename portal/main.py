@@ -956,10 +956,11 @@ class RunBody(BaseModel):
 
 
 _VALID_MODELS = {"tiny", "base", "small", "medium", "large", "large-v2", "large-v3", "large-v3-turbo"}
-_YT_SESSION_PREFIX = "yt-learn_"
+_YT_SESSION_PREFIX = "yt-learn"   # "yt-learn" と "yt-learn_*" の両方を検出
 
 
-async def _find_yt_session() -> str | None:
+async def _find_all_yt_sessions() -> list[str]:
+    """yt-learn* に一致する tmux セッション名を全て返す。"""
     try:
         proc = await asyncio.create_subprocess_exec(
             "tmux", "ls",
@@ -967,14 +968,19 @@ async def _find_yt_session() -> str | None:
         )
         stdout, _ = await asyncio.wait_for(proc.communicate(), timeout=3)
         if proc.returncode != 0:
-            return None
-        for line in stdout.decode().splitlines():
-            name = line.split(":")[0]
-            if name.startswith(_YT_SESSION_PREFIX):
-                return name
-        return None
+            return []
+        return [
+            line.split(":")[0]
+            for line in stdout.decode().splitlines()
+            if line.split(":")[0].startswith(_YT_SESSION_PREFIX)
+        ]
     except Exception:
-        return None
+        return []
+
+
+async def _find_yt_session() -> str | None:
+    sessions = await _find_all_yt_sessions()
+    return sessions[0] if sessions else None
 
 
 @app.get("/api/env")
@@ -1012,15 +1018,25 @@ async def start_run(body: RunBody):
 async def stop_run():
     if not IS_WSL:
         return JSONResponse({"error": "WSL 環境でのみ実行できます"}, status_code=400)
-    session = await _find_yt_session()
-    if not session:
+    sessions = await _find_all_yt_sessions()
+    if not sessions:
         return JSONResponse({"ok": True, "was_running": False})
-    proc = await asyncio.create_subprocess_exec(
-        "tmux", "kill-session", "-t", session,
-        stdout=asyncio.subprocess.DEVNULL, stderr=asyncio.subprocess.DEVNULL,
-    )
-    await proc.wait()
-    return JSONResponse({"ok": True, "was_running": True, "session": session})
+    # C-c を送って cleanup() トラップ → [session-end] を書かせる
+    for s in sessions:
+        await asyncio.create_subprocess_exec(
+            "tmux", "send-keys", "-t", s, "C-c", "",
+            stdout=asyncio.subprocess.DEVNULL, stderr=asyncio.subprocess.DEVNULL,
+        )
+    # cleanup が完了するまで待機（最大 4 秒）
+    await asyncio.sleep(4)
+    # 残っているセッションを強制終了
+    remaining = await _find_all_yt_sessions()
+    for s in remaining:
+        await asyncio.create_subprocess_exec(
+            "tmux", "kill-session", "-t", s,
+            stdout=asyncio.subprocess.DEVNULL, stderr=asyncio.subprocess.DEVNULL,
+        )
+    return JSONResponse({"ok": True, "was_running": True, "sessions": sessions})
 
 
 # ── Phase 2: URL 処理 ────────────────────────────────────────

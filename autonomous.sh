@@ -108,7 +108,7 @@ cleanup() {
   echo "$summary" | tee -a "$LOG_FILE"
   exit 0
 }
-trap cleanup SIGINT SIGTERM
+trap cleanup SIGINT SIGTERM SIGHUP
 
 # channels.txt からチャンネル名一覧を読み込み
 CHANNELS=()

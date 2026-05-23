@@ -12,6 +12,7 @@ document.addEventListener("DOMContentLoaded", () => {
   const _gpuHistory = [];
   const GPU_MAX_POINTS = 60;
   let _gpuPollTimer = null;
+  let _runBadgeTimer = null;       // HOME タブ クイック実行バッジポーリング
   let _selectedProcessId = null;   // 選択中プロセス id
   let _latestProcesses = [];       // 最新の processes リスト（SSE 更新）
 
@@ -28,7 +29,12 @@ document.addEventListener("DOMContentLoaded", () => {
     tabs.forEach(t  => t.classList.toggle("active", t.dataset.tab === id));
     panes.forEach(p => p.classList.toggle("active", p.id === `pane-${id}`));
     history.replaceState(null, "", `#${id}`);
-    if (id === "home")   { loadChannels(); loadRunPanel(); }
+    if (id === "home") {
+    loadChannels(); loadRunPanel();
+    if (!_runBadgeTimer) _runBadgeTimer = setInterval(_updateRunBadge, 10000);
+  } else {
+    if (_runBadgeTimer) { clearInterval(_runBadgeTimer); _runBadgeTimer = null; }
+  }
     if (id === "status") { loadStatus(); startStatusSSE(); }
     else                 stopStatusSSE();
     if (id === "readme") loadReadme();
@@ -879,7 +885,7 @@ document.addEventListener("DOMContentLoaded", () => {
     const stopBtn = document.getElementById("run-stop-btn");
     if (stopBtn) stopBtn.disabled = true;
     try {
-      await api("/api/run/stop", 10000, "POST");
+      await api("/api/run/stop", 15000, "POST");
       await _updateRunBadge();
     } catch (e) {
       await showConfirm(`停止失敗: ${e.message}`, "OK", false);
