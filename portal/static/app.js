@@ -66,6 +66,10 @@ document.addEventListener("DOMContentLoaded", () => {
   const initial = location.hash.replace("#", "") || "home";
   switchTab(initial);
   loadEnvBadge();
+  // 非アクティブタブのデータを起動時に先読み
+  if (initial !== "status") loadStatus();
+  if (initial !== "logs")   loadLogs();
+  if (_isWsl && initial !== "library") loadLibraryChannels();
 
   // ── HOME: channels ──────────────────────────────────────
   async function loadChannels() {
@@ -1787,20 +1791,17 @@ document.addEventListener("DOMContentLoaded", () => {
   }
 
   // ── ヘッダー環境バッジ ───────────────────────────────────────
-  async function loadEnvBadge() {
-    try {
-      const { is_wsl } = await api("/api/env");
-      const el = document.getElementById("env-badge");
-      if (!el) return;
-      const img = document.createElement("img");
-      img.src = is_wsl ? "/static/linux.png" : "/static/apple.png";
-      img.className = is_wsl ? "env-icon" : "env-icon env-icon-mac";
-      img.alt = is_wsl ? "WSL" : "Mac";
-      const label = document.createElement("span");
-      label.className = "env-label";
-      label.textContent = is_wsl ? "WSL" : "Mac";
-      el.appendChild(img);
-      el.appendChild(label);
-    } catch {}
+  function loadEnvBadge() {
+    const el = document.getElementById("env-badge");
+    if (!el) return;
+    const img = document.createElement("img");
+    img.src = _isWsl ? "/static/linux.png" : "/static/apple.png";
+    img.className = _isWsl ? "env-icon" : "env-icon env-icon-mac";
+    img.alt = _isWsl ? "WSL" : "Mac";
+    const label = document.createElement("span");
+    label.className = "env-label";
+    label.textContent = _isWsl ? "WSL" : "Mac";
+    el.appendChild(img);
+    el.appendChild(label);
   }
 });
