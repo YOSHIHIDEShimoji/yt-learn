@@ -1491,6 +1491,11 @@ class LibraryChatBody(BaseModel):
     model_pref: str = "ollama"  # "ollama" | "gemini"
 
 
+class HomeChatBody(BaseModel):
+    messages: list[dict]
+    model_pref: str = "ollama"  # "ollama" | "gemini"
+
+
 @app.post("/api/library/chat")
 async def library_chat(request: Request, body: LibraryChatBody):
     if not IS_WSL:
@@ -1537,6 +1542,71 @@ async def library_chat(request: Request, body: LibraryChatBody):
                     msg = "レート制限（Gemini 429）— しばらくしてから再試行してください"
                 elif any(k in err_str for k in ("token", "too large", "payload", "INVALID_ARGUMENT")):
                     msg = "コンテキスト上限超過 — 選択ファイルを減らしてください"
+                else:
+                    msg = err_str[:200] if len(err_str) > 200 else err_str
+                yield f"data: {json.dumps({'error': msg})}\n\n"
+
+        if not ok:
+            yield f"data: {json.dumps({'error': 'LLM未設定（LOCAL_LLM_URL / GEMINI_API_KEY）'})}\n\n"
+
+        yield f"data: {json.dumps({'done': True})}\n\n"
+
+    return StreamingResponse(
+        generate(), media_type="text/event-stream",
+        headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
+    )
+
+
+_HOME_DOC_PATH = PORTAL_DIR / "docs" / "home_assistant.md"
+
+
+@app.post("/api/home/chat")
+async def home_chat(request: Request, body: HomeChatBody):
+    if not IS_WSL:
+        return JSONResponse({"error": "WSL環境専用"}, status_code=400)
+
+    async def generate():
+        doc = _HOME_DOC_PATH.read_text(encoding="utf-8") if _HOME_DOC_PATH.exists() else ""
+        system = (
+            "あなたは yt-learn ポータルのアシスタントです。\n"
+            "以下のドキュメントを参照して、ユーザーの質問に日本語で簡潔に答えてください。\n"
+            "使い方の説明・案内のみ行い、実際の処理を実行する権限はありません。\n"
+            "ドキュメントに記載のない情報については「わかりません」と答えてください。\n"
+            "自己言及・メタコメント・免責事項などの余分な文は含めないでください。\n\n"
+            f"{doc}"
+        )
+        full_msgs = [{"role": "system", "content": system}] + list(body.messages)
+        local_url = os.environ.get("LOCAL_LLM_URL")
+        api_key   = os.environ.get("GEMINI_API_KEY")
+
+        ok = False
+        use_ollama = body.model_pref == "ollama"
+        use_gemini = body.model_pref == "gemini"
+
+        if use_ollama and local_url:
+            try:
+                async for chunk in _stream_ollama_chat(full_msgs, _OLLAMA_CHAT_MODEL, local_url):
+                    if await request.is_disconnected():
+                        return
+                    yield f"data: {json.dumps({'chunk': chunk})}\n\n"
+                ok = True
+            except RuntimeError as e:
+                yield f"data: {json.dumps({'error': f'Ollama エラー: {e}'})}\n\n"
+                ok = True
+            except Exception:
+                pass
+
+        if use_gemini and api_key:
+            try:
+                result, usage = await _call_gemini_chat(full_msgs, api_key, _GEMINI_CHAT_MODEL)
+                yield f"data: {json.dumps({'chunk': result})}\n\n"
+                if usage:
+                    yield f"data: {json.dumps({'usage': usage})}\n\n"
+                ok = True
+            except Exception as e:
+                err_str = str(e)
+                if "429" in err_str or "RESOURCE_EXHAUSTED" in err_str:
+                    msg = "レート制限（Gemini 429）— しばらくしてから再試行してください"
                 else:
                     msg = err_str[:200] if len(err_str) > 200 else err_str
                 yield f"data: {json.dumps({'error': msg})}\n\n"

@@ -15,6 +15,11 @@ document.addEventListener("DOMContentLoaded", () => {
   let _runBadgeTimer = null;       // HOME タブ クイック実行バッジポーリング
   let _selectedProcessId = null;   // 選択中プロセス id
   let _latestProcesses = [];       // 最新の processes リスト（SSE 更新）
+  let _activeTab = "home";         // 現在アクティブなタブ
+  let _homeChatPanelOpen = false;
+  let _homeModelPref = "ollama";
+  let _homeChatMessages = [];
+  let _homeChatSSE = null;
 
   const SESSION_TYPE_LABELS = {
     autonomous: "autonomous.sh",
@@ -26,24 +31,31 @@ document.addEventListener("DOMContentLoaded", () => {
   };
 
   function switchTab(id) {
+    _activeTab = id;
     tabs.forEach(t  => t.classList.toggle("active", t.dataset.tab === id));
     panes.forEach(p => p.classList.toggle("active", p.id === `pane-${id}`));
     history.replaceState(null, "", `#${id}`);
+
+    const fab = document.getElementById("lib-chat-fab");
     if (id === "home") {
-    loadChannels(); loadRunPanel();
-    if (!_runBadgeTimer) _runBadgeTimer = setInterval(_updateRunBadge, 10000);
-  } else {
-    if (_runBadgeTimer) { clearInterval(_runBadgeTimer); _runBadgeTimer = null; }
-  }
+      loadChannels(); loadRunPanel();
+      if (!_runBadgeTimer) _runBadgeTimer = setInterval(_updateRunBadge, 10000);
+      closeLibChat();
+      if (_isWsl && fab) fab.style.display = _homeChatPanelOpen ? "none" : "";
+    } else {
+      if (_runBadgeTimer) { clearInterval(_runBadgeTimer); _runBadgeTimer = null; }
+      closeHomeChat();
+    }
+
     if (id === "status") { loadStatus(); startStatusSSE(); }
     else                 stopStatusSSE();
     if (id === "readme") loadReadme();
     if (id === "logs")   loadLogs();
     else                 stopLogStream();
+
     if (id === "library") {
-      initLibrary();
-    } else {
-      const fab = document.getElementById("lib-chat-fab");
+      initLibrary();  // FAB は initLibrary / toggleLibChat / closeLibChat が制御
+    } else if (id !== "home") {
       if (fab) fab.style.display = "none";
       closeLibChat();
     }
@@ -1018,6 +1030,7 @@ document.addEventListener("DOMContentLoaded", () => {
       closeLogFilter();
       closeLibViewer();
       closeLibChat();
+      closeHomeChat();
       closeLibSelected();
       document.getElementById("confirm-modal").style.display = "none";
     }
@@ -1025,13 +1038,21 @@ document.addEventListener("DOMContentLoaded", () => {
 
   // パネル外クリックで閉じる
   document.addEventListener("click", e => {
-    if (!_libChatPanelOpen) return;
-    const panel = document.getElementById("lib-chat-panel");
-    const fab   = document.getElementById("lib-chat-fab");
-    if (panel && !panel.contains(e.target) && e.target !== fab && !fab?.contains(e.target)
-        && !e.target.closest(".lib-model-row")
-        && !e.target.closest("#lib-selected-modal")) {
-      closeLibChat();
+    const fab = document.getElementById("lib-chat-fab");
+    if (_libChatPanelOpen) {
+      const panel = document.getElementById("lib-chat-panel");
+      if (panel && !panel.contains(e.target) && e.target !== fab && !fab?.contains(e.target)
+          && !e.target.closest(".lib-model-row")
+          && !e.target.closest("#lib-selected-modal")
+          && !e.target.closest("#home-chat-panel")) {
+        closeLibChat();
+      }
+    }
+    if (_homeChatPanelOpen) {
+      const hp = document.getElementById("home-chat-panel");
+      if (hp && !hp.contains(e.target) && e.target !== fab && !fab?.contains(e.target)) {
+        closeHomeChat();
+      }
     }
   });
 
@@ -1577,10 +1598,115 @@ document.addEventListener("DOMContentLoaded", () => {
     const panel = document.getElementById("lib-chat-panel");
     const fab   = document.getElementById("lib-chat-fab");
     if (panel) panel.classList.remove("open");
-    if (fab && _isWsl) fab.style.display = "";
     _libChatPanelOpen = false;
+    // FAB をアクティブタブに応じて再表示
+    if (_isWsl && fab && (_activeTab === "library" || _activeTab === "home")) {
+      fab.style.display = "";
+    } else if (fab) {
+      fab.style.display = "none";
+    }
   }
   window.closeLibChat = closeLibChat;
+
+  // ── HOME: アシスタントパネル ─────────────────────────────────
+  window.toggleActiveChat = function() {
+    if (_activeTab === "library") toggleLibChat();
+    else if (_activeTab === "home") toggleHomeChat();
+  };
+
+  window.toggleHomeChat = function() {
+    const panel = document.getElementById("home-chat-panel");
+    const fab   = document.getElementById("lib-chat-fab");
+    if (!panel) return;
+    _homeChatPanelOpen = !_homeChatPanelOpen;
+    panel.classList.toggle("open", _homeChatPanelOpen);
+    if (fab) fab.style.display = _homeChatPanelOpen ? "none" : "";
+    if (_homeChatPanelOpen) {
+      const input = document.getElementById("home-chat-input");
+      if (input) input.focus();
+    }
+  };
+
+  function closeHomeChat() {
+    const panel = document.getElementById("home-chat-panel");
+    const fab   = document.getElementById("lib-chat-fab");
+    if (panel) panel.classList.remove("open");
+    _homeChatPanelOpen = false;
+    if (_homeChatSSE) { _homeChatSSE.abort(); _homeChatSSE = null; }
+    if (_isWsl && fab && (_activeTab === "home" || _activeTab === "library")) {
+      fab.style.display = "";
+    } else if (fab) {
+      fab.style.display = "none";
+    }
+  }
+  window.closeHomeChat = closeHomeChat;
+
+  window.setHomeModel = function(v) { _homeModelPref = v; };
+
+  window.homeChatClear = function() {
+    _homeChatMessages = [];
+    const el = document.getElementById("home-chat-messages");
+    if (el) el.innerHTML = "";
+  };
+
+  window.homeChatSend = async function() {
+    const input = document.getElementById("home-chat-input");
+    if (!input) return;
+    const text = input.value.trim();
+    if (!text) return;
+    input.value = ""; input.style.height = "auto";
+    const messagesEl = document.getElementById("home-chat-messages");
+    _homeChatMessages.push({ role: "user", content: text });
+    _appendChatBubble("user", text, messagesEl);
+    const aiText = await _homeStreamChat([..._homeChatMessages], messagesEl);
+    if (aiText) _homeChatMessages.push({ role: "assistant", content: aiText });
+  };
+
+  async function _homeStreamChat(messages, messagesEl) {
+    if (_homeChatSSE) { _homeChatSSE.abort(); _homeChatSSE = null; }
+    const ctrl = new AbortController();
+    _homeChatSSE = ctrl;
+    const bubble = _appendChatBubble("ai", "", messagesEl);
+    bubble.classList.add("lib-loading");
+    bubble.innerHTML = '<span class="lib-typing-dots"><span></span><span></span><span></span></span>';
+    let fullText = "";
+    try {
+      const resp = await fetch("/api/home/chat", {
+        method: "POST", signal: ctrl.signal,
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ messages, model_pref: _homeModelPref }),
+      });
+      if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+      const reader = resp.body.getReader();
+      const dec = new TextDecoder();
+      let lineBuf = "";
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        lineBuf += dec.decode(value, { stream: true });
+        const lines = lineBuf.split("\n");
+        lineBuf = lines.pop();
+        for (const line of lines) {
+          if (!line.startsWith("data:")) continue;
+          let d;
+          try { d = JSON.parse(line.slice(5).trim()); } catch { continue; }
+          if (d.chunk) {
+            fullText += d.chunk;
+            bubble.classList.remove("lib-loading");
+            bubble.innerHTML = typeof marked !== "undefined" ? marked.parse(fullText) : fullText;
+            messagesEl.scrollTop = 999999;
+          }
+          if (d.error) { bubble.textContent = `エラー: ${String(d.error)}`; break; }
+          if (d.done) break;
+        }
+      }
+    } catch (e) {
+      if (e.name !== "AbortError") bubble.textContent = `エラー: ${e.message}`;
+    } finally {
+      _homeChatSSE = null;
+    }
+    return fullText;
+  }
 
   window.libChatClear = function() {
     _libChatMessages = [];
