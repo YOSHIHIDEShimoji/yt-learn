@@ -1297,7 +1297,14 @@ async def _stream_ollama_chat(messages: list[dict], model: str, base_url: str):
                     data = json.loads(line)
                 except json.JSONDecodeError:
                     continue
-                chunk = _OLLAMA_SPECIAL.sub("", data.get("message", {}).get("content", ""))
+                chunk = data.get("message", {}).get("content", "")
+                # 特殊トークン開始を検出したらストリーム終了
+                if "<|" in chunk:
+                    trunc = chunk[:chunk.index("<|")]
+                    if trunc:
+                        yield trunc
+                    break
+                chunk = _OLLAMA_SPECIAL.sub("", chunk)
                 if chunk:
                     yield chunk
                 if data.get("done"):

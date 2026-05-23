@@ -958,9 +958,60 @@ document.addEventListener("DOMContentLoaded", () => {
       closeAddChannelModal();
       closeLogFilter();
       closeLibViewer();
+      closeLibChat();
       document.getElementById("confirm-modal").style.display = "none";
     }
   });
+
+  // パネル外クリックで閉じる
+  document.addEventListener("click", e => {
+    if (!_libChatPanelOpen) return;
+    const panel = document.getElementById("lib-chat-panel");
+    const fab   = document.getElementById("lib-chat-fab");
+    if (panel && !panel.contains(e.target) && e.target !== fab && !fab?.contains(e.target)) {
+      closeLibChat();
+    }
+  });
+
+  // パネル幅リサイズ（左端ドラッグ）
+  (function() {
+    const handle = document.getElementById("lib-panel-resize-handle");
+    const panel  = document.getElementById("lib-chat-panel");
+    if (!handle || !panel) return;
+    let prevX = 0;
+    handle.addEventListener("mousedown", e => {
+      e.preventDefault(); prevX = e.clientX;
+      handle.classList.add("dragging");
+      const move = ev => {
+        const dx = ev.clientX - prevX; prevX = ev.clientX;
+        const newW = panel.offsetWidth - dx;
+        panel.style.width = Math.max(260, Math.min(window.innerWidth * 0.6, newW)) + "px";
+      };
+      const up = () => { handle.classList.remove("dragging"); document.removeEventListener("mousemove", move); document.removeEventListener("mouseup", up); };
+      document.addEventListener("mousemove", move);
+      document.addEventListener("mouseup", up);
+    });
+  })();
+
+  // ファイルチャットリサイズ（上端ドラッグで高さ変更）
+  (function() {
+    const handle = document.getElementById("lib-file-chat-resize-handle");
+    const chat   = document.getElementById("lib-file-chat-messages");
+    if (!handle || !chat) return;
+    let startY = 0, startH = 0;
+    handle.addEventListener("mousedown", e => {
+      e.preventDefault();
+      startY = e.clientY; startH = chat.offsetHeight;
+      handle.classList.add("dragging");
+      const move = ev => {
+        const newH = startH - (ev.clientY - startY);
+        chat.style.maxHeight = Math.max(60, Math.min(500, newH)) + "px";
+      };
+      const up = () => { handle.classList.remove("dragging"); document.removeEventListener("mousemove", move); document.removeEventListener("mouseup", up); };
+      document.addEventListener("mousemove", move);
+      document.addEventListener("mouseup", up);
+    });
+  })();
 
   function esc(s) {
     return String(s ?? "").replace(/[&<>"']/g, c =>
@@ -1060,6 +1111,18 @@ document.addEventListener("DOMContentLoaded", () => {
     if (_libSelectedChannels.size > 0) fetchLibResults();
   };
 
+  window.selectAllCards = function() {
+    document.querySelectorAll(".lib-result-card").forEach(card => {
+      const path = card.dataset.path;
+      if (!path) return;
+      _libCheckedPaths.add(path);
+      card.classList.add("selected");
+      const cb = card.querySelector(".lib-card-cb");
+      if (cb) cb.checked = true;
+    });
+    _updateChatContextLabel();
+  };
+
   window.libClear = function() {
     _libSelectedChannels.clear();
     _libCurrentQuery = "";
@@ -1124,7 +1187,7 @@ document.addEventListener("DOMContentLoaded", () => {
           .map(p => `<div>• ${esc(p.replace(/^- /, ""))}</div>`).join("");
         const safePath = r.path.replace(/'/g, "\\'");
         html += `
-          <div class="lib-result-card${isChecked ? " selected" : ""}"
+          <div class="lib-result-card${isChecked ? " selected" : ""}" data-path="${safePath}"
                onclick="openLibViewer('${safePath}')">
             <div class="lib-card-title">${esc(r.title)}</div>
             <div class="lib-card-meta">${esc(r.date || "")}</div>

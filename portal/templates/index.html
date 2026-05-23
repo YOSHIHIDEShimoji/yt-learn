@@ -155,6 +155,7 @@
           <option value="full">全文</option>
         </select>
         <button class="refresh-btn" onclick="selectAllLib()">全選択</button>
+        <button class="refresh-btn" onclick="selectAllCards()">全カード選択</button>
         <button class="refresh-btn" onclick="libClear()">クリア</button>
       </div>
       <div id="lib-channel-chips" class="lib-chips"></div>
@@ -205,10 +206,10 @@
 
 <!-- LIBRARY チャットパネル（右スライドイン） -->
 <div id="lib-chat-panel" class="lib-chat-panel">
+  <div id="lib-panel-resize-handle" class="lib-panel-resize-handle"></div>
   <div class="lib-chat-header">
     <span id="lib-chat-ctx-label" class="lib-chat-ctx">ライブラリ全体</span>
     <button class="refresh-btn btn-sm" onclick="libChatClear()">クリア</button>
-    <button class="refresh-btn" onclick="closeLibChat()">✕</button>
   </div>
   <div id="lib-chat-messages" class="lib-chat-messages"></div>
   <div class="lib-chat-input-row">
@@ -272,10 +273,10 @@
     <div class="modal-title-row">
       <span id="lib-viewer-ch" class="badge badge-blue"></span>
       <a id="lib-viewer-yt" href="#" target="_blank" class="refresh-btn">↗ YouTube</a>
-      <button class="refresh-btn" onclick="closeLibViewer()">✕ 閉じる</button>
     </div>
     <div id="lib-viewer-content" class="markdown-body lib-viewer-content"></div>
     <div class="lib-file-chat">
+      <div id="lib-file-chat-resize-handle" class="lib-file-chat-resize-handle"></div>
       <div id="lib-file-chat-messages" class="lib-chat-messages lib-chat-messages-sm"></div>
       <div class="lib-chat-input-row">
         <textarea id="lib-file-chat-input" class="form-input lib-chat-textarea"
