@@ -141,9 +141,29 @@
 
   <!-- LIBRARY -->
   <div id="pane-library" class="pane">
-    <div class="card">
-      <div class="card-title">トランスクリプトライブラリ</div>
-      <div class="placeholder"><div class="placeholder-icon">📚</div><span>Phase 4 で全文検索付きライブラリを実装予定</span></div>
+    <div id="lib-wsl-warn" class="run-warn" style="display:none">WSL 環境専用機能です</div>
+    <div id="lib-gpu-warn" class="lib-gpu-warn" style="display:none">GPU 使用中 — Ollama と競合する可能性があります</div>
+
+    <div class="card lib-search-card" id="lib-search-card" style="display:none">
+      <div class="lib-search-row">
+        <input id="lib-search-input" class="form-input lib-search-input"
+               placeholder="キーワード検索..."
+               onkeydown="if(event.key==='Enter')libSearch()">
+        <select id="lib-scope" class="form-input lib-scope-select">
+          <option value="points">ポイントのみ</option>
+          <option value="full">全文</option>
+        </select>
+        <button class="btn-primary btn-sm" onclick="libSearch()">検索</button>
+        <button class="refresh-btn" onclick="libClear()">クリア</button>
+      </div>
+      <div id="lib-channel-chips" class="lib-chips"></div>
+    </div>
+
+    <div id="lib-results"></div>
+    <div id="lib-pagination" class="lib-pagination" style="display:none">
+      <button class="refresh-btn" onclick="libPagePrev()">← 前へ</button>
+      <span id="lib-page-info"></span>
+      <button class="refresh-btn" onclick="libPageNext()">次へ →</button>
     </div>
   </div>
 
@@ -182,6 +202,23 @@
 
 </main>
 
+<!-- LIBRARY チャットパネル（右スライドイン） -->
+<div id="lib-chat-panel" class="lib-chat-panel">
+  <div class="lib-chat-header">
+    <span id="lib-chat-ctx-label" class="lib-chat-ctx">ライブラリ全体</span>
+    <button class="refresh-btn btn-sm" onclick="libChatClear()">クリア</button>
+    <button class="refresh-btn" onclick="closeLibChat()">✕</button>
+  </div>
+  <div id="lib-chat-messages" class="lib-chat-messages"></div>
+  <div class="lib-chat-input-row">
+    <input id="lib-chat-input" class="form-input"
+           placeholder="質問してください..."
+           onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();libChatSend()}">
+    <button class="btn-primary btn-sm" onclick="libChatSend()">送信</button>
+  </div>
+</div>
+<button id="lib-chat-fab" class="lib-chat-fab" onclick="toggleLibChat()" style="display:none">💬</button>
+
 <!-- チャンネル追加モーダル -->
 <div id="add-channel-modal" class="modal-backdrop" style="display:none"
      onclick="if(event.target===this)closeAddChannelModal()">
@@ -219,6 +256,33 @@
     <div class="modal-btns">
       <button class="btn-secondary" id="confirm-cancel">キャンセル</button>
       <button class="btn-danger"    id="confirm-ok">削除</button>
+    </div>
+  </div>
+</div>
+
+<!-- LIBRARY ビューアーモーダル -->
+<div id="lib-viewer-modal" class="modal-backdrop" style="display:none"
+     onclick="if(event.target===this)closeLibViewer()">
+  <div class="modal-box modal-box-viewer">
+    <div class="modal-title-row">
+      <span id="lib-viewer-ch" class="badge badge-blue"></span>
+      <span id="lib-viewer-title" class="modal-title" style="margin:0;flex:1;font-size:14px"></span>
+      <a id="lib-viewer-yt" href="#" target="_blank" class="refresh-btn">↗ YouTube</a>
+      <button class="refresh-btn" onclick="closeLibViewer()">✕ 閉じる</button>
+    </div>
+    <div id="lib-viewer-content" class="markdown-body lib-viewer-content"></div>
+    <div class="lib-file-chat">
+      <div class="lib-chat-header">
+        <span class="lib-chat-ctx">この動画について質問</span>
+        <button class="refresh-btn btn-sm" onclick="libFileChatClear()">クリア</button>
+      </div>
+      <div id="lib-file-chat-messages" class="lib-chat-messages lib-chat-messages-sm"></div>
+      <div class="lib-chat-input-row">
+        <input id="lib-file-chat-input" class="form-input"
+               placeholder="質問してください..."
+               onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();libFileChatSend()}">
+        <button class="btn-primary btn-sm" onclick="libFileChatSend()">送信</button>
+      </div>
     </div>
   </div>
 </div>

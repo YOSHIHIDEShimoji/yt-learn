@@ -19,6 +19,20 @@ _proc_version = Path("/proc/version")
 IS_WSL = _proc_version.exists() and "microsoft" in _proc_version.read_text().lower()
 
 
+def _load_env() -> None:
+    env = ROOT / ".env"
+    if not env.exists():
+        return
+    for line in env.read_text().splitlines():
+        line = line.strip()
+        if line and not line.startswith("#") and "=" in line:
+            k, _, v = line.partition("=")
+            os.environ.setdefault(k.strip(), v.strip())
+
+
+_load_env()
+
+
 class _NoCacheStaticFiles(StaticFiles):
     async def get_response(self, path: str, scope):
         resp = await super().get_response(path, scope)
@@ -1150,3 +1164,276 @@ async def summarize_session(started: str = ""):
         "done_count": len(done),
         "phase": "summarizing",
     })
+
+
+# ── Phase 4: Library ヘルパー ─────────────────────────────────
+
+def _parse_transcript_meta(path: Path) -> dict:
+    meta = {"channel": "", "url": "", "date": ""}
+    try:
+        for line in path.read_text(encoding="utf-8", errors="replace").splitlines()[:15]:
+            if line.startswith("チャンネル:"):
+                meta["channel"] = line.split(":", 1)[1].strip()
+            elif line.startswith("URL:"):
+                meta["url"] = line.split(":", 1)[1].strip()
+            elif line.startswith("処理日時:"):
+                meta["date"] = line.split(":", 1)[1].strip()[:10]
+    except OSError:
+        pass
+    return meta
+
+
+def _parse_points_section(content: str) -> list[str]:
+    lines = content.splitlines()
+    in_points = False
+    points = []
+    for line in lines:
+        if line.startswith("## ポイント"):
+            in_points = True
+            continue
+        if in_points:
+            if line.strip() == "---":
+                break
+            if line.strip().startswith("-"):
+                points.append(line.strip())
+    return points
+
+
+def _get_all_library_titles() -> str:
+    tr_dir = ROOT / "transcripts"
+    if not tr_dir.exists():
+        return ""
+    lines = []
+    for ch_dir in sorted(tr_dir.iterdir()):
+        if not ch_dir.is_dir():
+            continue
+        titles = [f.stem for f in sorted(ch_dir.glob("*.md")) if not f.name.startswith("_")]
+        if titles:
+            lines.append(f"【{ch_dir.name}】")
+            lines.extend(f"  - {t}" for t in titles[:50])
+    return "\n".join(lines)
+
+
+def _search_library(q: str, channels: list[str], scope: str, page: int = 1, per_page: int = 20) -> dict:
+    tr_dir = ROOT / "transcripts"
+    if not tr_dir.exists():
+        return {"results": [], "total": 0, "pages": 0, "page": 1}
+
+    pat = re.compile(re.escape(q), re.IGNORECASE) if q else None
+    results = []
+
+    for ch_dir in sorted(tr_dir.iterdir()):
+        if not ch_dir.is_dir():
+            continue
+        channel = ch_dir.name
+        if channels and channel not in channels:
+            continue
+        for md in sorted(ch_dir.glob("*.md")):
+            if md.name.startswith("_"):
+                continue
+            try:
+                content = md.read_text(encoding="utf-8", errors="replace")
+            except OSError:
+                continue
+            points = _parse_points_section(content)
+            search_text = "\n".join(points) if scope == "points" else content
+            if pat and not pat.search(search_text):
+                continue
+            if pat:
+                matched = [p for p in points if pat.search(p)]
+                excerpt = " ".join(matched[:3]) if matched else (points[0] if points else "")
+            else:
+                excerpt = " ".join(points[:2])
+            meta = _parse_transcript_meta(md)
+            results.append({
+                "channel": channel,
+                "title": md.stem,
+                "url": meta["url"],
+                "path": str(md.relative_to(ROOT)),
+                "date": meta["date"],
+                "excerpt": excerpt[:200],
+                "points": points[:5],
+            })
+
+    total = len(results)
+    pages = max(1, (total + per_page - 1) // per_page)
+    page = max(1, min(page, pages))
+    start = (page - 1) * per_page
+    return {"results": results[start:start + per_page], "total": total, "pages": pages, "page": page}
+
+
+async def _stream_ollama_chat(messages: list[dict], model: str, base_url: str):
+    import httpx
+    async with httpx.AsyncClient(timeout=60) as client:
+        async with client.stream(
+            "POST", f"{base_url}/api/chat",
+            json={"model": model, "messages": messages, "stream": True},
+        ) as r:
+            async for line in r.aiter_lines():
+                if not line.strip():
+                    continue
+                try:
+                    data = json.loads(line)
+                except json.JSONDecodeError:
+                    continue
+                chunk = data.get("message", {}).get("content", "")
+                if chunk:
+                    yield chunk
+                if data.get("done"):
+                    break
+
+
+async def _call_gemini_chat(messages: list[dict], api_key: str) -> str:
+    def _sync() -> str:
+        import google.genai as genai
+        client = genai.Client(api_key=api_key)
+        system_msgs = [m["content"] for m in messages if m.get("role") == "system"]
+        contents = [
+            {"role": "user" if m["role"] == "user" else "model", "parts": [{"text": m["content"]}]}
+            for m in messages if m.get("role") in ("user", "assistant")
+        ]
+        cfg = {}
+        if system_msgs:
+            cfg["system_instruction"] = system_msgs[0]
+        response = client.models.generate_content(
+            model="gemini-2.0-flash",
+            contents=contents or [{"role": "user", "parts": [{"text": "Hello"}]}],
+            config=cfg or None,
+        )
+        return response.text or ""
+    return await asyncio.to_thread(_sync)
+
+
+def _build_library_context(messages: list[dict], paths: list[str]) -> str:
+    root_str = str(ROOT.resolve())
+    if paths:
+        parts = []
+        for p in paths[:5]:
+            try:
+                target = (ROOT / p).resolve()
+                if not str(target).startswith(root_str) or not target.exists():
+                    continue
+                content = target.read_text(encoding="utf-8", errors="replace")
+                parts.append(f"=== {target.stem} ===\n{content}")
+            except OSError:
+                pass
+        ctx = "\n\n".join(parts)
+        return (
+            "あなたは YouTube 動画のトランスクリプトを解析するアシスタントです。"
+            "以下の動画内容に基づいて質問に答えてください。\n\n" + ctx
+        )
+    else:
+        last_msg = next((m["content"] for m in reversed(messages) if m.get("role") == "user"), "")
+        if last_msg.strip():
+            results = _search_library(last_msg.strip()[:100], [], "points", per_page=20)
+            snippets = []
+            for r in results["results"][:10]:
+                pts = " ".join(r.get("points", [])[:2])
+                snippets.append(f"【{r['channel']}】{r['title']}: {pts}")
+            ctx = "\n".join(snippets)
+        else:
+            ctx = _get_all_library_titles()
+        return (
+            "あなたは YouTube 動画のトランスクリプトライブラリのアシスタントです。"
+            "以下のライブラリ情報に基づいて質問に答えてください。\n\n" + ctx
+        )
+
+
+# ── Phase 4: Library エンドポイント ──────────────────────────
+
+@app.get("/api/library/channels")
+async def library_channels():
+    if not IS_WSL:
+        return JSONResponse({"error": "WSL環境専用"}, status_code=400)
+    tr_dir = ROOT / "transcripts"
+    if not tr_dir.exists():
+        return JSONResponse({"channels": []})
+    channels = []
+    for ch_dir in sorted(tr_dir.iterdir()):
+        if not ch_dir.is_dir():
+            continue
+        count = sum(1 for f in ch_dir.glob("*.md") if not f.name.startswith("_"))
+        if count > 0:
+            channels.append({"name": ch_dir.name, "count": count})
+    channels.sort(key=lambda x: x["name"])
+    return JSONResponse({"channels": channels})
+
+
+@app.get("/api/library/files")
+async def library_files(channels: str = "", page: int = 1, per_page: int = 20):
+    if not IS_WSL:
+        return JSONResponse({"error": "WSL環境専用"}, status_code=400)
+    ch_list = [c.strip() for c in channels.split(",") if c.strip()] if channels else []
+    return JSONResponse(_search_library("", ch_list, "points", page=page, per_page=per_page))
+
+
+@app.get("/api/library/search")
+async def library_search(q: str = "", channels: str = "", page: int = 1, scope: str = "points"):
+    if not IS_WSL:
+        return JSONResponse({"error": "WSL環境専用"}, status_code=400)
+    ch_list = [c.strip() for c in channels.split(",") if c.strip()] if channels else []
+    return JSONResponse(_search_library(q, ch_list, scope, page=page))
+
+
+@app.get("/api/library/transcript")
+async def library_transcript(path: str):
+    if not IS_WSL:
+        return JSONResponse({"error": "WSL環境専用"}, status_code=400)
+    try:
+        target = (ROOT / path).resolve()
+        if not str(target).startswith(str(ROOT.resolve())):
+            return JSONResponse({"error": "アクセス拒否"}, status_code=403)
+        if not target.exists() or target.suffix != ".md":
+            return JSONResponse({"error": "ファイルが見つかりません"}, status_code=404)
+        content = target.read_text(encoding="utf-8", errors="replace")
+        meta = _parse_transcript_meta(target)
+        return JSONResponse({"content": content, "meta": meta, "title": target.stem})
+    except Exception as e:
+        return JSONResponse({"error": str(e)}, status_code=500)
+
+
+class LibraryChatBody(BaseModel):
+    messages: list[dict]
+    paths: list[str] = []
+
+
+@app.post("/api/library/chat")
+async def library_chat(request: Request, body: LibraryChatBody):
+    if not IS_WSL:
+        return JSONResponse({"error": "WSL環境専用"}, status_code=400)
+
+    async def generate():
+        system = _build_library_context(body.messages, body.paths)
+        full_msgs = [{"role": "system", "content": system}] + list(body.messages)
+        local_url   = os.environ.get("LOCAL_LLM_URL")
+        local_model = os.environ.get("LOCAL_LLM_MODEL", "qwen3.5:9b")
+        api_key     = os.environ.get("GEMINI_API_KEY")
+
+        ok = False
+        if local_url:
+            try:
+                async for chunk in _stream_ollama_chat(full_msgs, local_model, local_url):
+                    if await request.is_disconnected():
+                        return
+                    yield f"data: {json.dumps({'chunk': chunk})}\n\n"
+                ok = True
+            except Exception:
+                pass
+
+        if not ok and api_key:
+            try:
+                result = await _call_gemini_chat(full_msgs, api_key)
+                yield f"data: {json.dumps({'chunk': result})}\n\n"
+                ok = True
+            except Exception as e:
+                yield f"data: {json.dumps({'error': str(e)})}\n\n"
+
+        if not ok:
+            yield f"data: {json.dumps({'error': 'LLM未設定（LOCAL_LLM_URL / GEMINI_API_KEY）'})}\n\n"
+
+        yield f"data: {json.dumps({'done': True})}\n\n"
+
+    return StreamingResponse(
+        generate(), media_type="text/event-stream",
+        headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
+    )

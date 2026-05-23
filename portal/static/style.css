@@ -881,3 +881,116 @@ body {
   color: var(--text-faint);
   font-variant-numeric: tabular-nums;
 }
+
+/* ── Library ─────────────────────────────────────────────── */
+.lib-search-card { padding: 16px; }
+.lib-search-row {
+  display: flex; gap: 8px; align-items: center; flex-wrap: wrap;
+}
+.lib-search-input { flex: 1; min-width: 180px; }
+.lib-scope-select { width: 120px; flex-shrink: 0; }
+
+.lib-chips { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 10px; }
+.lib-chip {
+  padding: 4px 12px; border-radius: 20px; font-size: 12px; font-weight: 600;
+  cursor: pointer; border: 1px solid var(--border);
+  background: var(--surface); color: var(--text-dim); transition: all .15s;
+}
+.lib-chip:hover { background: var(--surface-hover); color: var(--text); }
+.lib-chip.selected { background: var(--blue-dim); border-color: var(--blue); color: var(--blue); }
+
+.lib-group-header {
+  font-size: 11px; font-weight: 700; letter-spacing: .08em;
+  color: var(--text-faint); text-transform: uppercase;
+  padding: 12px 0 8px; border-bottom: 1px solid var(--border); margin-bottom: 10px;
+}
+.lib-cards-grid {
+  display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: 12px; margin-bottom: 16px;
+}
+
+.lib-result-card {
+  background: var(--surface); border: 1px solid var(--border);
+  border-radius: var(--radius); padding: 14px; cursor: pointer;
+  transition: background .15s, border-color .15s; position: relative;
+}
+.lib-result-card:hover { background: var(--surface-hover); border-color: var(--border-strong); }
+.lib-result-card.selected { border-color: var(--blue); background: var(--blue-dim); }
+.lib-card-title { font-size: 13px; font-weight: 600; margin-bottom: 4px; padding-right: 24px; }
+.lib-card-meta { font-size: 11px; color: var(--text-faint); margin-bottom: 8px; }
+.lib-card-points { font-size: 12px; color: var(--text-dim); line-height: 1.6; }
+.lib-card-cb { position: absolute; top: 10px; right: 10px; cursor: pointer; }
+
+.lib-pagination {
+  display: flex; align-items: center; gap: 12px;
+  justify-content: center; padding: 16px 0; color: var(--text-dim); font-size: 13px;
+}
+
+/* ── Library: 右スライドインパネル ── */
+.lib-chat-panel {
+  position: fixed; top: 104px; right: 0; bottom: 0; width: 360px;
+  background: rgba(14, 14, 22, .92);
+  backdrop-filter: blur(24px) saturate(2);
+  -webkit-backdrop-filter: blur(24px) saturate(2);
+  border-left: 1px solid var(--border);
+  display: flex; flex-direction: column;
+  transform: translateX(100%); transition: transform .28s cubic-bezier(.4, 0, .2, 1);
+  z-index: 90;
+}
+.lib-chat-panel.open { transform: translateX(0); }
+
+.lib-chat-header {
+  display: flex; align-items: center; gap: 8px; padding: 12px 14px;
+  border-bottom: 1px solid var(--border);
+}
+.lib-chat-ctx { flex: 1; font-size: 12px; font-weight: 600; color: var(--blue); }
+
+.lib-chat-messages {
+  flex: 1; overflow-y: auto; padding: 12px;
+  display: flex; flex-direction: column; gap: 10px;
+}
+.lib-chat-messages-sm { flex: none; max-height: 220px; }
+
+.lib-bubble { padding: 10px 12px; border-radius: 10px; font-size: 13px; line-height: 1.6; }
+.lib-bubble-user {
+  background: var(--blue-dim); border: 1px solid rgba(10, 132, 255, .2);
+  align-self: flex-end; max-width: 85%;
+}
+.lib-bubble-ai {
+  background: var(--surface); border: 1px solid var(--border);
+  align-self: flex-start; max-width: 95%;
+}
+.lib-bubble-ai.markdown-body { font-size: 13px; }
+
+.lib-chat-input-row {
+  display: flex; gap: 6px; padding: 10px 12px;
+  border-top: 1px solid var(--border);
+}
+.lib-chat-input-row .form-input { flex: 1; font-size: 13px; }
+
+.lib-chat-fab {
+  position: fixed; bottom: 28px; right: 28px; width: 48px; height: 48px;
+  border-radius: 50%; background: var(--blue); color: #fff;
+  border: none; font-size: 20px; cursor: pointer;
+  box-shadow: 0 4px 16px rgba(10, 132, 255, .4);
+  transition: transform .15s, box-shadow .15s; z-index: 91;
+}
+.lib-chat-fab:hover { transform: scale(1.08); box-shadow: 0 6px 20px rgba(10, 132, 255, .5); }
+
+/* ── Library: ビューアーモーダル ── */
+.modal-box-viewer {
+  width: min(860px, 92vw); max-height: 88vh;
+  display: flex; flex-direction: column;
+}
+.lib-viewer-content {
+  flex: 1; overflow-y: auto; padding: 16px 0;
+  border-bottom: 1px solid var(--border); margin-bottom: 12px;
+}
+.lib-file-chat { padding-top: 8px; }
+
+/* GPU 警告バッジ */
+.lib-gpu-warn {
+  display: inline-flex; align-items: center; gap: 5px;
+  font-size: 11px; color: var(--warn); background: var(--warn-dim);
+  border-radius: 6px; padding: 3px 10px; margin-bottom: 10px;
+}

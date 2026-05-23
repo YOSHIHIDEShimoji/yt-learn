@@ -34,6 +34,14 @@ document.addEventListener("DOMContentLoaded", () => {
     if (id === "readme") loadReadme();
     if (id === "logs")   loadLogs();
     else                 stopLogStream();
+    const fab = document.getElementById("lib-chat-fab");
+    if (id === "library") {
+      initLibrary();
+      if (fab) fab.style.display = "";
+    } else {
+      if (fab) fab.style.display = "none";
+      closeLibChat();
+    }
   }
 
   tabs.forEach(t => t.addEventListener("click", () => switchTab(t.dataset.tab)));
@@ -950,6 +958,7 @@ document.addEventListener("DOMContentLoaded", () => {
     if (e.key === "Escape") {
       closeAddChannelModal();
       closeLogFilter();
+      closeLibViewer();
       document.getElementById("confirm-modal").style.display = "none";
     }
   });
@@ -957,6 +966,354 @@ document.addEventListener("DOMContentLoaded", () => {
   function esc(s) {
     return String(s ?? "").replace(/[&<>"']/g, c =>
       ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+  }
+
+  // ── Library: 状態変数 ────────────────────────────────────────
+  let _libSelectedChannels = new Set();
+  let _libCurrentPage = 1;
+  let _libCurrentQuery = "";
+  let _libCurrentScope = "points";
+  let _libTotalPages = 1;
+  let _libCheckedPaths = new Set();
+  let _libChatMessages = [];
+  let _libFileChatMessages = [];
+  let _libCurrentFilePath = "";
+  let _libChatPanelOpen = false;
+  let _libChatSSE = null;
+  let _libInitialized = false;
+
+  // ── Library: 初期化 ──────────────────────────────────────────
+  async function initLibrary() {
+    if (_isWsl === null) {
+      try { const d = await api("/api/env"); _isWsl = d.is_wsl; } catch { _isWsl = false; }
+    }
+    const warn = document.getElementById("lib-wsl-warn");
+    const card = document.getElementById("lib-search-card");
+    if (!_isWsl) {
+      if (warn) warn.style.display = "";
+      if (card) card.style.display = "none";
+      return;
+    }
+    if (warn) warn.style.display = "none";
+    if (card) card.style.display = "";
+    if (!_libInitialized) {
+      _libInitialized = true;
+      await loadLibraryChannels();
+      await fetchLibResults();
+    }
+    _updateGpuWarn();
+  }
+
+  async function loadLibraryChannels() {
+    try {
+      const data = await api("/api/library/channels");
+      renderChannelChips(data.channels || []);
+    } catch {}
+  }
+
+  function renderChannelChips(channels) {
+    const el = document.getElementById("lib-channel-chips");
+    if (!el) return;
+    el.innerHTML = "";
+    channels.forEach(ch => {
+      const btn = document.createElement("button");
+      btn.className = "lib-chip" + (_libSelectedChannels.has(ch.name) ? " selected" : "");
+      btn.textContent = `${ch.name} (${ch.count})`;
+      btn.dataset.channel = ch.name;
+      btn.onclick = () => toggleLibChip(ch.name);
+      el.appendChild(btn);
+    });
+  }
+
+  function toggleLibChip(name) {
+    if (_libSelectedChannels.has(name)) _libSelectedChannels.delete(name);
+    else _libSelectedChannels.add(name);
+    document.querySelectorAll(".lib-chip").forEach(el => {
+      el.classList.toggle("selected", _libSelectedChannels.has(el.dataset.channel));
+    });
+    _libCurrentPage = 1;
+    fetchLibResults();
+  }
+
+  // ── Library: 検索・結果描画 ──────────────────────────────────
+  window.libSearch = async function() {
+    const input = document.getElementById("lib-search-input");
+    const scope = document.getElementById("lib-scope");
+    _libCurrentQuery = input ? input.value.trim() : "";
+    _libCurrentScope = scope ? scope.value : "points";
+    _libCurrentPage = 1;
+    await fetchLibResults();
+  };
+
+  window.libClear = function() {
+    _libSelectedChannels.clear();
+    _libCurrentQuery = "";
+    _libCurrentPage = 1;
+    const input = document.getElementById("lib-search-input");
+    if (input) input.value = "";
+    document.querySelectorAll(".lib-chip").forEach(el => el.classList.remove("selected"));
+    fetchLibResults();
+  };
+
+  async function fetchLibResults() {
+    const resultsEl = document.getElementById("lib-results");
+    const paginEl = document.getElementById("lib-pagination");
+    if (!resultsEl) return;
+    resultsEl.innerHTML = placeholder("⏳", "読み込み中…");
+    try {
+      const chParam = [..._libSelectedChannels].join(",");
+      let data;
+      if (_libCurrentQuery) {
+        const params = new URLSearchParams({
+          q: _libCurrentQuery, channels: chParam,
+          page: _libCurrentPage, scope: _libCurrentScope,
+        });
+        data = await api(`/api/library/search?${params}`, 30000);
+      } else {
+        const params = new URLSearchParams({
+          channels: chParam, page: _libCurrentPage, per_page: 20,
+        });
+        data = await api(`/api/library/files?${params}`, 30000);
+      }
+      _libTotalPages = data.pages || 1;
+      renderLibResults(data.results || []);
+      updateLibPagination(data.total || 0, data.page || 1, data.pages || 1);
+    } catch (e) {
+      resultsEl.innerHTML = placeholder("❌", `エラー: ${e.message}`);
+      if (paginEl) paginEl.style.display = "none";
+    }
+  }
+
+  function renderLibResults(results) {
+    const el = document.getElementById("lib-results");
+    if (!el) return;
+    if (!results.length) { el.innerHTML = placeholder("🔍", "結果がありません"); return; }
+
+    const groups = {};
+    results.forEach(r => { if (!groups[r.channel]) groups[r.channel] = []; groups[r.channel].push(r); });
+
+    let html = "";
+    for (const [ch, items] of Object.entries(groups)) {
+      html += `<div class="lib-group-header">${esc(ch)}</div><div class="lib-cards-grid">`;
+      items.forEach(r => {
+        const isChecked = _libCheckedPaths.has(r.path);
+        const pts = (r.points || []).slice(0, 3)
+          .map(p => `<div>• ${esc(p.replace(/^- /, ""))}</div>`).join("");
+        const safePath = r.path.replace(/'/g, "\\'");
+        html += `
+          <div class="lib-result-card${isChecked ? " selected" : ""}"
+               onclick="openLibViewer('${safePath}')">
+            <div class="lib-card-title">${esc(r.title)}</div>
+            <div class="lib-card-meta">${esc(r.date || "")}</div>
+            <div class="lib-card-points">${pts}</div>
+            <input type="checkbox" class="lib-card-cb"${isChecked ? " checked" : ""}
+                   onclick="event.stopPropagation();toggleLibCardCheck('${safePath}', this)">
+          </div>`;
+      });
+      html += "</div>";
+    }
+    el.innerHTML = html;
+  }
+
+  function updateLibPagination(total, page, pages) {
+    const el = document.getElementById("lib-pagination");
+    const info = document.getElementById("lib-page-info");
+    if (!el) return;
+    if (!total) { el.style.display = "none"; return; }
+    el.style.display = "flex";
+    if (info) info.textContent = `${page} / ${pages} ページ（計 ${total} 件）`;
+    const btns = el.querySelectorAll("button");
+    if (btns[0]) btns[0].disabled = page <= 1;
+    if (btns[1]) btns[1].disabled = page >= pages;
+  }
+
+  window.libPagePrev = function() {
+    if (_libCurrentPage > 1) { _libCurrentPage--; fetchLibResults(); }
+  };
+  window.libPageNext = function() {
+    if (_libCurrentPage < _libTotalPages) { _libCurrentPage++; fetchLibResults(); }
+  };
+
+  // ── Library: チェックボックス管理 ───────────────────────────
+  window.toggleLibCardCheck = function(path, el) {
+    if (el.checked) _libCheckedPaths.add(path);
+    else            _libCheckedPaths.delete(path);
+    el.closest(".lib-result-card").classList.toggle("selected", el.checked);
+    _updateChatContextLabel();
+  };
+
+  function _updateChatContextLabel() {
+    const label = document.getElementById("lib-chat-ctx-label");
+    if (!label) return;
+    const n = _libCheckedPaths.size;
+    label.textContent = n > 0 ? `選択 ${n} 件` : "ライブラリ全体";
+  }
+
+  // ── Library: ビューアーモーダル ─────────────────────────────
+  window.openLibViewer = async function(path) {
+    const modal = document.getElementById("lib-viewer-modal");
+    const contentEl = document.getElementById("lib-viewer-content");
+    const titleEl = document.getElementById("lib-viewer-title");
+    const chEl = document.getElementById("lib-viewer-ch");
+    const ytEl = document.getElementById("lib-viewer-yt");
+    if (!modal || !contentEl) return;
+
+    _libCurrentFilePath = path;
+    _libFileChatMessages = [];
+    const fileChatEl = document.getElementById("lib-file-chat-messages");
+    if (fileChatEl) fileChatEl.innerHTML = "";
+
+    contentEl.innerHTML = placeholder("⏳", "読み込み中…");
+    modal.style.display = "flex";
+
+    try {
+      const data = await api(`/api/library/transcript?path=${encodeURIComponent(path)}`, 15000);
+      if (titleEl) titleEl.textContent = data.title || "";
+      if (chEl) chEl.textContent = data.meta?.channel || path.split("/")[1] || "";
+      if (ytEl) {
+        if (data.meta?.url) { ytEl.href = data.meta.url; ytEl.style.display = ""; }
+        else ytEl.style.display = "none";
+      }
+      if (typeof marked !== "undefined") {
+        contentEl.innerHTML = marked.parse(data.content || "");
+      } else {
+        contentEl.textContent = data.content || "";
+      }
+    } catch (e) {
+      contentEl.innerHTML = placeholder("❌", `エラー: ${e.message}`);
+    }
+  };
+
+  function closeLibViewer() {
+    const modal = document.getElementById("lib-viewer-modal");
+    if (modal) modal.style.display = "none";
+    _libCurrentFilePath = "";
+  }
+  window.closeLibViewer = closeLibViewer;
+
+  // ── Library: SSE チャットストリーム ─────────────────────────
+  async function _libStreamChat(messages, paths, messagesEl) {
+    if (_libChatSSE) { _libChatSSE.abort(); _libChatSSE = null; }
+    const ctrl = new AbortController();
+    _libChatSSE = ctrl;
+    const bubble = _appendChatBubble("ai", "", messagesEl);
+    let fullText = "";
+    try {
+      const resp = await fetch("/api/library/chat", {
+        method: "POST", signal: ctrl.signal,
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ messages, paths }),
+      });
+      if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+      const reader = resp.body.getReader();
+      const dec = new TextDecoder();
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        for (const line of dec.decode(value, { stream: true }).split("\n")) {
+          if (!line.startsWith("data:")) continue;
+          let d;
+          try { d = JSON.parse(line.slice(5).trim()); } catch { continue; }
+          if (d.chunk) {
+            fullText += d.chunk;
+            bubble.innerHTML = typeof marked !== "undefined" ? marked.parse(fullText) : fullText;
+            messagesEl.scrollTop = 999999;
+          }
+          if (d.error) { bubble.textContent = `エラー: ${d.error}`; break; }
+          if (d.done) break;
+        }
+      }
+    } catch (e) {
+      if (e.name !== "AbortError") bubble.textContent = `エラー: ${e.message}`;
+    } finally {
+      _libChatSSE = null;
+    }
+    return fullText;
+  }
+
+  function _appendChatBubble(role, text, containerEl) {
+    const div = document.createElement("div");
+    div.className = `lib-bubble lib-bubble-${role}`;
+    if (role === "ai") {
+      div.className += " markdown-body";
+      div.innerHTML = (text && typeof marked !== "undefined") ? marked.parse(text) : (text || "");
+    } else {
+      div.textContent = text;
+    }
+    containerEl.appendChild(div);
+    containerEl.scrollTop = 999999;
+    return div;
+  }
+
+  // ── Library: 右パネル（全体チャット） ───────────────────────
+  window.toggleLibChat = function() {
+    const panel = document.getElementById("lib-chat-panel");
+    if (!panel) return;
+    _libChatPanelOpen = !_libChatPanelOpen;
+    panel.classList.toggle("open", _libChatPanelOpen);
+    if (_libChatPanelOpen) {
+      const input = document.getElementById("lib-chat-input");
+      if (input) input.focus();
+    }
+  };
+
+  function closeLibChat() {
+    const panel = document.getElementById("lib-chat-panel");
+    if (panel) panel.classList.remove("open");
+    _libChatPanelOpen = false;
+  }
+  window.closeLibChat = closeLibChat;
+
+  window.libChatClear = function() {
+    _libChatMessages = [];
+    const el = document.getElementById("lib-chat-messages");
+    if (el) el.innerHTML = "";
+  };
+
+  window.libChatSend = async function() {
+    const input = document.getElementById("lib-chat-input");
+    if (!input) return;
+    const text = input.value.trim();
+    if (!text) return;
+    input.value = "";
+    const messagesEl = document.getElementById("lib-chat-messages");
+    _libChatMessages.push({ role: "user", content: text });
+    _appendChatBubble("user", text, messagesEl);
+    _updateChatContextLabel();
+    const paths = _libCheckedPaths.size > 0 ? [..._libCheckedPaths] : [];
+    const aiText = await _libStreamChat([..._libChatMessages], paths, messagesEl);
+    if (aiText) _libChatMessages.push({ role: "assistant", content: aiText });
+  };
+
+  // ── Library: ファイルチャット（ビューアー内） ────────────────
+  window.libFileChatClear = function() {
+    _libFileChatMessages = [];
+    const el = document.getElementById("lib-file-chat-messages");
+    if (el) el.innerHTML = "";
+  };
+
+  window.libFileChatSend = async function() {
+    const input = document.getElementById("lib-file-chat-input");
+    if (!input) return;
+    const text = input.value.trim();
+    if (!text) return;
+    input.value = "";
+    const messagesEl = document.getElementById("lib-file-chat-messages");
+    _libFileChatMessages.push({ role: "user", content: text });
+    _appendChatBubble("user", text, messagesEl);
+    const paths = _libCurrentFilePath ? [_libCurrentFilePath] : [];
+    const aiText = await _libStreamChat([..._libFileChatMessages], paths, messagesEl);
+    if (aiText) _libFileChatMessages.push({ role: "assistant", content: aiText });
+  };
+
+  // ── Library: GPU 警告バッジ ──────────────────────────────────
+  function _updateGpuWarn() {
+    const warn = document.getElementById("lib-gpu-warn");
+    if (!warn) return;
+    const hasGpu = _latestProcesses.some(p =>
+      p.type === "autonomous" || p.type === "transcribe" || p.type === "loop"
+    );
+    warn.style.display = hasGpu ? "" : "none";
   }
 
   // ── ヘッダー環境バッジ ───────────────────────────────────────
