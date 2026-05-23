@@ -1107,31 +1107,32 @@ document.addEventListener("DOMContentLoaded", () => {
   let _libModelPref = "ollama";
 
   // ── Gemini レート管理 ──────────────────────────────────────
-  const _GEMINI_LIMIT = 10, _GEMINI_WIN = 3600000;
-  function _gTs() { return (JSON.parse(localStorage.getItem("yt_g_ts")||"[]")).filter(t=>Date.now()-t<_GEMINI_WIN); }
-  function _gRemaining() { return Math.max(0, _GEMINI_LIMIT - _gTs().length); }
-  function _gRecord() { const ts=_gTs(); ts.push(Date.now()); localStorage.setItem("yt_g_ts",JSON.stringify(ts)); _updateGeminiBadge(); }
-  function _updateGeminiBadge() {
+  const _GEMINI_CTX_MAX = 1_048_576;  // gemini-2.5-flash-lite の入力トークン上限
+  let _libLastUsage = null;            // 直近の Gemini usage_metadata
+
+  function _updateContextChart() {
     const svg = document.getElementById("lib-gemini-quota");
     const arc = document.getElementById("lib-gemini-quota-arc");
     if (!svg) return;
-    if (_libModelPref === "gemini") {
-      const rem   = _gRemaining();
-      const circ  = 2 * Math.PI * 8;  // r=8 の円周
-      const fill  = (rem / _GEMINI_LIMIT) * circ;
+    if (_libModelPref !== "gemini") { svg.style.display = "none"; return; }
+    svg.style.display = "";
+    const circ = 2 * Math.PI * 8;
+    if (_libLastUsage) {
+      const pct  = Math.min(_libLastUsage.prompt_tokens / _GEMINI_CTX_MAX, 1);
+      const fill = pct * circ;
       if (arc) {
         arc.setAttribute("stroke-dasharray", `${fill.toFixed(2)} ${circ.toFixed(2)}`);
-        arc.setAttribute("stroke", rem === 0 ? "#ef4444" : rem <= 2 ? "#f59e0b" : "#4ade80");
+        arc.setAttribute("stroke", pct > 0.8 ? "#ef4444" : pct > 0.5 ? "#f59e0b" : "#4ade80");
       }
-      svg.style.display = "";
-      svg.title = `残り ${rem} / ${_GEMINI_LIMIT} 回（1時間）`;
+      svg.title = `入力: ${_libLastUsage.prompt_tokens.toLocaleString()} / ${_GEMINI_CTX_MAX.toLocaleString()} tokens (${(pct * 100).toFixed(1)}%)`;
     } else {
-      svg.style.display = "none";
+      if (arc) arc.setAttribute("stroke-dasharray", `0 ${circ.toFixed(2)}`);
+      svg.title = "コンテキスト使用量（送信後に更新）";
     }
   }
   window.setLibModel = function(v) {
     _libModelPref = v;
-    _updateGeminiBadge();
+    _updateContextChart();
   };
 
   // 重複段落除去（同じ段落が2回出る問題の後処理）
@@ -1492,11 +1493,6 @@ document.addEventListener("DOMContentLoaded", () => {
     bubble.innerHTML = '<span class="lib-typing-dots"><span></span><span></span><span></span></span>';
     let fullText = "";
     try {
-      if (_libModelPref === "gemini" && _gRemaining() <= 0) {
-        bubble.classList.remove("lib-loading");
-        bubble.textContent = "Geminiのレート制限に達しました。1時間後にリセットされます。";
-        return "";
-      }
       const resp = await fetch("/api/library/chat", {
         method: "POST", signal: ctrl.signal,
         headers: { "Content-Type": "application/json" },
@@ -1518,6 +1514,7 @@ document.addEventListener("DOMContentLoaded", () => {
             bubble.innerHTML = typeof marked !== "undefined" ? marked.parse(fullText) : fullText;
             messagesEl.scrollTop = 999999;
           }
+          if (d.usage) { _libLastUsage = d.usage; _updateContextChart(); }
           if (d.error) {
             bubble.textContent = `エラー: ${String(d.error)}`;
             break;

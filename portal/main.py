@@ -1337,8 +1337,10 @@ async def _stream_ollama_chat(messages: list[dict], model: str, base_url: str):
                     break
 
 
-async def _call_gemini_chat(messages: list[dict], api_key: str, model: str = "gemini-2.0-flash") -> str:
-    def _sync() -> str:
+async def _call_gemini_chat(
+    messages: list[dict], api_key: str, model: str = "gemini-2.0-flash"
+) -> tuple[str, dict]:
+    def _sync() -> tuple[str, dict]:
         import google.genai as genai
         client = genai.Client(api_key=api_key)
         system_msgs = [m["content"] for m in messages if m.get("role") == "system"]
@@ -1354,7 +1356,14 @@ async def _call_gemini_chat(messages: list[dict], api_key: str, model: str = "ge
             contents=contents or [{"role": "user", "parts": [{"text": "Hello"}]}],
             config=cfg or None,
         )
-        return response.text or ""
+        usage: dict = {}
+        if response.usage_metadata:
+            usage = {
+                "prompt_tokens":  response.usage_metadata.prompt_token_count  or 0,
+                "output_tokens":  response.usage_metadata.candidates_token_count or 0,
+                "total_tokens":   response.usage_metadata.total_token_count   or 0,
+            }
+        return response.text or "", usage
     return await asyncio.to_thread(_sync)
 
 
@@ -1502,8 +1511,10 @@ async def library_chat(request: Request, body: LibraryChatBody):
 
         if use_gemini and api_key:
             try:
-                result = await _call_gemini_chat(full_msgs, api_key, _GEMINI_CHAT_MODEL)
+                result, usage = await _call_gemini_chat(full_msgs, api_key, _GEMINI_CHAT_MODEL)
                 yield f"data: {json.dumps({'chunk': result})}\n\n"
+                if usage:
+                    yield f"data: {json.dumps({'usage': usage})}\n\n"
                 ok = True
             except Exception as e:
                 err_str = str(e)
