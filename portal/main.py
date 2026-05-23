@@ -992,7 +992,14 @@ async def get_env():
 @app.get("/api/run/status")
 async def run_status():
     session = await _find_yt_session()
-    return JSONResponse({"running": session is not None, "session": session})
+    log_file = ""
+    if session:
+        log_dir = ROOT / "logs" / "autonomous"
+        if log_dir.exists():
+            logs = sorted(log_dir.glob("*.log"), key=lambda x: x.stat().st_mtime, reverse=True)
+            if logs:
+                log_file = str(logs[0].relative_to(ROOT))
+    return JSONResponse({"running": session is not None, "session": session, "log_file": log_file})
 
 
 @app.post("/api/run")

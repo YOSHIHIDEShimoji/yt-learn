@@ -523,6 +523,7 @@ document.addEventListener("DOMContentLoaded", () => {
   };
 
   window.showQueueFiles = async function() {
+    if (!_statusData?.log_file_path) return;
     const modal   = document.getElementById("log-filter-modal");
     const titleEl = document.getElementById("log-filter-title");
     const countEl = document.getElementById("log-filter-count");
@@ -844,20 +845,26 @@ document.addEventListener("DOMContentLoaded", () => {
   async function _updateRunBadge() {
     if (!_isWsl) return;
     try {
-      const { running, session } = await api("/api/run/status");
+      const { running, session, log_file } = await api("/api/run/status");
       const badge    = document.getElementById("run-badge");
       const startBtn = document.getElementById("run-start-btn");
       const stopBtn  = document.getElementById("run-stop-btn");
+      const logBtn   = document.getElementById("run-log-btn");
       if (!badge) return;
       if (running) {
         badge.className   = "badge badge-green";
         badge.textContent = session ? `running: ${session}` : "running";
         if (startBtn) startBtn.style.display = "none";
         if (stopBtn)  stopBtn.style.display  = "";
+        if (logBtn) {
+          if (log_file) { logBtn.dataset.logPath = log_file; logBtn.style.display = ""; }
+          else logBtn.style.display = "none";
+        }
       } else {
         badge.className   = "badge badge-gray"; badge.textContent = "stopped";
-        if (startBtn) startBtn.style.display = "";
+        if (startBtn) { startBtn.style.display = ""; startBtn.disabled = false; startBtn.textContent = "▶ 起動"; }
         if (stopBtn)  stopBtn.style.display  = "none";
+        if (logBtn)   logBtn.style.display   = "none";
       }
     } catch {}
   }
@@ -871,6 +878,7 @@ document.addEventListener("DOMContentLoaded", () => {
       await _updateRunBadge();
     } catch (e) {
       await showConfirm(`起動失敗: ${e.message}`, "OK", false);
+    } finally {
       startBtn.disabled = false; startBtn.textContent = origText;
     }
   };
@@ -1147,17 +1155,12 @@ document.addEventListener("DOMContentLoaded", () => {
   }
   let _libChatPanelOpen = false;
   let _libChatSSE = null;
-  let _libInitialized = false;
-
   // ── Library: 初期化 ──────────────────────────────────────────
   async function initLibrary() {
     const fab = document.getElementById("lib-chat-fab");
     if (!_isWsl) return;
     if (fab && !_libChatPanelOpen) fab.style.display = "";
-    if (!_libInitialized) {
-      _libInitialized = true;
-      await loadLibraryChannels();
-    }
+    await loadLibraryChannels();
     _updateGpuWarn();
   }
 
