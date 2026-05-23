@@ -1029,7 +1029,8 @@ document.addEventListener("DOMContentLoaded", () => {
     const panel = document.getElementById("lib-chat-panel");
     const fab   = document.getElementById("lib-chat-fab");
     if (panel && !panel.contains(e.target) && e.target !== fab && !fab?.contains(e.target)
-        && !e.target.closest(".lib-model-row")) {
+        && !e.target.closest(".lib-model-row")
+        && !e.target.closest("#lib-selected-modal")) {
       closeLibChat();
     }
   });
