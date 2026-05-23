@@ -130,6 +130,18 @@ async def _rclone_link(path: str) -> str:
         return cached or ""
 
 
+def _rclone_link_nonblocking(path: str) -> str:
+    """キャッシュを即返し、stale なら background で _rclone_link を走らせる。
+    STATUS のクリティカルパス（status-summary / SSE）を rclone のブロック待ちから外す。"""
+    cached = _rclone_link_cache.get(path)
+    fresh = cached is not None and (
+        time.time() - _rclone_link_cache_ts.get(path, 0)
+    ) < (RCLONE_LINK_HIT_TTL if cached else RCLONE_LINK_EMPTY_TTL)
+    if not fresh and shutil.which("rclone"):
+        asyncio.ensure_future(_rclone_link(path))
+    return cached or ""
+
+
 _drive_fetch_running: set[str] = set()
 
 
@@ -568,7 +580,7 @@ async def _build_status_data(log_path: str | None = None) -> dict:
     ]
     queue_dir   = ROOT / "queue"
     queue_count = len(list(queue_dir.glob("*.m4a"))) if queue_dir.exists() else 0
-    folder_url  = await _rclone_link("gdrive:yt-learn")
+    folder_url  = _rclone_link_nonblocking("gdrive:yt-learn")
 
     # 対象ログファイルを決定
     _idle_base = {

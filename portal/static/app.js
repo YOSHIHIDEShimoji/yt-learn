@@ -20,6 +20,10 @@ document.addEventListener("DOMContentLoaded", () => {
   let _homeModelPref = "ollama";
   let _homeChatMessages = [];
   let _homeChatSSE = null;
+  // closeLibChat() が初期化中の switchTab() から参照するため、ここで先に宣言する
+  // （旧来は定義箇所が switchTab(initial) より後ろにあり TDZ ReferenceError で初期化が中断していた）
+  let _libChatPanelOpen = false;
+  let _libChatSSE = null;
 
   const SESSION_TYPE_LABELS = {
     autonomous: "autonomous.sh",
@@ -65,7 +69,7 @@ document.addEventListener("DOMContentLoaded", () => {
   window.goHome = () => switchTab("home");
   const initial = location.hash.replace("#", "") || "home";
   switchTab(initial);
-  loadEnvBadge();
+  // env バッジはサーバサイドレンダリング（index.html）に移行済み
   // 非アクティブタブのデータを起動時に先読み
   if (initial !== "status") loadStatus();
   if (initial !== "logs")   loadLogs();
@@ -1206,8 +1210,6 @@ document.addEventListener("DOMContentLoaded", () => {
     }
     return out.join("\n\n");
   }
-  let _libChatPanelOpen = false;
-  let _libChatSSE = null;
   // ── Library: 初期化 ──────────────────────────────────────────
   async function initLibrary() {
     const fab = document.getElementById("lib-chat-fab");
@@ -1790,18 +1792,4 @@ document.addEventListener("DOMContentLoaded", () => {
     warn.style.display = hasGpu ? "" : "none";
   }
 
-  // ── ヘッダー環境バッジ ───────────────────────────────────────
-  function loadEnvBadge() {
-    const el = document.getElementById("env-badge");
-    if (!el) return;
-    const img = document.createElement("img");
-    img.src = _isWsl ? "/static/linux.png" : "/static/apple.png";
-    img.className = _isWsl ? "env-icon" : "env-icon env-icon-mac";
-    img.alt = _isWsl ? "WSL" : "Mac";
-    const label = document.createElement("span");
-    label.className = "env-label";
-    label.textContent = _isWsl ? "WSL" : "Mac";
-    el.appendChild(img);
-    el.appendChild(label);
-  }
 });

@@ -13,7 +13,15 @@
   <button class="header-logo-btn" onclick="goHome()">
     <img src="/static/logo.png" alt="yt-learn" class="header-logo-img">
   </button>
-  <span id="env-badge" class="env-badge"></span>
+  <span id="env-badge" class="env-badge">
+    {% if is_wsl %}
+    <img src="/static/linux.png" alt="WSL" class="env-icon">
+    <span class="env-label">WSL</span>
+    {% else %}
+    <img src="/static/apple.png" alt="Mac" class="env-icon env-icon-mac">
+    <span class="env-label">Mac</span>
+    {% endif %}
+  </span>
 </header>
 
 <nav class="tabbar">
