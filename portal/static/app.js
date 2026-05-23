@@ -1112,14 +1112,30 @@ document.addEventListener("DOMContentLoaded", () => {
     if (_libSelectedChannels.size > 0) fetchLibResults();
   };
 
-  window.selectAllCards = function() {
+  window.selectAllCards = async function() {
+    const chParam = [..._libSelectedChannels].join(",");
+    try {
+      let data;
+      if (_libCurrentQuery) {
+        const params = new URLSearchParams({
+          q: _libCurrentQuery, channels: chParam,
+          page: 1, scope: _libCurrentScope, per_page: 9999,
+        });
+        data = await api(`/api/library/search?${params}`, 60000);
+      } else {
+        const params = new URLSearchParams({ channels: chParam, page: 1, per_page: 9999 });
+        data = await api(`/api/library/files?${params}`, 60000);
+      }
+      (data.results || []).forEach(r => _libCheckedPaths.add(r.path));
+    } catch {}
+    // 表示中カードを checked 状態に更新
     document.querySelectorAll(".lib-result-card").forEach(card => {
       const path = card.dataset.path;
-      if (!path) return;
-      _libCheckedPaths.add(path);
-      card.classList.add("selected");
-      const cb = card.querySelector(".lib-card-cb");
-      if (cb) cb.checked = true;
+      if (path && _libCheckedPaths.has(path)) {
+        card.classList.add("selected");
+        const cb = card.querySelector(".lib-card-cb");
+        if (cb) cb.checked = true;
+      }
     });
     _updateChatContextLabel();
   };
@@ -1275,12 +1291,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
   window.jumpToLibCard = function(path) {
     closeLibSelected();
-    const card = document.querySelector(`.lib-result-card[data-path="${CSS.escape(path)}"]`);
-    if (card) {
-      card.scrollIntoView({ behavior: "smooth", block: "center" });
-      card.style.outline = "2px solid var(--blue)";
-      setTimeout(() => { card.style.outline = ""; }, 1500);
-    }
+    openLibViewer(path);
   };
 
   window.deselectCard = function(path, btn) {
