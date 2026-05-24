@@ -32,10 +32,11 @@
 .bg-aurora {
   position: fixed; inset: 0; z-index: -1; pointer-events: none;
   background:
-    radial-gradient(42vw 42vw at 18% 12%, rgba(10,132,255,0.22), transparent 60%),
-    radial-gradient(38vw 38vw at 85% 22%, rgba(48,209,88,0.14),  transparent 60%),
-    radial-gradient(46vw 46vw at 70% 88%, rgba(140,90,255,0.16), transparent 62%),
-    radial-gradient(40vw 40vw at 25% 80%, rgba(10,132,255,0.12), transparent 60%);
+    radial-gradient(42vw 42vw at 18% 12%, rgba(10,132,255,0.30), transparent 60%),
+    radial-gradient(38vw 38vw at 85% 22%, rgba(48,209,88,0.20),  transparent 60%),
+    radial-gradient(46vw 46vw at 70% 88%, rgba(140,90,255,0.22), transparent 62%),
+    radial-gradient(40vw 40vw at 25% 80%, rgba(10,132,255,0.18), transparent 60%),
+    radial-gradient(60vw 45vw at 50% 42%, rgba(10,132,255,0.12), transparent 65%);
   filter: blur(8px);
   animation: aurora-drift 32s ease-in-out infinite alternate;
 }
@@ -412,6 +413,21 @@ body {
   display: flex;
   flex-direction: column;
   max-height: 520px;
+}
+
+/* ヘッダー行を Aurora が透けるガラス面として強調 */
+.status-videos-card .card-title-row,
+.logs-grid .card .card-title-row {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  backdrop-filter: blur(20px) saturate(1.6);
+  -webkit-backdrop-filter: blur(20px) saturate(1.6);
+  background: rgba(255,255,255,0.04);
+  margin: -20px -20px 16px;
+  padding: 14px 20px;
+  border-bottom: 1px solid rgba(255,255,255,0.08);
+  border-radius: var(--radius) var(--radius) 0 0;
 }
 .status-stats-card {
   max-height: 520px;
