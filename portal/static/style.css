@@ -28,7 +28,7 @@
   --tab-h: 48px;
 }
 
-/* ── Aurora background ── */
+/* ── Aurora background (static — no animation to keep GPU cool) ── */
 .bg-aurora {
   position: fixed; inset: 0; z-index: -1; pointer-events: none;
   background:
@@ -38,13 +38,7 @@
     radial-gradient(40vw 40vw at 25% 80%, rgba(10,132,255,0.18), transparent 60%),
     radial-gradient(60vw 45vw at 50% 42%, rgba(10,132,255,0.12), transparent 65%);
   filter: blur(8px);
-  animation: aurora-drift 32s ease-in-out infinite alternate;
 }
-@keyframes aurora-drift {
-  0%   { transform: translate3d(0,0,0)      scale(1);    }
-  100% { transform: translate3d(-3%,2%,0)   scale(1.08); }
-}
-@media (prefers-reduced-motion: reduce) { .bg-aurora { animation: none; } }
 
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
@@ -224,8 +218,6 @@ body {
   border-radius: var(--radius-sm);
   background: rgba(255,255,255,0.05);
   border: 1px solid var(--border);
-  backdrop-filter: var(--glass-blur-md);
-  -webkit-backdrop-filter: var(--glass-blur-md);
   box-shadow: inset 0 1px 0 rgba(255,255,255,0.14);
   transition: background 0.12s;
 }
@@ -386,8 +378,6 @@ body {
   border-radius: var(--radius-sm);
   background: rgba(255,255,255,0.05);
   border: 1px solid var(--border);
-  backdrop-filter: var(--glass-blur-md);
-  -webkit-backdrop-filter: var(--glass-blur-md);
   box-shadow: inset 0 1px 0 rgba(255,255,255,0.14);
   margin-bottom: 8px;
   transition: background 0.12s;
@@ -459,8 +449,6 @@ body {
   border: 1px solid var(--border);
   border-top: none;
   border-radius: 0 0 var(--radius-sm) var(--radius-sm);
-  backdrop-filter: var(--glass-blur-md);
-  -webkit-backdrop-filter: var(--glass-blur-md);
   font-size: 11px;
   color: var(--text-faint);
   gap: 16px;
@@ -496,8 +484,6 @@ body {
   display: flex;
   flex-direction: column;
   gap: 4px;
-  backdrop-filter: var(--glass-blur-md);
-  -webkit-backdrop-filter: var(--glass-blur-md);
   box-shadow: inset 0 1px 0 rgba(255,255,255,0.14);
 }
 .stat-label { font-size: 11px; color: var(--text-faint); text-transform: uppercase; letter-spacing: 0.4px; }
@@ -905,8 +891,6 @@ body {
   font-weight: 500;
   padding: 4px 10px;
   cursor: pointer;
-  backdrop-filter: var(--glass-blur-md);
-  -webkit-backdrop-filter: var(--glass-blur-md);
   box-shadow: inset 0 1px 0 rgba(255,255,255,0.12);
   transition: background 0.12s, border-color 0.12s, color 0.12s;
   white-space: nowrap;
@@ -999,8 +983,6 @@ body {
 .lib-result-card {
   background: rgba(255,255,255,0.05); border: 1px solid var(--border);
   border-radius: var(--radius); padding: 14px; cursor: pointer;
-  backdrop-filter: var(--glass-blur-md);
-  -webkit-backdrop-filter: var(--glass-blur-md);
   box-shadow: inset 0 1px 0 rgba(255,255,255,0.14);
   transition: background .15s, border-color .15s; position: relative;
 }
@@ -1108,7 +1090,7 @@ body {
 
 /* 選択動画モーダル */
 .lib-selected-list { display: flex; flex-direction: column; gap: 6px; max-height: 420px; overflow-y: auto; }
-.lib-selected-row { display: flex; align-items: center; gap: 8px; padding: 8px 10px; background: rgba(255,255,255,0.05); border-radius: 6px; border: 1px solid var(--border); backdrop-filter: var(--glass-blur-md); -webkit-backdrop-filter: var(--glass-blur-md); box-shadow: inset 0 1px 0 rgba(255,255,255,0.12); }
+.lib-selected-row { display: flex; align-items: center; gap: 8px; padding: 8px 10px; background: rgba(255,255,255,0.05); border-radius: 6px; border: 1px solid var(--border); box-shadow: inset 0 1px 0 rgba(255,255,255,0.12); }
 .lib-sel-ch { flex-shrink: 0; font-size: 11px; }
 .lib-sel-title { flex: 1; font-size: 13px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
 .lib-chat-ctx-clickable { cursor: pointer; text-decoration: underline dotted; }
@@ -1124,7 +1106,4 @@ body {
 /* ── Liquid Glass: backdrop-filter フォールバック ── */
 @supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
   .card, .modal-box { background: rgba(24,24,31,0.92); }
-  .video-card, .stat-item, .channel-item, .lib-result-card, .process-tab, .lib-selected-row, .video-more {
-    background: rgba(255,255,255,0.07);
-  }
 }
