@@ -352,7 +352,7 @@ body {
 .status-script {
   font-size: 15px;
   font-weight: 600;
-  color: var(--text);
+  color: var(--blue);
 }
 .status-session {
   font-size: 12px;
@@ -422,6 +422,11 @@ body {
 }
 .status-stats-card {
   max-height: 520px;
+  display: flex;
+  flex-direction: column;
+}
+.status-stats-card #status-stats {
+  flex: 1;
   overflow-y: auto;
   -webkit-mask-image: linear-gradient(to bottom, transparent 0, #000 14px, #000 calc(100% - 14px), transparent 100%);
           mask-image: linear-gradient(to bottom, transparent 0, #000 14px, #000 calc(100% - 14px), transparent 100%);
