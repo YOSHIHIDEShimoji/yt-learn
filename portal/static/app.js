@@ -415,7 +415,7 @@ document.addEventListener("DOMContentLoaded", () => {
         <div class="stat-item stat-clickable" onclick="showQueueFiles()" title="キュー一覧を表示">
           <span class="stat-label">queue ↗</span><span class="stat-val">${d.queue_count}</span>
         </div>
-        ${logStat("done", "done", "stat-green", d.done_count)}
+        ${logStat("done", "done", "stat-green", d.done_videos?.length || d.done_count)}
         ${logStat("warn", "warn", "stat-warn", d.warn_count)}
         ${logStat("error", "error", "stat-err", d.error_count)}
         ${logStat("rate-limit", "rate-limit", "", d.rate_limit_count)}
@@ -521,7 +521,18 @@ document.addEventListener("DOMContentLoaded", () => {
       allLines.forEach((line, i) => { if (line.includes(tag)) matchIndices.push(i); });
 
       countEl.textContent = `${matchIndices.length} 件`;
-      if (!matchIndices.length) { content.textContent = "該当行なし"; return; }
+      if (!matchIndices.length) {
+        // drain-queue は [done] を出さないので done_videos リストで代替
+        if (filterType === "done" && _statusData?.done_videos?.length) {
+          countEl.textContent = `${_statusData.done_videos.length} 件`;
+          content.textContent = _statusData.done_videos
+            .map(v => `${v.channel ? v.channel + " / " : ""}${v.title}`)
+            .join("\n");
+          return;
+        }
+        content.textContent = "該当行なし";
+        return;
+      }
 
       // ±10行コンテキスト、重複ウィンドウをマージ
       const CONTEXT = 10;
