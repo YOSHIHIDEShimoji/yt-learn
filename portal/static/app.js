@@ -222,7 +222,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
     // タブ行を更新（既存のタブ行があれば差し替え）
     let tabsRow = headerEl.querySelector(".process-tabs");
-    if (!procs || procs.length === 0) {
+    if (!procs || procs.length <= 1) {
       if (tabsRow) tabsRow.remove();
       return;
     }
