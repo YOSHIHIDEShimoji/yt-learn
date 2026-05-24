@@ -384,6 +384,14 @@ body {
   transition: background 0.12s;
 }
 .video-card:hover { background: rgba(255,255,255,0.085); }
+.video-card-lib {
+  cursor: pointer;
+  transition: background 0.12s, border-color 0.12s;
+}
+.video-card-lib:hover {
+  background: var(--blue-dim);
+  border-color: rgba(10,132,255,0.35);
+}
 .video-info { min-width: 0; flex: 1; }
 .video-title {
   font-size: 12.5px;

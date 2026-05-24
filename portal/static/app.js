@@ -387,13 +387,15 @@ document.addEventListener("DOMContentLoaded", () => {
     if (d.done_videos && d.done_videos.length) {
       d.done_videos.forEach((v, i) => {
         cards.push(`
-          <div class="video-card" data-idx="${i}">
+          <div class="video-card video-card-lib" data-idx="${i}"
+               data-channel="${esc(v.channel)}" data-title="${esc(v.title)}"
+               onclick="openVideoInLibrary(this)" title="LIBRARY で開く">
             <span class="badge badge-green" style="flex-shrink:0">done</span>
             <div class="video-info">
               <div class="video-title">${esc(v.title)}</div>
               <div class="video-channel">${esc(v.channel)}</div>
             </div>
-            ${v.drive_url ? `<a class="channel-link" href="${esc(v.drive_url)}" target="_blank" rel="noopener" style="flex-shrink:0">↗ Drive</a>` : ""}
+            ${v.drive_url ? `<a class="channel-link" href="${esc(v.drive_url)}" target="_blank" rel="noopener" style="flex-shrink:0" onclick="event.stopPropagation()">↗ Drive</a>` : ""}
           </div>`);
       });
     } else if (!d.running_video) {
@@ -445,6 +447,13 @@ document.addEventListener("DOMContentLoaded", () => {
       if (el) el.innerHTML = placeholder("⏳", "更新中…");
     });
     loadStatus();
+  };
+
+  window.openVideoInLibrary = function(el) {
+    const channel = el.dataset.channel;
+    const title   = el.dataset.title;
+    switchTab("library");
+    openLibViewer(`transcripts/${channel}/${title}.md`);
   };
 
   // ── STATUS: ジョブ停止 ───────────────────────────────────
