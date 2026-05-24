@@ -23,7 +23,6 @@ COOKIES_FILE = BASE_DIR / "cookies.txt"
 WHISPER_MODEL = "large-v3"
 WHISPER_CLI = Path.home() / "my-projects/whisper.cpp/build/bin/whisper-cli"
 WHISPER_MODELS_DIR = Path.home() / "my-projects/whisper.cpp/models"
-GEMINI_MODEL = "gemini-2.5-flash-lite"
 OLLAMA_GENERATE_PATH = "/api/generate"
 RCLONE_REMOTE = "gdrive"
 RCLONE_DEST = f"{RCLONE_REMOTE}:yt-learn"
@@ -750,13 +749,12 @@ def _call_ollama(prompt: str, base_url: str, model: str) -> str | None:
     return (data.get("response") or "").strip() or None
 
 
-def _generate_core_summary(title: str, text: str) -> tuple[str, str] | tuple[None, None]:
+def _generate_core_summary(title: str, text: str) -> tuple[str, str]:
     local_url = os.environ.get("LOCAL_LLM_URL")
     local_model = os.environ.get("LOCAL_LLM_MODEL", "qwen2.5:14b")
-    api_key = os.environ.get("GEMINI_API_KEY")
 
-    if not local_url and not api_key:
-        return None, None
+    if not local_url:
+        raise RuntimeError("LOCAL_LLM_URL が未設定です")
 
     prompt = f"""\
 以下はYouTube動画の文字起こしです。
@@ -779,25 +777,10 @@ def _generate_core_summary(title: str, text: str) -> tuple[str, str] | tuple[Non
 
 出力形式: 「## ポイント」という見出しの後に「- 」始まりの箇条書きのみ。それ以外の文章は一切不要。"""
 
-    if local_url:
-        try:
-            result = _call_ollama(prompt, local_url, local_model)
-            if result:
-                return result, f"Ollama({local_model})"
-            _err("[summary] Ollama レスポンスが空 → Geminiにフォールバック")
-        except Exception as e:
-            _err(f"[summary] Ollama接続失敗 ({e}) → Geminiにフォールバック")
-
-    if not api_key:
-        return None, None
-    try:
-        from google import genai
-        client = genai.Client(api_key=api_key)
-        response = client.models.generate_content(model=GEMINI_MODEL, contents=prompt)
-        return (response.text or "").strip(), "Gemini"
-    except Exception:
-        _err("[summary] ポイント挿入失敗")
-        return None, None
+    result = _call_ollama(prompt, local_url, local_model)
+    if not result:
+        raise RuntimeError("Ollama レスポンスが空でした")
+    return result, f"Ollama({local_model})"
 
 
 def _inject_core_summary(md_path: Path) -> None:
@@ -809,8 +792,6 @@ def _inject_core_summary(md_path: Path) -> None:
         title=re.search(r"^# (.+)", content, re.MULTILINE).group(1) if re.search(r"^# (.+)", content, re.MULTILINE) else "",
         text=raw_transcript,
     )
-    if not summary:
-        return
     # 「処理日時: ...」行の直後、「---」の直前に挿入
     updated = re.sub(
         r"(処理日時: .+\n)(\n---\n)",

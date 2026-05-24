@@ -22,7 +22,6 @@ TRANSCRIPTS_DIR = BASE_DIR / "transcripts"
 SUMMARIES_DIR = BASE_DIR / "summaries"
 CHANNELS_FILE = BASE_DIR / "channels.txt"
 
-GEMINI_MODEL = "gemini-2.5-flash-lite"
 OLLAMA_GENERATE_PATH = "/api/generate"
 RCLONE_REMOTE = "gdrive"
 RCLONE_DEST = f"{RCLONE_REMOTE}:yt-learn"
@@ -160,10 +159,9 @@ def _copy_file_to_drive(file_path: Path) -> None:
 
 # ── チャンネルサマリー生成 ────────────────────────────────────────────────────
 
-def _update_summary(channel_name: str, transcript: str, video_title: str, api_key: str, video_count: int) -> None:
+def _update_summary(channel_name: str, transcript: str, video_title: str, video_count: int) -> None:
     local_url = os.environ.get("LOCAL_LLM_URL")
     local_model = os.environ.get("LOCAL_LLM_MODEL", "qwen2.5:14b")
-    from google import genai
 
     SUMMARIES_DIR.mkdir(parents=True, exist_ok=True)
     summary_path = SUMMARIES_DIR / f"{_sanitize(channel_name)}.md"
@@ -204,24 +202,13 @@ def _update_summary(channel_name: str, transcript: str, video_title: str, api_ke
 動画数: {video_count}
 """
 
-    result = None
+    if not local_url:
+        raise RuntimeError("LOCAL_LLM_URL が未設定です")
 
-    if local_url:
-        try:
-            result = _call_ollama(prompt, local_url, local_model)
-            if result:
-                _err(f"  → Ollama({local_model}) でサマリー生成")
-            else:
-                _err("  → Ollama レスポンスが空 → Geminiにフォールバック")
-        except Exception as e:
-            _err(f"  → Ollama接続失敗 ({e}) → Geminiにフォールバック")
-
+    result = _call_ollama(prompt, local_url, local_model)
     if not result:
-        if not api_key:
-            raise RuntimeError("GEMINI_API_KEY が未設定でOllamaも利用できません")
-        client = genai.Client(api_key=api_key)
-        response = client.models.generate_content(model=GEMINI_MODEL, contents=prompt)
-        result = response.text.strip()
+        raise RuntimeError("Ollama レスポンスが空でした")
+    _err(f"  → Ollama({local_model}) でサマリー生成")
 
     summary_path.write_text(result + "\n", encoding="utf-8")
     _err(f"  → サマリー更新: {summary_path.name}")
@@ -229,7 +216,7 @@ def _update_summary(channel_name: str, transcript: str, video_title: str, api_ke
 
 # ── チャンネル処理 ────────────────────────────────────────────────────────────
 
-def _summarize_channel(channel_name: str, api_key: str, force: bool = False, threshold: int = 0) -> None:
+def _summarize_channel(channel_name: str, force: bool = False, threshold: int = 0) -> None:
     channel_dir = TRANSCRIPTS_DIR / _sanitize(channel_name)
     if not channel_dir.exists():
         _err(f"[skip] トランスクリプトなし: {channel_dir}")
@@ -266,7 +253,7 @@ def _summarize_channel(channel_name: str, api_key: str, force: bool = False, thr
                 _err(f"  [skip] ## ポイント なし: {t.stem}")
                 continue
             video_count = len(processed) + i
-            _update_summary(channel_name, points, t.stem, api_key, video_count)
+            _update_summary(channel_name, points, t.stem, video_count)
             _copy_file_to_drive(summary_path)
             processed.add(t.name)
             _save_processed(channel_name, processed)
@@ -283,32 +270,29 @@ def main() -> None:
     _setup_log()
     _load_env()
 
-    api_key = os.environ.get("GEMINI_API_KEY")
     local_url = os.environ.get("LOCAL_LLM_URL")
-    if not api_key and not local_url:
-        _err("[error] GEMINI_API_KEY または LOCAL_LLM_URL が設定されていません")
-        _err("  .env ファイルに GEMINI_API_KEY または LOCAL_LLM_URL を設定してください")
+    if not local_url:
+        _err("[error] LOCAL_LLM_URL が設定されていません")
+        _err("  .env ファイルに LOCAL_LLM_URL を設定してください")
         sys.exit(1)
 
     parser = argparse.ArgumentParser(
-        description="チャンネルのサマリーをGeminiで生成・更新する",
+        description="チャンネルのサマリーをローカルLLM(Ollama)で生成・更新する",
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""\
-ローカルLLM（Ollama）を使う場合:
-  .env に LOCAL_LLM_URL と LOCAL_LLM_MODEL を設定する。
-  Mac: LOCAL_LLM_URL=http://<Windows-TailscaleIP>:11434（トンネル不要）
-  WSL: LOCAL_LLM_URL=http://localhost:11434（トンネル不要）
-  未設定または接続失敗時は Gemini にフォールバック。
+.env に LOCAL_LLM_URL と LOCAL_LLM_MODEL を設定する。
+  Mac: LOCAL_LLM_URL=http://<Windows-TailscaleIP>:11434
+  WSL: LOCAL_LLM_URL=http://localhost:11434
 
 examples:
   # 特定チャンネルのサマリー更新
-  python summarize.py "メンタリストDAIGO" --threshold 20
+  python src/summarize.py "メンタリストDAIGO" --threshold 20
 
   # 全チャンネル一括（未処理20本未満はスキップ）
-  python summarize.py all --threshold 20
+  python src/summarize.py all --threshold 20
 
   # 処理済みを無視して全件再生成
-  python summarize.py "メンタリストDAIGO" --force
+  python src/summarize.py "メンタリストDAIGO" --force
 """,
     )
     parser.add_argument(
@@ -332,9 +316,9 @@ examples:
             _err("[warn] channels.txt にチャンネルが登録されていません")
             sys.exit(0)
         for name in channels:
-            _summarize_channel(name, api_key, args.force, args.threshold)
+            _summarize_channel(name, args.force, args.threshold)
     else:
-        _summarize_channel(args.target, api_key, args.force, args.threshold)
+        _summarize_channel(args.target, args.force, args.threshold)
 
 
 if __name__ == "__main__":

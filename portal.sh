@@ -34,7 +34,7 @@ if [[ "$(uname)" == "Darwin" ]]; then
     fi
     echo "[portal] Mac ローカルサーバーを起動します (port ${PORT})"
     (sleep 2 && open "http://localhost:${PORT}") &
-    exec uvicorn portal.main:app --host 127.0.0.1 --port "${PORT}" --reload
+    exec uvicorn portal.main:app --host 127.0.0.1 --port "${PORT}" --reload --reload-dir portal
   fi
 
   # WSL の IP を取得（Tailscale ミラーネットワーク）
@@ -47,17 +47,25 @@ if [[ "$(uname)" == "Darwin" ]]; then
 
   # WSL 側でサーバーを常に最新コードで再起動
   echo "[portal] WSL: tmux セッション '$TMUX_SESSION' を再起動中…"
-  ssh win "wsl -- bash -c 'cd ~/my-projects/${PROJECT} && tmux kill-session -t ${TMUX_SESSION} 2>/dev/null; tmux new-session -d -s ${TMUX_SESSION} ./src/portal-server.sh'" 2>/dev/null
+  if ! ssh win "wsl -- bash -c 'cd ~/my-projects/${PROJECT} && tmux kill-session -t ${TMUX_SESSION} 2>/dev/null; tmux new-session -d -s ${TMUX_SESSION} ./src/portal-server.sh'"; then
+    echo "[portal] エラー: WSL サーバー起動に失敗しました"
+    exit 1
+  fi
 
   # サーバー起動待機（最大 15 秒）
   echo "[portal] サーバー起動待機中…"
+  _server_ready=false
   for i in $(seq 1 15); do
     if curl -s --max-time 1 "http://${WSL_IP}:${PORT}/" > /dev/null 2>&1; then
       echo "[portal] サーバー起動確認 (${i}秒)"
+      _server_ready=true
       break
     fi
     sleep 1
   done
+  if [[ "$_server_ready" == false ]]; then
+    echo "[portal] 警告: サーバー応答なし — ssh win で tmux ${TMUX_SESSION} のログを確認してください"
+  fi
 
   echo "[portal] ブラウザを開きます: http://${WSL_IP}:${PORT}"
   open "http://${WSL_IP}:${PORT}"
@@ -94,7 +102,7 @@ elif grep -qi microsoft /proc/version 2>/dev/null; then
   # Windows ブラウザを非同期で開く（起動後3秒後）
   (sleep 3 && open_browser "http://localhost:${PORT}") &
 
-  exec uvicorn portal.main:app --host 0.0.0.0 --port "${PORT}" --reload
+  exec uvicorn portal.main:app --host 0.0.0.0 --port "${PORT}" --reload --reload-dir portal
 
 # ──────────────────────────────────────────
 # その他 Linux
@@ -102,5 +110,5 @@ elif grep -qi microsoft /proc/version 2>/dev/null; then
 else
   echo "[portal] Linux モード"
   cd "$(dirname "$(realpath "$0")")"
-  exec uvicorn portal.main:app --host 0.0.0.0 --port "${PORT}" --reload
+  exec uvicorn portal.main:app --host 0.0.0.0 --port "${PORT}" --reload --reload-dir portal
 fi
