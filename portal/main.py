@@ -249,20 +249,20 @@ async def _await_and_close(proc, f, job_id: str | None = None, append_session_en
 _JOB_LABELS: dict[str, str] = {
     "autonomous": "autonomous.sh",
     "process":    "URL処理",
-    "summarize":  "summarize",
+    "summarize":  "summarize.py",
     "sync":       "Drive Sync",
-    "transcribe": "transcribe",
+    "transcribe": "transcribe.py",
     "loop":       "loop_transcribe",
     "benchmark":  "benchmark",
 }
 
 # ── 手動起動プロセスの自動検出パターン（WSL 専用）─────────────
 _AUTO_DETECT_PATTERNS: list[tuple[str, str]] = [
+    (r"autonomous\.sh\b",      "autonomous"),   # tmux 外手動起動も検出
     (r"transcribe\.py\b",      "transcribe"),
     (r"summarize\.py\b",       "summarize"),
     (r"loop_transcribe\.sh\b", "loop"),
     (r"benchmark\.sh\b",       "benchmark"),
-    # autonomous.sh は tmux セッション検出で管理するためここには含めない
 ]
 
 

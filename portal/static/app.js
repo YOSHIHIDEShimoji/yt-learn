@@ -30,9 +30,9 @@ document.addEventListener("DOMContentLoaded", () => {
   const SESSION_TYPE_LABELS = {
     autonomous: "autonomous.sh",
     process:    "URL処理",
-    summarize:  "Summarize",
+    summarize:  "summarize.py",
     sync:       "Drive Sync",
-    transcribe: "文字起こし",
+    transcribe: "transcribe.py",
     idle:       "idle",
   };
 
@@ -423,7 +423,7 @@ document.addEventListener("DOMContentLoaded", () => {
       </div>
       <div style="margin-top:12px;display:flex;justify-content:space-between;align-items:center;font-size:11px;color:var(--text-faint)">
         <span title="${esc(d.log_file_path || "")}">ログ: ${esc(d.log_file || "—")}</span>
-        ${d.log_file_path ? `<button class="refresh-btn" style="font-size:11px;padding:2px 8px" data-log-path="${esc(d.log_file_path)}" onclick="openLogByPath(this.dataset.logPath)">ログを見る →</button>` : ""}
+        ${d.log_file_path ? `<button class="refresh-btn" style="font-size:11px;padding:2px 8px" data-log-path="${esc(d.log_file_path)}" onclick="openLogByPath(this.dataset.logPath)">ログを開く →</button>` : ""}
       </div>`;
   }
 
@@ -922,7 +922,7 @@ document.addEventListener("DOMContentLoaded", () => {
       if (running) {
         badge.className   = "badge badge-green";
         badge.textContent = session ? `running: ${session}` : "running";
-        if (startBtn) startBtn.style.display = "none";
+        if (startBtn) { startBtn.style.display = ""; startBtn.disabled = true; startBtn.textContent = "already running"; }
         if (stopBtn)  stopBtn.style.display  = "";
         if (logBtn) {
           if (log_file) { logBtn.dataset.logPath = log_file; logBtn.style.display = ""; }

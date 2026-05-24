@@ -406,17 +406,15 @@ body {
   max-height: 520px;
 }
 
-/* ヘッダー行を Aurora が透けるガラス面として強調 */
+/* sticky タイトル行: カード背景と同系のガラス感に統一 */
 .status-videos-card .card-title-row,
 .logs-grid .card .card-title-row {
   position: sticky;
   top: 0;
   z-index: 1;
-  /* backdrop-filter の代わりにカードと同系の半透明ダークを使い aurora を薄く透過させる。
-     1要素だけなので blur(8px) のコストは許容範囲。 */
-  backdrop-filter: blur(8px);
-  -webkit-backdrop-filter: blur(8px);
-  background: rgba(14, 14, 20, 0.80);
+  backdrop-filter: blur(12px) saturate(1.4);
+  -webkit-backdrop-filter: blur(12px) saturate(1.4);
+  background: rgba(255, 255, 255, 0.06);
   margin: -20px -20px 16px;
   padding: 14px 20px;
   border-bottom: 1px solid rgba(255,255,255,0.08);
