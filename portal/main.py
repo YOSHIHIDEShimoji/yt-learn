@@ -631,7 +631,18 @@ async def _build_status_data(log_path: str | None = None) -> dict:
                 target_log = candidate
                 break
 
-    # フォールバック: ログディレクトリから最新ファイルを探す
+    # アクティブプロセスがあるのにログが見つからない → 古いログを混入させず running を返す
+    if target_log is None and processes:
+        proc_types = [p["type"] for p in processes]
+        if   "autonomous"  in proc_types: st = "autonomous"
+        elif "process"     in proc_types: st = "process"
+        elif "summarize"   in proc_types: st = "summarize"
+        elif "sync"        in proc_types: st = "sync"
+        elif "transcribe"  in proc_types: st = "transcribe"
+        else:                             st = "running"
+        return {**_idle_base, "status": "running", "session_type": st, "error": None}
+
+    # フォールバック: ログディレクトリから最新ファイルを探す（アクティブプロセスなし時のみ）
     if target_log is None:
         for log_dir in [ROOT / "logs", ROOT / "log"]:
             if not log_dir.exists():
