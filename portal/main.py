@@ -291,14 +291,18 @@ def _find_log_for_pid(pid: int, job_type: str) -> str:
                 pass
     except OSError:
         pass
-    # フォールバック: job_type 専用ディレクトリの最新「live」ログ
+    # フォールバック: job_type 専用ディレクトリ → logs/autonomous の順で最新「live」ログを探す
     # プロセス起動後に更新されたもの（[session-end] なし）のみ返す
+    # drain-queue など autonomous.sh 子プロセスは stdout が tee 経由のため fd スキャンでは
+    # ログファイルに辿り着けない。autonomous ログをフォールバックとして検出する。
     try:
         proc_start = Path(f"/proc/{pid}").stat().st_mtime
     except OSError:
         proc_start = 0.0
-    d = ROOT / f"logs/{job_type}"
-    if d.exists():
+    for log_subdir in [f"logs/{job_type}", "logs/autonomous"]:
+        d = ROOT / log_subdir
+        if not d.exists():
+            continue
         logs = sorted(d.glob("*.log"), key=lambda x: x.stat().st_mtime, reverse=True)
         for log in logs:
             try:

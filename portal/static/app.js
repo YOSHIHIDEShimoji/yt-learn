@@ -402,11 +402,12 @@ document.addEventListener("DOMContentLoaded", () => {
     videosEl.innerHTML = cards.join("");
 
     const hasLog = !!d.log_file_path;
-    const logStat = (type, label, valCls, val) => hasLog
-      ? `<div class="stat-item stat-clickable" onclick="showLogFilter('${type}')" title="ログでフィルタ">
+    // count > 0 なら押せる（ログがなくても done_videos リストを表示する）
+    const logStat = (type, label, valCls, val) => val > 0
+      ? `<div class="stat-item stat-clickable" onclick="showLogFilter('${type}')" title="${hasLog ? 'ログでフィルタ' : '処理済み一覧を表示'}">
           <span class="stat-label">${label} ↗</span><span class="stat-val ${valCls}">${val}</span>
         </div>`
-      : `<div class="stat-item stat-nolog" title="ログファイルがないためフィルタできません">
+      : `<div class="stat-item stat-nolog" title="0件">
           <span class="stat-label">${label}</span><span class="stat-val ${valCls}">${val}</span>
         </div>`;
     statsEl.innerHTML = `
@@ -489,10 +490,17 @@ document.addEventListener("DOMContentLoaded", () => {
     if (!modal) return;
 
     if (!_activeLogPath) {
+      // ログなしでも done_videos がある場合は処理済み動画リストを表示
+      const videos = filterType === "done" && _statusData?.done_videos?.length
+        ? _statusData.done_videos : [];
       titleEl.textContent = filterType;
-      countEl.textContent = "";
-      content.textContent = "このセッションにはログファイルがありません";
+      countEl.textContent = videos.length ? `${videos.length} 件` : "";
       if (openBtn) openBtn.style.display = "none";
+      if (videos.length) {
+        content.textContent = videos.map(v => `${v.channel ? v.channel + " / " : ""}${v.title}`).join("\n");
+      } else {
+        content.textContent = "このセッションにはログファイルがありません";
+      }
       modal.style.display = "flex";
       return;
     }

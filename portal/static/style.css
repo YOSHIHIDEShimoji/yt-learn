@@ -412,9 +412,11 @@ body {
   position: sticky;
   top: 0;
   z-index: 1;
-  /* sticky 行のスクロール追従時に backdrop-filter が再計算され重いため不使用。
-     カード地色に近い不透明な面でスクロール内容を隠す。 */
-  background: #16161d;
+  /* backdrop-filter の代わりにカードと同系の半透明ダークを使い aurora を薄く透過させる。
+     1要素だけなので blur(8px) のコストは許容範囲。 */
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  background: rgba(14, 14, 20, 0.80);
   margin: -20px -20px 16px;
   padding: 14px 20px;
   border-bottom: 1px solid rgba(255,255,255,0.08);
