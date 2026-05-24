@@ -291,12 +291,19 @@ def _find_log_for_pid(pid: int, job_type: str) -> str:
                 pass
     except OSError:
         pass
-    # フォールバック: job_type 専用ディレクトリの最新「live」ログ（[session-end] なし）のみ
+    # フォールバック: job_type 専用ディレクトリの最新「live」ログ
+    # プロセス起動後に更新されたもの（[session-end] なし）のみ返す
+    try:
+        proc_start = Path(f"/proc/{pid}").stat().st_mtime
+    except OSError:
+        proc_start = 0.0
     d = ROOT / f"logs/{job_type}"
     if d.exists():
         logs = sorted(d.glob("*.log"), key=lambda x: x.stat().st_mtime, reverse=True)
         for log in logs:
             try:
+                if log.stat().st_mtime < proc_start:
+                    break  # 以降はすべて古い → 打ち切り
                 if "[session-end]" not in log.read_text(encoding="utf-8", errors="replace"):
                     return str(log.relative_to(ROOT))
             except OSError:
