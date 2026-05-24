@@ -273,8 +273,20 @@ def _find_log_for_pid(pid: int, job_type: str) -> str:
         for fd_path in Path(f"/proc/{pid}/fd").iterdir():
             try:
                 target = os.readlink(str(fd_path))
-                if target.endswith(".log") and target.startswith(root_str):
-                    return target[len(root_str):].lstrip("/")
+                if not (target.endswith(".log") and target.startswith(root_str)):
+                    continue
+                # 読み取り専用(O_RDONLY=0)は除外 — 古いログを「確認用」に開いている場合を弾く
+                try:
+                    fdinfo = Path(f"/proc/{pid}/fdinfo/{fd_path.name}").read_text()
+                    flags_line = next(
+                        (l for l in fdinfo.splitlines() if l.startswith("flags:")), ""
+                    )
+                    flags = int(flags_line.split()[-1], 8) if flags_line else 0
+                    if (flags & 0o3) == 0:  # O_RDONLY
+                        continue
+                except OSError:
+                    pass
+                return target[len(root_str):].lstrip("/")
             except OSError:
                 pass
     except OSError:
