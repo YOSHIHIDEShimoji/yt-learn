@@ -1213,7 +1213,11 @@ document.addEventListener("DOMContentLoaded", () => {
   // ── Library: 初期化 ──────────────────────────────────────────
   async function initLibrary() {
     const fab = document.getElementById("lib-chat-fab");
-    if (!_isWsl) return;
+    if (!_isWsl) {
+      const warn = document.getElementById("lib-wsl-warn");
+      if (warn) warn.style.display = "block";
+      return;
+    }
     if (fab && !_libChatPanelOpen) fab.style.display = "";
     await loadLibraryChannels();
     _updateGpuWarn();
