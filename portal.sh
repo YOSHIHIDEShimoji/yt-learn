@@ -91,9 +91,10 @@ elif grep -qi microsoft /proc/version 2>/dev/null; then
   }
 
   # 旧サーバーを常に停止して最新コードで再起動
-  if curl -s --max-time 1 "http://localhost:${PORT}/" > /dev/null 2>&1; then
-    echo "[portal] 旧サーバーを停止して最新コードで再起動します"
-    kill "$(lsof -ti :"${PORT}" 2>/dev/null)" 2>/dev/null || true
+  OLD_PID=$(lsof -ti :"${PORT}" 2>/dev/null || true)
+  if [[ -n "$OLD_PID" ]]; then
+    echo "[portal] 旧サーバー (PID ${OLD_PID}) を停止して再起動します"
+    kill "$OLD_PID" 2>/dev/null || true
     sleep 1
   fi
 

@@ -8,4 +8,13 @@ export PATH="$PYENV_ROOT/bin:$PATH"
 eval "$(pyenv init -)"
 
 cd "$(dirname "$(dirname "$(realpath "$0")")")"
+
+# Kill any existing process on port 8080 before starting
+OLD_PID=$(lsof -ti :8080 2>/dev/null || true)
+if [[ -n "$OLD_PID" ]]; then
+  echo "[portal-server] ポート 8080 の既存プロセス (PID ${OLD_PID}) を終了します"
+  kill "$OLD_PID" 2>/dev/null || true
+  sleep 1
+fi
+
 exec uvicorn portal.main:app --host 0.0.0.0 --port 8080
