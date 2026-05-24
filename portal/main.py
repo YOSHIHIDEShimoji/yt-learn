@@ -606,6 +606,20 @@ async def _build_status_data(log_path: str | None = None) -> dict:
         if (str(candidate).startswith(str(ROOT.resolve()))
                 and candidate.exists() and candidate.suffix == ".log"):
             target_log = candidate
+
+    # アクティブプロセスがある場合はそのプロセスのログを優先（rglob より確実）
+    if target_log is None:
+        for proc in processes:
+            lf = proc.get("log_file", "")
+            if not lf:
+                continue
+            candidate = (ROOT / lf).resolve()
+            if (str(candidate).startswith(str(ROOT.resolve()))
+                    and candidate.exists() and candidate.suffix == ".log"):
+                target_log = candidate
+                break
+
+    # フォールバック: ログディレクトリから最新ファイルを探す
     if target_log is None:
         for log_dir in [ROOT / "logs", ROOT / "log"]:
             if not log_dir.exists():
