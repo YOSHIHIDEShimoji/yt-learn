@@ -425,6 +425,7 @@ class TestProcessUrl:
         self._setup(tmp_path, monkeypatch)
         with patch.object(transcribe, "_download_audio", return_value="/tmp/audio.wav"), \
              patch.object(transcribe, "_transcribe", return_value="文字起こし結果"), \
+             patch.object(transcribe, "_inject_core_summary"), \
              patch("tempfile.mkdtemp", return_value="/tmp/fake"), \
              patch("shutil.rmtree"):
             result = transcribe._process_url("https://youtu.be/newvid", "CH", title="新しい動画")
@@ -437,6 +438,7 @@ class TestProcessUrl:
         self._setup(tmp_path, monkeypatch)
         with patch.object(transcribe, "_download_audio", return_value="/tmp/audio.wav"), \
              patch.object(transcribe, "_transcribe", return_value="text"), \
+             patch.object(transcribe, "_inject_core_summary"), \
              patch("tempfile.mkdtemp", return_value="/tmp/fake"), \
              patch("shutil.rmtree"):
             transcribe._process_url("https://youtu.be/newvid", "CH", title="動画タイトル")
@@ -451,6 +453,7 @@ class TestProcessUrl:
         custom_dir = tmp_path / "custom_output"
         with patch.object(transcribe, "_download_audio", return_value="/tmp/audio.wav"), \
              patch.object(transcribe, "_transcribe", return_value="text"), \
+             patch.object(transcribe, "_inject_core_summary"), \
              patch("tempfile.mkdtemp", return_value="/tmp/fake"), \
              patch("shutil.rmtree"):
             transcribe._process_url("https://youtu.be/vid1", "CH", title="動画", output_dir=custom_dir)
@@ -462,6 +465,7 @@ class TestProcessUrl:
         with patch.object(transcribe, "_get_video_title", return_value="取得したタイトル") as mock_title, \
              patch.object(transcribe, "_download_audio", return_value="/tmp/audio.wav"), \
              patch.object(transcribe, "_transcribe", return_value="text"), \
+             patch.object(transcribe, "_inject_core_summary"), \
              patch("tempfile.mkdtemp", return_value="/tmp/fake"), \
              patch("shutil.rmtree"):
             transcribe._process_url("https://youtu.be/xxx", "CH")
@@ -659,59 +663,38 @@ class TestCallOllama:
         assert "100.85.4.93:11434" in captured["url"]
 
 
-# ── _generate_core_summary (Ollama統合) ──────────────────────────────────────
+# ── _generate_core_summary (Ollama専用) ──────────────────────────────────────
 
 class TestGenerateCoreSummaryOllama:
     def test_uses_ollama_when_local_url_set(self, monkeypatch):
         monkeypatch.setenv("LOCAL_LLM_URL", "http://localhost:11434")
         monkeypatch.setenv("LOCAL_LLM_MODEL", "qwen3.5:9b")
-        monkeypatch.delenv("GEMINI_API_KEY", raising=False)
         with patch.object(transcribe, "_call_ollama", return_value="## ポイント\n- テスト") as mock_ollama:
             text, backend = transcribe._generate_core_summary("タイトル", "本文")
         assert text == "## ポイント\n- テスト"
         assert "Ollama" in backend
         mock_ollama.assert_called_once()
 
-    def test_falls_back_to_gemini_on_ollama_failure(self, monkeypatch):
-        monkeypatch.setenv("LOCAL_LLM_URL", "http://localhost:11434")
-        monkeypatch.setenv("GEMINI_API_KEY", "dummy_key")
-        mock_gemini_resp = MagicMock()
-        mock_gemini_resp.text = "## ポイント\n- Gemini結果"
-        mock_genai = MagicMock()
-        mock_genai.Client.return_value.models.generate_content.return_value = mock_gemini_resp
-        with patch.object(transcribe, "_call_ollama", side_effect=ConnectionError("refused")), \
-             patch.dict("sys.modules", {"google.genai": mock_genai, "google": MagicMock(genai=mock_genai)}):
-            text, backend = transcribe._generate_core_summary("タイトル", "本文")
-        assert text == "## ポイント\n- Gemini結果"
-        assert backend == "Gemini"
-
-    def test_uses_ollama_regardless_of_platform(self, monkeypatch):
-        monkeypatch.setenv("LOCAL_LLM_URL", "http://localhost:11434")
-        monkeypatch.setenv("LOCAL_LLM_MODEL", "qwen3.5:9b")
-        monkeypatch.delenv("GEMINI_API_KEY", raising=False)
-        with patch.object(transcribe, "_call_ollama", return_value="## ポイント\n- Ollama結果") as mock_ollama:
-            text, backend = transcribe._generate_core_summary("タイトル", "本文")
-        mock_ollama.assert_called_once()
-        assert text == "## ポイント\n- Ollama結果"
-
-    def test_returns_none_when_both_unset(self, monkeypatch):
+    def test_raises_when_local_url_unset(self, monkeypatch):
         monkeypatch.delenv("LOCAL_LLM_URL", raising=False)
-        monkeypatch.delenv("GEMINI_API_KEY", raising=False)
-        text, backend = transcribe._generate_core_summary("タイトル", "本文")
-        assert text is None
-        assert backend is None
+        with pytest.raises(RuntimeError, match="LOCAL_LLM_URL"):
+            transcribe._generate_core_summary("タイトル", "本文")
+
+    def test_raises_on_ollama_failure(self, monkeypatch):
+        monkeypatch.setenv("LOCAL_LLM_URL", "http://localhost:11434")
+        with patch.object(transcribe, "_call_ollama", side_effect=ConnectionError("refused")):
+            with pytest.raises(ConnectionError):
+                transcribe._generate_core_summary("タイトル", "本文")
+
+    def test_raises_on_empty_ollama_response(self, monkeypatch):
+        monkeypatch.setenv("LOCAL_LLM_URL", "http://100.85.4.93:11434")
+        with patch.object(transcribe, "_call_ollama", return_value=None):
+            with pytest.raises(RuntimeError, match="空"):
+                transcribe._generate_core_summary("タイトル", "本文")
 
     def test_uses_custom_model_from_env(self, monkeypatch):
         monkeypatch.setenv("LOCAL_LLM_URL", "http://100.85.4.93:11434")
         monkeypatch.setenv("LOCAL_LLM_MODEL", "custom-model:latest")
-        monkeypatch.delenv("GEMINI_API_KEY", raising=False)
         with patch.object(transcribe, "_call_ollama", return_value="## ポイント\n- テスト") as mock_ollama:
             transcribe._generate_core_summary("タイトル", "本文")
         assert mock_ollama.call_args[0][2] == "custom-model:latest"
-
-    def test_ollama_empty_response_no_gemini_returns_none(self, monkeypatch):
-        monkeypatch.setenv("LOCAL_LLM_URL", "http://100.85.4.93:11434")
-        monkeypatch.delenv("GEMINI_API_KEY", raising=False)
-        with patch.object(transcribe, "_call_ollama", return_value=None):
-            text, backend = transcribe._generate_core_summary("タイトル", "本文")
-        assert text is None
