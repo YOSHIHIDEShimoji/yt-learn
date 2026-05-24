@@ -1288,6 +1288,64 @@ async def summarize_session(started: str = ""):
     })
 
 
+@app.get("/api/transcribe-session")
+async def transcribe_session(started: str = ""):
+    """ログなし transcribe / drain-queue プロセス用: transcripts/ の更新時刻から
+    今セッション処理済み動画を返す（drain-queue は stdout のみでログを残さないため）。"""
+    transcripts_dir = ROOT / "transcripts"
+    queue_dir = ROOT / "queue"
+    _audio_exts = {".m4a", ".webm", ".opus", ".mp4"}
+    queue_count = (
+        sum(1 for f in queue_dir.rglob("*") if f.is_file() and f.suffix in _audio_exts)
+        if queue_dir.exists() else 0
+    )
+    folder_url = _rclone_link_nonblocking("gdrive:yt-learn")
+    empty = {
+        "done_videos": [], "running_video": None, "done_count": 0,
+        "warn_count": 0, "error_count": 0, "rate_limit_count": 0,
+        "queue_count": queue_count, "phase": "transcribing", "status": "running",
+        "log_file": "(手動起動 — ログなし)", "log_file_path": "",
+        "drive_folder_url": folder_url,
+    }
+    if not transcripts_dir.exists():
+        return JSONResponse(empty)
+
+    start_ts = 0.0
+    if started:
+        try:
+            start_ts = datetime.strptime(started, "%Y-%m-%d %H:%M:%S").timestamp()
+        except ValueError:
+            pass
+
+    done: list[dict] = []
+    for ch_dir in transcripts_dir.iterdir():
+        if not ch_dir.is_dir():
+            continue
+        channel = ch_dir.name
+        url_map = _get_channel_drive_urls(channel)
+        for md in ch_dir.glob("*.md"):
+            if md.name.startswith("_"):
+                continue
+            try:
+                mtime = md.stat().st_mtime
+            except OSError:
+                continue
+            if start_ts and mtime < start_ts:
+                continue
+            done.append({
+                "title": md.stem, "channel": channel,
+                "drive_url": url_map.get(md.stem, ""), "_mtime": mtime,
+            })
+    done.sort(key=lambda v: v["_mtime"], reverse=True)
+    for v in done:
+        v.pop("_mtime", None)
+    return JSONResponse({
+        **empty,
+        "done_videos": done,
+        "done_count": len(done),
+    })
+
+
 # ── Phase 4: Library ヘルパー ─────────────────────────────────
 
 def _parse_transcript_meta(path: Path) -> dict:

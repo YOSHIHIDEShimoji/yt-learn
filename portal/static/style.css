@@ -37,7 +37,8 @@
     radial-gradient(46vw 46vw at 70% 88%, rgba(140,90,255,0.22), transparent 62%),
     radial-gradient(40vw 40vw at 25% 80%, rgba(10,132,255,0.18), transparent 60%),
     radial-gradient(60vw 45vw at 50% 42%, rgba(10,132,255,0.12), transparent 65%);
-  filter: blur(8px);
+  /* filter: blur(...) は全画面 GPU フィルタパスになり高負荷なので使わない。
+     放射グラデーション自体が十分柔らかいため不要。 */
 }
 
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
@@ -59,9 +60,9 @@ body {
   display: flex;
   align-items: center;
   padding: 0 24px;
-  background: rgba(10, 10, 15, 0.7);
-  backdrop-filter: var(--glass-blur);
-  -webkit-backdrop-filter: var(--glass-blur);
+  background: rgba(10, 10, 15, 0.88);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
   border-bottom: 1px solid var(--border);
   z-index: 100;
 }
@@ -94,9 +95,9 @@ body {
   align-items: center;
   padding: 0 16px;
   gap: 4px;
-  background: rgba(14, 14, 20, 0.50);
-  backdrop-filter: blur(48px) saturate(2.8) brightness(1.08);
-  -webkit-backdrop-filter: blur(48px) saturate(2.8) brightness(1.08);
+  background: rgba(14, 14, 20, 0.82);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
   border-bottom: 1px solid rgba(255, 255, 255, 0.07);
   /* 上端スペキュラーハイライト + 深度シャドウ */
   box-shadow:
@@ -184,11 +185,11 @@ body {
 
 /* ── Glass Card ── */
 .card {
-  background: var(--glass-bg);
+  /* backdrop-filter は常時表示の大面積要素では GPU を焼くため不使用。
+     やや不透明なダーク面で擬似ガラスを表現する。 */
+  background: rgba(255, 255, 255, 0.05);
   border: 1px solid var(--border);
   border-radius: var(--radius);
-  backdrop-filter: var(--glass-blur-lg);
-  -webkit-backdrop-filter: var(--glass-blur-lg);
   box-shadow: var(--glass-highlight), var(--glass-edge), var(--glass-depth);
   padding: 20px;
   margin-bottom: 16px;
@@ -411,9 +412,9 @@ body {
   position: sticky;
   top: 0;
   z-index: 1;
-  backdrop-filter: blur(20px) saturate(1.6);
-  -webkit-backdrop-filter: blur(20px) saturate(1.6);
-  background: rgba(255,255,255,0.04);
+  /* sticky 行のスクロール追従時に backdrop-filter が再計算され重いため不使用。
+     カード地色に近い不透明な面でスクロール内容を隠す。 */
+  background: #16161d;
   margin: -20px -20px 16px;
   padding: 14px 20px;
   border-bottom: 1px solid rgba(255,255,255,0.08);
@@ -499,6 +500,12 @@ body {
 .stat-clickable:hover {
   background: rgba(255,255,255,0.085);
   border-color: var(--border-strong);
+}
+
+/* ログがないセッション: フィルタ不可（クリック無効を視覚化） */
+.stat-nolog {
+  cursor: default;
+  opacity: 0.55;
 }
 
 /* ── LOGS: 等高・1ページ収まりレイアウト ── */
@@ -848,8 +855,6 @@ body {
   background: rgba(255, 255, 255, 0.06);
   border: 1px solid rgba(255, 255, 255, 0.10);
   border-radius: 20px;
-  backdrop-filter: blur(8px);
-  -webkit-backdrop-filter: blur(8px);
   flex-shrink: 0;
 }
 

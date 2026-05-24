@@ -15,6 +15,7 @@ document.addEventListener("DOMContentLoaded", () => {
   let _runBadgeTimer = null;       // HOME タブ クイック実行バッジポーリング
   let _selectedProcessId = null;   // 選択中プロセス id
   let _latestProcesses = [];       // 最新の processes リスト（SSE 更新）
+  let _latestQueueCount = 0;       // 最新の queue 件数（ログなしプロセスの表示フォールバック）
   let _activeLogPath = "";         // 現在のパネルに紐づいた実ログパス（showLogFilter 用）
   let _activeTab = "home";         // 現在アクティブなタブ
   let _homeChatPanelOpen = false;
@@ -146,6 +147,7 @@ document.addEventListener("DOMContentLoaded", () => {
         const d = JSON.parse(e.data);
         if (d.error) return;
         _latestProcesses = d.processes || [];
+        if (typeof d.queue_count === "number") _latestQueueCount = d.queue_count;
 
         if (_selectedProcessId) {
           const still = _latestProcesses.find(p => p.id === _selectedProcessId);
@@ -160,9 +162,16 @@ document.addEventListener("DOMContentLoaded", () => {
               renderStatusPanels(fresh);
               renderProcessHeader(still, { status: "running", phase: "summarizing" });
               _statusData = fresh;
+            } else if (still.type === "transcribe") {
+              const fresh = await api(`/api/transcribe-session?started=${encodeURIComponent(still.started_at || "")}`);
+              renderStatusPanels(fresh);
+              renderProcessHeader(still, { status: "running", phase: "transcribing" });
+              _statusData = fresh;
             } else {
-              renderStatusPanels(_noLogPanels());
+              const np = _noLogPanels();
+              renderStatusPanels(np);
               renderProcessHeader(still, { status: "running", phase: "—" });
+              _statusData = np;
             }
           } else {
             _selectedProcessId = null;
@@ -247,9 +256,18 @@ document.addEventListener("DOMContentLoaded", () => {
         renderProcessHeader(proc, { status: "running", phase: "summarizing" });
         _statusData = d;
       } catch {}
+    } else if (proc.type === "transcribe") {
+      try {
+        const d = await api(`/api/transcribe-session?started=${encodeURIComponent(proc.started_at || "")}`);
+        renderStatusPanels(d);
+        renderProcessHeader(proc, { status: "running", phase: "transcribing" });
+        _statusData = d;
+      } catch {}
     } else {
-      renderStatusPanels(_noLogPanels());
+      const np = _noLogPanels();
+      renderStatusPanels(np);
       renderProcessHeader(proc, { status: "running", phase: "—" });
+      _statusData = np;
     }
   };
 
@@ -306,7 +324,7 @@ document.addEventListener("DOMContentLoaded", () => {
   // ── ログなし時の空パネルデータ ──────────────────────────────
   function _noLogPanels() {
     return { done_videos: [], running_video: null, done_count: 0, warn_count: 0,
-             error_count: 0, rate_limit_count: 0, queue_count: 0,
+             error_count: 0, rate_limit_count: 0, queue_count: _latestQueueCount,
              phase: "—", status: "running", log_file: "(手動起動 — ログなし)",
              log_file_path: "", drive_folder_url: "" };
   }
@@ -350,7 +368,7 @@ document.addEventListener("DOMContentLoaded", () => {
   // ── 動画・統計パネル描画（プロセス切り替え共通）─────────────
   function renderStatusPanels(d) {
     // パネルに対応する実ログパスを記録（showLogFilter が参照）
-    if (d.log_file_path) _activeLogPath = d.log_file_path;
+    _activeLogPath = d.log_file_path || "";
     const videosEl = document.getElementById("status-videos");
     const statsEl  = document.getElementById("status-stats");
     if (!videosEl || !statsEl) return;
@@ -383,23 +401,23 @@ document.addEventListener("DOMContentLoaded", () => {
     }
     videosEl.innerHTML = cards.join("");
 
+    const hasLog = !!d.log_file_path;
+    const logStat = (type, label, valCls, val) => hasLog
+      ? `<div class="stat-item stat-clickable" onclick="showLogFilter('${type}')" title="ログでフィルタ">
+          <span class="stat-label">${label} ↗</span><span class="stat-val ${valCls}">${val}</span>
+        </div>`
+      : `<div class="stat-item stat-nolog" title="ログファイルがないためフィルタできません">
+          <span class="stat-label">${label}</span><span class="stat-val ${valCls}">${val}</span>
+        </div>`;
     statsEl.innerHTML = `
       <div class="stat-grid">
         <div class="stat-item stat-clickable" onclick="showQueueFiles()" title="キュー一覧を表示">
           <span class="stat-label">queue ↗</span><span class="stat-val">${d.queue_count}</span>
         </div>
-        <div class="stat-item stat-clickable" onclick="showLogFilter('done')" title="ログでフィルタ">
-          <span class="stat-label">done ↗</span><span class="stat-val stat-green">${d.done_count}</span>
-        </div>
-        <div class="stat-item stat-clickable" onclick="showLogFilter('warn')" title="ログでフィルタ">
-          <span class="stat-label">warn ↗</span><span class="stat-val stat-warn">${d.warn_count}</span>
-        </div>
-        <div class="stat-item stat-clickable" onclick="showLogFilter('error')" title="ログでフィルタ">
-          <span class="stat-label">error ↗</span><span class="stat-val stat-err">${d.error_count}</span>
-        </div>
-        <div class="stat-item stat-clickable" onclick="showLogFilter('rate-limit')" title="ログでフィルタ">
-          <span class="stat-label">rate-limit ↗</span><span class="stat-val">${d.rate_limit_count}</span>
-        </div>
+        ${logStat("done", "done", "stat-green", d.done_count)}
+        ${logStat("warn", "warn", "stat-warn", d.warn_count)}
+        ${logStat("error", "error", "stat-err", d.error_count)}
+        ${logStat("rate-limit", "rate-limit", "", d.rate_limit_count)}
         <div class="stat-item"><span class="stat-label">phase</span><span class="stat-val" style="font-size:13px">${esc(d.phase)}</span></div>
       </div>
       <div style="margin-top:12px;display:flex;justify-content:space-between;align-items:center;font-size:11px;color:var(--text-faint)">
@@ -454,7 +472,6 @@ document.addEventListener("DOMContentLoaded", () => {
   };
 
   window.showLogFilter = async function(filterType) {
-    if (!_activeLogPath) return;
     const filterMap = {
       done: "[done]",
       warn: "[warn]",
@@ -464,15 +481,24 @@ document.addEventListener("DOMContentLoaded", () => {
     const tag = filterMap[filterType];
     if (!tag) return;
 
-    const logPath = _activeLogPath;
-    const logName = logPath.split("/").pop();
-
     const modal    = document.getElementById("log-filter-modal");
     const titleEl  = document.getElementById("log-filter-title");
     const countEl  = document.getElementById("log-filter-count");
     const content  = document.getElementById("log-filter-content");
     const openBtn  = document.getElementById("log-filter-open-btn");
     if (!modal) return;
+
+    if (!_activeLogPath) {
+      titleEl.textContent = filterType;
+      countEl.textContent = "";
+      content.textContent = "このセッションにはログファイルがありません";
+      if (openBtn) openBtn.style.display = "none";
+      modal.style.display = "flex";
+      return;
+    }
+
+    const logPath = _activeLogPath;
+    const logName = logPath.split("/").pop();
 
     titleEl.textContent = `${filterType} — ${logName}`;
     countEl.textContent = "";
