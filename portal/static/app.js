@@ -15,6 +15,7 @@ document.addEventListener("DOMContentLoaded", () => {
   let _runBadgeTimer = null;       // HOME タブ クイック実行バッジポーリング
   let _selectedProcessId = null;   // 選択中プロセス id
   let _latestProcesses = [];       // 最新の processes リスト（SSE 更新）
+  let _activeLogPath = "";         // 現在のパネルに紐づいた実ログパス（showLogFilter 用）
   let _activeTab = "home";         // 現在アクティブなタブ
   let _homeChatPanelOpen = false;
   let _homeModelPref = "ollama";
@@ -348,6 +349,8 @@ document.addEventListener("DOMContentLoaded", () => {
 
   // ── 動画・統計パネル描画（プロセス切り替え共通）─────────────
   function renderStatusPanels(d) {
+    // パネルに対応する実ログパスを記録（showLogFilter が参照）
+    if (d.log_file_path) _activeLogPath = d.log_file_path;
     const videosEl = document.getElementById("status-videos");
     const statsEl  = document.getElementById("status-stats");
     if (!videosEl || !statsEl) return;
@@ -451,7 +454,7 @@ document.addEventListener("DOMContentLoaded", () => {
   };
 
   window.showLogFilter = async function(filterType) {
-    if (!_statusData?.log_file_path) return;
+    if (!_activeLogPath) return;
     const filterMap = {
       done: "[done]",
       warn: "[warn]",
@@ -461,7 +464,7 @@ document.addEventListener("DOMContentLoaded", () => {
     const tag = filterMap[filterType];
     if (!tag) return;
 
-    const logPath = _statusData.log_file_path;
+    const logPath = _activeLogPath;
     const logName = logPath.split("/").pop();
 
     const modal    = document.getElementById("log-filter-modal");
@@ -543,7 +546,7 @@ document.addEventListener("DOMContentLoaded", () => {
   };
 
   window.showQueueFiles = async function() {
-    if (!_statusData?.log_file_path) return;
+    if (!_statusData) return;
     const modal   = document.getElementById("log-filter-modal");
     const titleEl = document.getElementById("log-filter-title");
     const countEl = document.getElementById("log-filter-count");

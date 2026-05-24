@@ -579,7 +579,11 @@ async def _build_status_data(log_path: str | None = None) -> dict:
         for j in _active_jobs.values()
     ]
     queue_dir   = ROOT / "queue"
-    queue_count = len(list(queue_dir.glob("*.m4a"))) if queue_dir.exists() else 0
+    _audio_exts = {".m4a", ".webm", ".opus", ".mp4"}
+    queue_count = (
+        sum(1 for f in queue_dir.rglob("*") if f.is_file() and f.suffix in _audio_exts)
+        if queue_dir.exists() else 0
+    )
     folder_url  = _rclone_link_nonblocking("gdrive:yt-learn")
 
     # 対象ログファイルを決定
@@ -903,7 +907,12 @@ async def get_jobs():
 @app.get("/api/queue-files")
 async def get_queue_files():
     queue_dir = ROOT / "queue"
-    files = sorted(f.name for f in queue_dir.glob("*.m4a")) if queue_dir.exists() else []
+    _audio_exts = {".m4a", ".webm", ".opus", ".mp4"}
+    files = (
+        sorted(f"{f.parent.name}/{f.name}" for f in queue_dir.rglob("*")
+               if f.is_file() and f.suffix in _audio_exts)
+        if queue_dir.exists() else []
+    )
     return JSONResponse({"files": files})
 
 
