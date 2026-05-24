@@ -293,7 +293,7 @@ document.addEventListener("DOMContentLoaded", () => {
     const startedStr  = startedDate ? `started: ${startedDate}` : "";
     detailRow.innerHTML = `
       <div class="status-header-left">
-        <div class="status-script">${esc(proc.label)}</div>
+        <div class="status-script"><span class="proc-dot"></span>${esc(proc.label)}</div>
         <div class="status-session">
           ${esc(startedStr)}${proc.started_at ? `<span id="status-elapsed" data-started="${esc(proc.started_at)}"></span>` : ""}
         </div>
