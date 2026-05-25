@@ -452,7 +452,6 @@ document.addEventListener("DOMContentLoaded", () => {
   window.openVideoInLibrary = function(el) {
     const channel = el.dataset.channel;
     const title   = el.dataset.title;
-    switchTab("library");
     openLibViewer(`transcripts/${channel}/${title}.md`);
   };
 
