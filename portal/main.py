@@ -382,7 +382,10 @@ async def _get_tmux_descendant_pids(session: str) -> set[int]:
     return pids
 
 
-async def _detect_manual_processes(excluded_pids: set[int] | None = None) -> list[dict]:
+async def _detect_manual_processes(
+    excluded_pids: set[int] | None = None,
+    skip_types: set[str] | None = None,
+) -> list[dict]:
     """ポータル外で手動起動されたスクリプトを /proc スキャンで検出（WSL 専用）。"""
     if not IS_WSL:
         return []
@@ -422,6 +425,8 @@ async def _detect_manual_processes(excluded_pids: set[int] | None = None) -> lis
         except OSError:
             continue
         for pattern, job_type in _AUTO_DETECT_PATTERNS:
+            if skip_types and job_type in skip_types:
+                continue
             if not re.search(pattern, cmd):
                 continue
             if job_type in seen_types:
@@ -525,7 +530,9 @@ async def _get_active_processes() -> list[dict]:
     # manual detect から除外（transcribe.py 等が二重表示されるのを防ぐ）
     yt_session = await _find_yt_session() if IS_WSL else None
     excluded_pids = await _get_tmux_descendant_pids(yt_session) if yt_session else set()
-    procs.extend(await _detect_manual_processes(excluded_pids=excluded_pids))
+    # yt_session がある = autonomous.sh は tmux 経由で動いているので /proc スキャンで重複検出しない
+    skip_types = {"autonomous"} if yt_session else None
+    procs.extend(await _detect_manual_processes(excluded_pids=excluded_pids, skip_types=skip_types))
     if yt_session:
         log_dir = ROOT / "logs" / "autonomous"
         log_file = ""
