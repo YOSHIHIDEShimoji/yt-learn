@@ -183,6 +183,7 @@ document.addEventListener("DOMContentLoaded", () => {
           _statusData = d;
         }
         renderProcessTabs(_latestProcesses);
+        _syncRunBadgeFromProcesses(_latestProcesses);
       } catch {}
     };
     _statusEventSource.onerror = () => {};
@@ -905,6 +906,21 @@ document.addEventListener("DOMContentLoaded", () => {
   }
 
   // ── HOME: 実行パネル ────────────────────────────────────────
+  function _syncRunBadgeFromProcesses(procs) {
+    const badge    = document.getElementById("run-badge");
+    const startBtn = document.getElementById("run-start-btn");
+    if (!badge) return;
+    const autoProc = procs.find(p => p.type === "autonomous");
+    if (autoProc) {
+      badge.className = "badge badge-green";
+      badge.textContent = autoProc.id ? `running: ${autoProc.id.replace("autonomous_", "")}` : "running";
+      if (startBtn) { startBtn.disabled = true; startBtn.textContent = "already running"; }
+    } else {
+      badge.className = "badge badge-gray"; badge.textContent = "stopped";
+      if (startBtn) { startBtn.disabled = false; startBtn.textContent = "▶ Start"; }
+    }
+  }
+
   async function loadRunPanel() {
     if (!_isWsl) {
       const warn = document.getElementById("run-wsl-warn");
@@ -924,22 +940,19 @@ document.addEventListener("DOMContentLoaded", () => {
       const { running, session, log_file } = await api("/api/run/status");
       const badge    = document.getElementById("run-badge");
       const startBtn = document.getElementById("run-start-btn");
-      const stopBtn  = document.getElementById("run-stop-btn");
       const logBtn   = document.getElementById("run-log-btn");
       if (!badge) return;
       if (running) {
         badge.className   = "badge badge-green";
         badge.textContent = session ? `running: ${session}` : "running";
-        if (startBtn) { startBtn.style.display = ""; startBtn.disabled = true; startBtn.textContent = "already running"; }
-        if (stopBtn)  stopBtn.style.display  = "";
+        if (startBtn) { startBtn.disabled = true; startBtn.textContent = "already running"; }
         if (logBtn) {
           if (log_file) { logBtn.dataset.logPath = log_file; logBtn.style.display = ""; }
           else logBtn.style.display = "none";
         }
       } else {
         badge.className   = "badge badge-gray"; badge.textContent = "stopped";
-        if (startBtn) { startBtn.style.display = ""; startBtn.disabled = false; startBtn.textContent = "▶ Start"; }
-        if (stopBtn)  stopBtn.style.display  = "none";
+        if (startBtn) { startBtn.disabled = false; startBtn.textContent = "▶ Start"; }
         if (logBtn)   logBtn.style.display   = "none";
       }
     } catch {}
@@ -954,7 +967,6 @@ document.addEventListener("DOMContentLoaded", () => {
       await _updateRunBadge();
     } catch (e) {
       await showConfirm(`起動失敗: ${e.message}`, "OK", false);
-    } finally {
       startBtn.disabled = false; startBtn.textContent = origText;
     }
   };
@@ -962,15 +974,11 @@ document.addEventListener("DOMContentLoaded", () => {
   window.stopRun = async function() {
     const ok = await showConfirm("autonomous.sh を停止しますか？", "Stop");
     if (!ok) return;
-    const stopBtn = document.getElementById("run-stop-btn");
-    if (stopBtn) stopBtn.disabled = true;
     try {
       await api("/api/run/stop", 15000, "POST");
       await _updateRunBadge();
     } catch (e) {
       await showConfirm(`停止失敗: ${e.message}`, "OK", false);
-    } finally {
-      if (stopBtn) stopBtn.disabled = false;
     }
   };
 

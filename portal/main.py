@@ -1075,24 +1075,21 @@ async def get_env():
 
 @app.get("/api/run/status")
 async def run_status():
-    session = await _find_yt_session()
-    log_file = ""
-    if session:
-        log_dir = ROOT / "logs" / "autonomous"
-        if log_dir.exists():
-            logs = sorted(log_dir.glob("*.log"), key=lambda x: x.stat().st_mtime, reverse=True)
-            if logs:
-                log_file = str(logs[0].relative_to(ROOT))
-    return JSONResponse({"running": session is not None, "session": session, "log_file": log_file})
+    procs = await _get_active_processes()
+    auto_proc = next((p for p in procs if p["type"] == "autonomous"), None)
+    log_file = auto_proc.get("log_file", "") if auto_proc else ""
+    session = auto_proc["id"].removeprefix("autonomous_") if auto_proc else None
+    return JSONResponse({"running": auto_proc is not None, "session": session, "log_file": log_file})
 
 
 @app.post("/api/run")
 async def start_run(body: RunBody):
     if not IS_WSL:
         return JSONResponse({"error": "WSL 環境でのみ実行できます"}, status_code=400)
-    existing = await _find_yt_session()
+    procs = await _get_active_processes()
+    existing = next((p for p in procs if p["type"] == "autonomous"), None)
     if existing:
-        return JSONResponse({"error": f"既に実行中です ({existing})"}, status_code=409)
+        return JSONResponse({"error": f"既に実行中です ({existing['id']})"}, status_code=409)
     limit   = max(1, min(body.limit, 100))
     model   = body.model if body.model in _VALID_MODELS else "large-v3"
     session = f"{_YT_SESSION_PREFIX}{datetime.now().strftime('%Y%m%d_%H%M%S')}"
