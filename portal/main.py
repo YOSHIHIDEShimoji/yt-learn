@@ -2,6 +2,7 @@ import asyncio
 import json
 import os
 import re
+import signal
 import shutil
 import time
 from datetime import datetime
@@ -1107,25 +1108,48 @@ async def start_run(body: RunBody):
 async def stop_run():
     if not IS_WSL:
         return JSONResponse({"error": "WSL 環境でのみ実行できます"}, status_code=400)
-    sessions = await _find_all_yt_sessions()
-    if not sessions:
+    procs = await _get_active_processes()
+    auto_proc = next((p for p in procs if p["type"] == "autonomous"), None)
+    if not auto_proc:
         return JSONResponse({"ok": True, "was_running": False})
-    # C-c を送って cleanup() トラップ → [session-end] を書かせる
-    for s in sessions:
-        await asyncio.create_subprocess_exec(
-            "tmux", "send-keys", "-t", s, "C-c", "",
-            stdout=asyncio.subprocess.DEVNULL, stderr=asyncio.subprocess.DEVNULL,
-        )
-    # cleanup が完了するまで待機（最大 4 秒）
-    await asyncio.sleep(4)
-    # 残っているセッションを強制終了
-    remaining = await _find_all_yt_sessions()
-    for s in remaining:
-        await asyncio.create_subprocess_exec(
-            "tmux", "kill-session", "-t", s,
-            stdout=asyncio.subprocess.DEVNULL, stderr=asyncio.subprocess.DEVNULL,
-        )
-    return JSONResponse({"ok": True, "was_running": True, "sessions": sessions})
+
+    if auto_proc.get("is_external"):
+        # /proc 検出プロセス: プロセスグループごと kill して子プロセスにも伝播させる
+        try:
+            pid = int(auto_proc["id"].split("_")[-1])
+        except (ValueError, IndexError):
+            return JSONResponse({"error": "PID の取得に失敗しました"}, status_code=500)
+        try:
+            pgid = os.getpgid(pid)
+            os.killpg(pgid, signal.SIGINT)  # cleanup() トラップ → [session-end] を書かせる
+        except (ProcessLookupError, OSError):
+            return JSONResponse({"ok": True, "was_running": False})
+        await asyncio.sleep(4)
+        try:
+            pgid = os.getpgid(pid)
+            os.killpg(pgid, signal.SIGTERM)  # まだ生きていれば強制終了
+        except (ProcessLookupError, OSError):
+            pass  # 正常終了済み
+        return JSONResponse({"ok": True, "was_running": True})
+    else:
+        # tmux セッション経由
+        sessions = await _find_all_yt_sessions()
+        if not sessions:
+            return JSONResponse({"ok": True, "was_running": False})
+        # C-c を送って cleanup() トラップ → [session-end] を書かせる
+        for s in sessions:
+            await asyncio.create_subprocess_exec(
+                "tmux", "send-keys", "-t", s, "C-c", "",
+                stdout=asyncio.subprocess.DEVNULL, stderr=asyncio.subprocess.DEVNULL,
+            )
+        await asyncio.sleep(4)
+        remaining = await _find_all_yt_sessions()
+        for s in remaining:
+            await asyncio.create_subprocess_exec(
+                "tmux", "kill-session", "-t", s,
+                stdout=asyncio.subprocess.DEVNULL, stderr=asyncio.subprocess.DEVNULL,
+            )
+        return JSONResponse({"ok": True, "was_running": True, "sessions": sessions})
 
 
 # ── Phase 2: URL 処理 ────────────────────────────────────────
