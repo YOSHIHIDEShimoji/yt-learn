@@ -79,9 +79,6 @@ if [[ "$(uname)" == "Darwin" ]]; then
 elif grep -qi microsoft /proc/version 2>/dev/null; then
   cd "$(dirname "$(realpath "$0")")"
 
-  # WSL IP（Tailscale ミラー）を取得
-  WSL_IP=$(hostname -I | cut -d" " -f1)
-
   # Windows ブラウザを開く関数（cmd.exe start 経由で確実に Windows ブラウザを起動）
   open_browser() {
     local url="$1"
@@ -90,20 +87,33 @@ elif grep -qi microsoft /proc/version 2>/dev/null; then
       || echo "[portal] 自動起動失敗 — ブラウザで手動で開いてください: ${url}"
   }
 
-  # 旧サーバーを常に停止して最新コードで再起動
-  OLD_PID=$(lsof -ti :"${PORT}" 2>/dev/null || true)
-  if [[ -n "$OLD_PID" ]]; then
-    echo "[portal] 旧サーバー (PID ${OLD_PID}) を停止して再起動します"
-    kill "$OLD_PID" 2>/dev/null || true
-    sleep 1
+  # 旧セッションを常に停止して最新コードで再起動
+  echo "[portal] WSL: tmux セッション '$TMUX_SESSION' を再起動中…"
+  tmux kill-session -t "${TMUX_SESSION}" 2>/dev/null || true
+  if ! tmux new-session -d -s "${TMUX_SESSION}" ./src/portal-server.sh; then
+    echo "[portal] エラー: サーバー起動に失敗しました"
+    exit 1
   fi
 
-  echo "[portal] WSL モード — uvicorn を 0.0.0.0:${PORT} で起動します"
+  # サーバー起動待機（最大 10 秒）
+  echo "[portal] サーバー起動待機中…"
+  _server_ready=false
+  for i in $(seq 1 10); do
+    if curl -s --max-time 1 "http://localhost:${PORT}/" > /dev/null 2>&1; then
+      echo "[portal] サーバー起動確認 (${i}秒)"
+      _server_ready=true
+      break
+    fi
+    sleep 1
+  done
+  if [[ "$_server_ready" == false ]]; then
+    echo "[portal] 警告: サーバー応答なし — tmux attach -t ${TMUX_SESSION} でログを確認してください"
+  fi
 
-  # Windows ブラウザを非同期で開く（起動後3秒後）
-  (sleep 3 && open_browser "http://localhost:${PORT}") &
+  open_browser "http://localhost:${PORT}"
 
-  exec uvicorn portal.main:app --host 0.0.0.0 --port "${PORT}" --reload --reload-dir portal
+  echo "[portal] 完了"
+  echo "[portal] サーバー停止: tmux kill-session -t ${TMUX_SESSION}"
 
 # ──────────────────────────────────────────
 # その他 Linux
