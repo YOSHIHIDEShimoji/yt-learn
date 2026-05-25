@@ -90,7 +90,7 @@ document.addEventListener("DOMContentLoaded", () => {
           <span class="channel-lang">${esc(ch.lang)}</span>
           <span class="channel-name">${esc(ch.name)}</span>
           <a class="channel-link" href="${esc(ch.url)}" target="_blank" rel="noopener">↗ YouTube</a>
-          <button class="delete-btn" data-name="${esc(ch.name)}" title="削除">×</button>
+          <button class="delete-btn" data-name="${esc(ch.name)}" title="Delete">×</button>
         </div>`).join("");
       el.querySelectorAll(".delete-btn").forEach(btn => {
         btn.addEventListener("click", e => { e.stopPropagation(); deleteChannel(btn.dataset.name); });
@@ -285,9 +285,9 @@ document.addEventListener("DOMContentLoaded", () => {
       : d.status === "rate-limit" ? "badge-warn" : "badge-gray";
     const stopBtn = proc.is_external ? ""
       : proc.type === "autonomous"
-        ? `<button class="btn-danger btn-sm" onclick="stopRun()">■ 停止</button>`
+        ? `<button class="btn-danger btn-sm" onclick="stopRun()">■ Stop</button>`
         : proc.id
-          ? `<button class="btn-danger btn-sm" onclick="stopJob('${esc(proc.id)}')">■ 中止</button>`
+          ? `<button class="btn-danger btn-sm" onclick="stopJob('${esc(proc.id)}')">■ Abort</button>`
           : "";
     const startedDate = proc.started_at ? proc.started_at.slice(0, 16) : "";
     const startedStr  = startedDate ? `started: ${startedDate}` : "";
@@ -425,7 +425,7 @@ document.addEventListener("DOMContentLoaded", () => {
       </div>
       <div style="margin-top:12px;display:flex;justify-content:space-between;align-items:center;font-size:11px;color:var(--text-faint)">
         <span title="${esc(d.log_file_path || "")}">ログ: ${esc(d.log_file || "—")}</span>
-        ${d.log_file_path ? `<button class="refresh-btn" style="font-size:11px;padding:2px 8px" data-log-path="${esc(d.log_file_path)}" onclick="openLogByPath(this.dataset.logPath)">ログを開く →</button>` : ""}
+        ${d.log_file_path ? `<button class="refresh-btn" style="font-size:11px;padding:2px 8px" data-log-path="${esc(d.log_file_path)}" onclick="openLogByPath(this.dataset.logPath)">Open Log →</button>` : ""}
       </div>`;
   }
 
@@ -457,7 +457,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
   // ── STATUS: ジョブ停止 ───────────────────────────────────
   window.stopJob = async function(jobId) {
-    const ok = await showConfirm("処理を中止しますか？", "中止");
+    const ok = await showConfirm("処理を中止しますか？", "Abort");
     if (!ok) return;
     try {
       await api(`/api/jobs/${encodeURIComponent(jobId)}/stop`, 5000, "POST");
@@ -938,7 +938,7 @@ document.addEventListener("DOMContentLoaded", () => {
         }
       } else {
         badge.className   = "badge badge-gray"; badge.textContent = "stopped";
-        if (startBtn) { startBtn.style.display = ""; startBtn.disabled = false; startBtn.textContent = "▶ 起動"; }
+        if (startBtn) { startBtn.style.display = ""; startBtn.disabled = false; startBtn.textContent = "▶ Start"; }
         if (stopBtn)  stopBtn.style.display  = "none";
         if (logBtn)   logBtn.style.display   = "none";
       }
@@ -960,7 +960,7 @@ document.addEventListener("DOMContentLoaded", () => {
   };
 
   window.stopRun = async function() {
-    const ok = await showConfirm("autonomous.sh を停止しますか？", "停止");
+    const ok = await showConfirm("autonomous.sh を停止しますか？", "Stop");
     if (!ok) return;
     const stopBtn = document.getElementById("run-stop-btn");
     if (stopBtn) stopBtn.disabled = true;
@@ -1065,7 +1065,7 @@ document.addEventListener("DOMContentLoaded", () => {
   };
 
   // ── 汎用確認ダイアログ ─────────────────────────────────────
-  function showConfirm(message, okLabel = "削除", showCancel = true) {
+  function showConfirm(message, okLabel = "Delete", showCancel = true) {
     return new Promise(resolve => {
       const modal  = document.getElementById("confirm-modal");
       const msgEl  = document.getElementById("confirm-message");
@@ -1418,8 +1418,8 @@ document.addEventListener("DOMContentLoaded", () => {
     results.forEach(r => { if (!groups[r.channel]) groups[r.channel] = []; groups[r.channel].push(r); });
 
     const BTNS = `<div class="lib-group-btns">
-      <button class="refresh-btn" onclick="selectAllCards()">全選択</button>
-      <button class="refresh-btn" onclick="libClear()">クリア</button>
+      <button class="refresh-btn" onclick="selectAllCards()">Select All</button>
+      <button class="refresh-btn" onclick="libClear()">Clear</button>
     </div>`;
 
     let html = "";
@@ -1511,8 +1511,8 @@ document.addEventListener("DOMContentLoaded", () => {
       row.innerHTML = `
         <span class="badge badge-blue lib-sel-ch">${esc(channel)}</span>
         <span class="lib-sel-title" title="${esc(title)}">${esc(title)}</span>
-        <button class="refresh-btn btn-sm" onclick="jumpToLibCard('${safePath}')">↗ 表示</button>
-        <button class="refresh-btn btn-sm" onclick="deselectCard('${safePath}', this)">× 解除</button>`;
+        <button class="refresh-btn btn-sm" onclick="jumpToLibCard('${safePath}')">↗ View</button>
+        <button class="refresh-btn btn-sm" onclick="deselectCard('${safePath}', this)">× Remove</button>`;
       list.appendChild(row);
     });
     modal.style.display = "flex";

@@ -43,8 +43,8 @@
           <div class="card-title-row">
             <span class="card-title" style="margin-bottom:0">登録チャンネル</span>
             <div style="display:flex;gap:6px">
-              <button class="refresh-btn" onclick="openAddChannelModal()">+ 追加</button>
-              <button class="refresh-btn" onclick="reloadChannels()">↻ 更新</button>
+              <button class="refresh-btn" onclick="openAddChannelModal()">+ Add</button>
+              <button class="refresh-btn" onclick="reloadChannels()">↻ Refresh</button>
             </div>
           </div>
           <div class="channel-list" id="channel-list">
@@ -61,9 +61,9 @@
           </div>
           <div id="run-wsl-warn" class="run-warn" style="display:none">WSL 環境専用機能です</div>
           <div class="run-btns" style="margin-top:4px;display:flex;align-items:center;gap:8px">
-            <button id="run-start-btn" class="btn-primary" onclick="startRun()">▶ 起動</button>
-            <button id="run-stop-btn" class="btn-danger" style="display:none" onclick="stopRun()">■ 停止</button>
-            <button id="run-log-btn" class="refresh-btn" style="display:none;font-size:11px;padding:2px 8px;margin-left:auto" onclick="openLogByPath(this.dataset.logPath)">ログを開く →</button>
+            <button id="run-start-btn" class="btn-primary" onclick="startRun()">▶ Start</button>
+            <button id="run-stop-btn" class="btn-danger" style="display:none" onclick="stopRun()">■ Stop</button>
+            <button id="run-log-btn" class="refresh-btn" style="display:none;font-size:11px;padding:2px 8px;margin-left:auto" onclick="openLogByPath(this.dataset.logPath)">Open Log →</button>
           </div>
         </div>
 
@@ -89,7 +89,7 @@
             </div>
           </div>
           <div class="run-btns">
-            <button id="proc-submit-btn" class="btn-primary" onclick="processUrl()">▶ 処理開始</button>
+            <button id="proc-submit-btn" class="btn-primary" onclick="processUrl()">▶ Run</button>
           </div>
           <div id="proc-result" class="proc-result"></div>
         </div>
@@ -125,7 +125,7 @@
       <div class="card status-videos-card">
         <div class="card-title-row">
           <span class="card-title" style="margin-bottom:0">処理済み動画（今セッション）</span>
-          <button class="refresh-btn" onclick="reloadStatus()">↻ 更新</button>
+          <button class="refresh-btn" onclick="reloadStatus()">↻ Refresh</button>
         </div>
         <div class="status-videos-scroll" id="status-videos">
           <div class="placeholder"><div class="placeholder-icon">🎞️</div><span>読み込み中…</span></div>
@@ -170,9 +170,9 @@
 
     <div id="lib-results"></div>
     <div id="lib-pagination" class="lib-pagination" style="display:none">
-      <button class="refresh-btn" onclick="libPagePrev()">← 前へ</button>
+      <button class="refresh-btn" onclick="libPagePrev()">← Prev</button>
       <span id="lib-page-info"></span>
-      <button class="refresh-btn" onclick="libPageNext()">次へ →</button>
+      <button class="refresh-btn" onclick="libPageNext()">Next →</button>
     </div>
   </div>
 
@@ -182,7 +182,7 @@
       <div class="card">
         <div class="card-title-row">
           <span class="card-title" style="margin-bottom:0">ログファイル一覧</span>
-          <button class="refresh-btn" onclick="reloadLogs()">↻ 更新</button>
+          <button class="refresh-btn" onclick="reloadLogs()">↻ Refresh</button>
         </div>
         <div class="channel-list" id="log-list">
           <div class="placeholder"><div class="placeholder-icon">📄</div><span>読み込み中…</span></div>
@@ -191,7 +191,7 @@
       <div class="card" id="log-viewer-card" style="display:none">
         <div class="card-title-row">
           <span class="card-title" id="log-viewer-title" style="margin-bottom:0"></span>
-          <button class="refresh-btn" onclick="closeLogViewer()">✕ 閉じる</button>
+          <button class="refresh-btn" onclick="closeLogViewer()">✕ Close</button>
         </div>
         <div class="log-output" id="log-viewer-content"></div>
       </div>
@@ -203,7 +203,7 @@
     <div class="card">
       <div class="card-title-row">
         <span class="card-title" style="margin-bottom:0">README.md</span>
-        <button class="refresh-btn" onclick="reloadReadme()">↻ 再読み込み</button>
+        <button class="refresh-btn" onclick="reloadReadme()">↻ Reload</button>
       </div>
       <div class="markdown-body" id="readme-body">読み込み中…</div>
     </div>
@@ -216,7 +216,7 @@
   <div id="lib-panel-resize-handle" class="lib-panel-resize-handle"></div>
   <div class="lib-chat-header">
     <span id="lib-chat-ctx-label" class="lib-chat-ctx">ライブラリ全体</span>
-    <button class="refresh-btn btn-sm" onclick="libChatClear()">クリア</button>
+    <button class="refresh-btn btn-sm" onclick="libChatClear()">Clear</button>
   </div>
   <div class="lib-model-row" style="padding:4px 14px 0">
     <span class="lib-model-label">AI:</span>
@@ -243,14 +243,14 @@
            rows="1"
            onkeydown="if(event.key==='Enter'&&!event.shiftKey&&!event.isComposing){event.preventDefault();libChatSend()}"
            oninput="this.style.height='auto';this.style.height=Math.min(this.scrollHeight,120)+'px'"></textarea>
-    <button class="btn-primary btn-sm" onclick="libChatSend()">送信</button>
+    <button class="btn-primary btn-sm" onclick="libChatSend()">Send</button>
   </div>
 </div>
 
 <div id="home-chat-panel" class="lib-chat-panel">
   <div class="lib-chat-header">
     <span class="lib-chat-ctx">yt-learn アシスタント</span>
-    <button class="refresh-btn btn-sm" onclick="homeChatClear()">クリア</button>
+    <button class="refresh-btn btn-sm" onclick="homeChatClear()">Clear</button>
   </div>
   <div class="lib-model-row" style="padding:4px 14px 0">
     <span class="lib-model-label">AI:</span>
@@ -277,7 +277,7 @@
            rows="1"
            onkeydown="if(event.key==='Enter'&&!event.shiftKey&&!event.isComposing){event.preventDefault();homeChatSend()}"
            oninput="this.style.height='auto';this.style.height=Math.min(this.scrollHeight,120)+'px'"></textarea>
-    <button class="btn-primary btn-sm" onclick="homeChatSend()">送信</button>
+    <button class="btn-primary btn-sm" onclick="homeChatSend()">Send</button>
   </div>
 </div>
 
@@ -309,8 +309,8 @@
     </div>
     <div id="modal-error" class="modal-error"></div>
     <div class="modal-btns">
-      <button class="btn-secondary" onclick="closeAddChannelModal()">キャンセル</button>
-      <button class="btn-primary" onclick="submitAddChannel()">追加</button>
+      <button class="btn-secondary" onclick="closeAddChannelModal()">Cancel</button>
+      <button class="btn-primary" onclick="submitAddChannel()">Add</button>
     </div>
   </div>
 </div>
@@ -320,8 +320,8 @@
   <div class="modal-box">
     <div class="modal-title" id="confirm-message"></div>
     <div class="modal-btns">
-      <button class="btn-secondary" id="confirm-cancel">キャンセル</button>
-      <button class="btn-danger"    id="confirm-ok">削除</button>
+      <button class="btn-secondary" id="confirm-cancel">Cancel</button>
+      <button class="btn-danger"    id="confirm-ok">Delete</button>
     </div>
   </div>
 </div>
@@ -344,7 +344,7 @@
                rows="1"
                onkeydown="if(event.key==='Enter'&&!event.shiftKey&&!event.isComposing){event.preventDefault();libFileChatSend()}"
                oninput="this.style.height='auto';this.style.height=Math.min(this.scrollHeight,120)+'px'"></textarea>
-        <button class="btn-primary btn-sm" onclick="libFileChatSend()">送信</button>
+        <button class="btn-primary btn-sm" onclick="libFileChatSend()">Send</button>
       </div>
     </div>
   </div>
@@ -358,8 +358,8 @@
       <span class="modal-title" id="log-filter-title" style="margin-bottom:0"></span>
       <span style="font-size:12px;color:var(--text-faint)" id="log-filter-count"></span>
       <span style="flex:1"></span>
-      <button id="log-filter-open-btn" class="refresh-btn">↗ ログを開く</button>
-      <button class="refresh-btn" onclick="closeLogFilter()">✕ 閉じる</button>
+      <button id="log-filter-open-btn" class="refresh-btn">↗ Open Log</button>
+      <button class="refresh-btn" onclick="closeLogFilter()">✕ Close</button>
     </div>
     <div class="log-output log-filter-output" id="log-filter-content"></div>
   </div>
@@ -373,8 +373,8 @@
       <span class="modal-title" style="margin-bottom:0">選択中の動画</span>
       <span id="lib-selected-count" style="font-size:12px;color:var(--text-faint)"></span>
       <span style="flex:1"></span>
-      <button class="refresh-btn btn-sm" onclick="deselectAllCards()">全解除</button>
-      <button class="refresh-btn" onclick="closeLibSelected()">✕ 閉じる</button>
+      <button class="refresh-btn btn-sm" onclick="deselectAllCards()">Clear All</button>
+      <button class="refresh-btn" onclick="closeLibSelected()">✕ Close</button>
     </div>
     <div id="lib-selected-list" class="lib-selected-list"></div>
   </div>
