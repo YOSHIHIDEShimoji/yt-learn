@@ -157,7 +157,7 @@
     <div class="card lib-search-card" id="lib-search-card" style="display:{{ '' if is_wsl else 'none' }}">
       <div class="lib-search-row">
         <input id="lib-search-input" class="form-input lib-search-input"
-               placeholder="キーワード検索..."
+               placeholder="Search..."
                oninput="libSearchInstant()"
                onkeydown="if(event.key==='Escape'){this.value='';libSearchInstant()}">
         <select id="lib-scope" class="form-input lib-scope-select" onchange="libSearchInstant()">
@@ -239,7 +239,7 @@
   <div id="lib-chat-messages" class="lib-chat-messages"></div>
   <div class="lib-chat-input-row">
     <textarea id="lib-chat-input" class="form-input lib-chat-textarea"
-           placeholder="質問してください..."
+           placeholder="Ask a question..."
            rows="1"
            onkeydown="if(event.key==='Enter'&&!event.shiftKey&&!event.isComposing){event.preventDefault();libChatSend()}"
            oninput="this.style.height='auto';this.style.height=Math.min(this.scrollHeight,120)+'px'"></textarea>
@@ -273,7 +273,7 @@
   <div id="home-chat-messages" class="lib-chat-messages"></div>
   <div class="lib-chat-input-row">
     <textarea id="home-chat-input" class="form-input lib-chat-textarea"
-           placeholder="使い方を聞いてください..."
+           placeholder="Ask anything about yt-learn..."
            rows="1"
            onkeydown="if(event.key==='Enter'&&!event.shiftKey&&!event.isComposing){event.preventDefault();homeChatSend()}"
            oninput="this.style.height='auto';this.style.height=Math.min(this.scrollHeight,120)+'px'"></textarea>
@@ -340,7 +340,7 @@
       <div id="lib-file-chat-messages" class="lib-chat-messages lib-chat-messages-sm"></div>
       <div class="lib-chat-input-row">
         <textarea id="lib-file-chat-input" class="form-input lib-chat-textarea"
-               placeholder="質問してください..."
+               placeholder="Ask a question..."
                rows="1"
                onkeydown="if(event.key==='Enter'&&!event.shiftKey&&!event.isComposing){event.preventDefault();libFileChatSend()}"
                oninput="this.style.height='auto';this.style.height=Math.min(this.scrollHeight,120)+'px'"></textarea>
