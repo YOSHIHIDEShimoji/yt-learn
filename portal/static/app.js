@@ -29,7 +29,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
   const SESSION_TYPE_LABELS = {
     autonomous: "autonomous.sh",
-    process:    "URL処理",
+    process:    "URL Process",
     summarize:  "summarize.py",
     sync:       "Drive Sync",
     transcribe: "transcribe.py",
@@ -84,7 +84,7 @@ document.addEventListener("DOMContentLoaded", () => {
     try {
       const { channels } = await api("/api/channels");
       _channels = channels;
-      if (!channels.length) { el.innerHTML = placeholder("📭", "チャンネルなし"); return; }
+      if (!channels.length) { el.innerHTML = placeholder("📭", "No channels"); return; }
       el.innerHTML = channels.map((ch, i) => `
         <div class="channel-item" data-idx="${i}">
           <span class="channel-lang">${esc(ch.lang)}</span>
@@ -98,12 +98,12 @@ document.addEventListener("DOMContentLoaded", () => {
       el.dataset.loaded = "1";
       _updateChannelSelect(channels);
       fetchChannelDriveLinks();
-    } catch { el.innerHTML = placeholder("⚠️", "読み込み失敗"); }
+    } catch { el.innerHTML = placeholder("⚠️", "Failed to load"); }
   }
 
   window.reloadChannels = function() {
     const el = document.getElementById("channel-list");
-    if (el) { delete el.dataset.loaded; el.innerHTML = placeholder("⏳", "読み込み中…"); }
+    if (el) { delete el.dataset.loaded; el.innerHTML = placeholder("⏳", "Loading…"); }
     loadChannels();
   };
 
@@ -326,7 +326,7 @@ document.addEventListener("DOMContentLoaded", () => {
   function _noLogPanels() {
     return { done_videos: [], running_video: null, done_count: 0, warn_count: 0,
              error_count: 0, rate_limit_count: 0, queue_count: _latestQueueCount,
-             phase: "—", status: "running", log_file: "(手動起動 — ログなし)",
+             phase: "—", status: "running", log_file: "(manual launch — no log)",
              log_file_path: "", drive_folder_url: "" };
   }
 
@@ -438,14 +438,14 @@ document.addEventListener("DOMContentLoaded", () => {
       renderStatusData(d);
       _statusData = d;
     } catch (e) {
-      headerEl.innerHTML = placeholder("⚠️", "読み込み失敗");
+      headerEl.innerHTML = placeholder("⚠️", "Failed to load");
     }
   }
 
   window.reloadStatus = function() {
     ["status-header-card", "status-videos", "status-stats"].forEach(id => {
       const el = document.getElementById(id);
-      if (el) el.innerHTML = placeholder("⏳", "更新中…");
+      if (el) el.innerHTML = placeholder("⏳", "Updating…");
     });
     loadStatus();
   };
@@ -458,12 +458,12 @@ document.addEventListener("DOMContentLoaded", () => {
 
   // ── STATUS: ジョブ停止 ───────────────────────────────────
   window.stopJob = async function(jobId) {
-    const ok = await showConfirm("処理を中止しますか？", "Abort");
+    const ok = await showConfirm("Abort this job?", "Abort");
     if (!ok) return;
     try {
       await api(`/api/jobs/${encodeURIComponent(jobId)}/stop`, 5000, "POST");
     } catch (e) {
-      await showConfirm(`中止失敗: ${e.message}`, "OK", false);
+      await showConfirm(`Abort failed: ${e.message}`, "OK", false);
     }
   };
 
@@ -503,12 +503,12 @@ document.addEventListener("DOMContentLoaded", () => {
       const videos = filterType === "done" && _statusData?.done_videos?.length
         ? _statusData.done_videos : [];
       titleEl.textContent = filterType;
-      countEl.textContent = videos.length ? `${videos.length} 件` : "";
+      countEl.textContent = videos.length ? `${videos.length} items` : "";
       if (openBtn) openBtn.style.display = "none";
       if (videos.length) {
         content.textContent = videos.map(v => `${v.channel ? v.channel + " / " : ""}${v.title}`).join("\n");
       } else {
-        content.textContent = "このセッションにはログファイルがありません";
+        content.textContent = "No log file for this session";
       }
       modal.style.display = "flex";
       return;
@@ -519,7 +519,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
     titleEl.textContent = `${filterType} — ${logName}`;
     countEl.textContent = "";
-    content.textContent = "読み込み中…";
+    content.textContent = "Loading…";
     if (openBtn) { openBtn.style.display = ""; openBtn.onclick = () => openLogByPath(logPath); }
     modal.style.display = "flex";
 
@@ -529,17 +529,17 @@ document.addEventListener("DOMContentLoaded", () => {
       const matchIndices = [];
       allLines.forEach((line, i) => { if (line.includes(tag)) matchIndices.push(i); });
 
-      countEl.textContent = `${matchIndices.length} 件`;
+      countEl.textContent = `${matchIndices.length} items`;
       if (!matchIndices.length) {
         // drain-queue は [done] を出さないので done_videos リストで代替
         if (filterType === "done" && _statusData?.done_videos?.length) {
-          countEl.textContent = `${_statusData.done_videos.length} 件`;
+          countEl.textContent = `${_statusData.done_videos.length} items`;
           content.textContent = _statusData.done_videos
             .map(v => `${v.channel ? v.channel + " / " : ""}${v.title}`)
             .join("\n");
           return;
         }
-        content.textContent = "該当行なし";
+        content.textContent = "No matching lines";
         return;
       }
 
@@ -590,7 +590,7 @@ document.addEventListener("DOMContentLoaded", () => {
       });
       content.appendChild(frag);
     } catch (e) {
-      content.textContent = `読み込み失敗: ${e.message}`;
+      content.textContent = `Failed to load: ${e.message}`;
     }
   };
 
@@ -610,17 +610,17 @@ document.addEventListener("DOMContentLoaded", () => {
 
     titleEl.textContent = "queue";
     countEl.textContent = "";
-    content.textContent = "読み込み中…";
+    content.textContent = "Loading…";
     if (openBtn) openBtn.style.display = "none";
     modal.style.display = "flex";
 
     try {
       const d = await api("/api/queue-files");
       const files = d.files || [];
-      countEl.textContent = `${files.length} 件`;
-      content.textContent = files.length ? files.join("\n") : "キューは空です";
+      countEl.textContent = `${files.length} items`;
+      content.textContent = files.length ? files.join("\n") : "Queue is empty";
     } catch (e) {
-      content.textContent = `読み込み失敗: ${e.message}`;
+      content.textContent = `Failed to load: ${e.message}`;
     }
   };
 
@@ -632,7 +632,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
     if (!gpu || !gpu.available) {
       initEl.style.display = "";
-      initEl.innerHTML = `<div class="placeholder-icon">🖥️</div><span>GPU データ取得不可</span>`;
+      initEl.innerHTML = `<div class="placeholder-icon">🖥️</div><span>GPU data unavailable</span>`;
       wrapEl.style.display = "none";
       return;
     }
@@ -734,12 +734,12 @@ document.addEventListener("DOMContentLoaded", () => {
     if (!el) return;
     if (el.dataset.loading) return;
     el.dataset.loading = "1";
-    el.textContent = "読み込み中…";
+    el.textContent = "Loading…";
     try {
       const { content } = await api("/api/readme");
       el.innerHTML = marked.parse(content);
     } catch {
-      el.textContent = "読み込み失敗";
+      el.textContent = "Failed to load";
     } finally {
       delete el.dataset.loading;
     }
@@ -751,10 +751,10 @@ document.addEventListener("DOMContentLoaded", () => {
   async function loadLogs() {
     const el = document.getElementById("log-list");
     if (!el) return;
-    el.innerHTML = placeholder("⏳", "読み込み中…");
+    el.innerHTML = placeholder("⏳", "Loading…");
     try {
       const { logs } = await api("/api/logs");
-      if (!logs.length) { el.innerHTML = placeholder("📭", "ログファイルなし"); return; }
+      if (!logs.length) { el.innerHTML = placeholder("📭", "No log files"); return; }
       el.innerHTML = logs.map(l => {
         const badgeCls = !l.is_done ? "badge-blue" : l.has_error ? "badge-err" : "badge-green";
         const badgeText = !l.is_done ? "running" : l.has_error ? "error" : "done";
@@ -770,7 +770,7 @@ document.addEventListener("DOMContentLoaded", () => {
         if (target) { _pendingLogPath = null; openLog(target); }
         else _pendingLogPath = null;
       }
-    } catch { el.innerHTML = placeholder("⚠️", "読み込み失敗"); }
+    } catch { el.innerHTML = placeholder("⚠️", "Failed to load"); }
   }
 
   window.reloadLogs = function() { stopLogStream(); loadLogs(); };
@@ -785,7 +785,7 @@ document.addEventListener("DOMContentLoaded", () => {
     const content = document.getElementById("log-viewer-content");
     card.style.display = "flex";
     titleEl.textContent = path.split("/").pop();
-    content.textContent = "読み込み中…";
+    content.textContent = "Loading…";
 
     stopLogStream();
 
@@ -796,7 +796,7 @@ document.addEventListener("DOMContentLoaded", () => {
       try {
         const d = await api(`/api/log-content?path=${encodeURIComponent(path)}`);
         renderLog(content, d.content.split("\n"));
-      } catch { content.textContent = "読み込み失敗"; }
+      } catch { content.textContent = "Failed to load"; }
     }
   };
 
@@ -966,19 +966,19 @@ document.addEventListener("DOMContentLoaded", () => {
       await api("/api/run", 10000, "POST", { limit: 10, model: "large-v3" });
       await _updateRunBadge();
     } catch (e) {
-      await showConfirm(`起動失敗: ${e.message}`, "OK", false);
+      await showConfirm(`Start failed: ${e.message}`, "OK", false);
       startBtn.disabled = false; startBtn.textContent = origText;
     }
   };
 
   window.stopRun = async function() {
-    const ok = await showConfirm("autonomous.sh を停止しますか？", "Stop");
+    const ok = await showConfirm("Stop autonomous.sh?", "Stop");
     if (!ok) return;
     try {
       await api("/api/run/stop", 15000, "POST");
       await _updateRunBadge();
     } catch (e) {
-      await showConfirm(`停止失敗: ${e.message}`, "OK", false);
+      await showConfirm(`Stop failed: ${e.message}`, "OK", false);
     }
   };
 
@@ -991,16 +991,16 @@ document.addEventListener("DOMContentLoaded", () => {
     const resultEl = document.getElementById("proc-result");
     const btn      = document.getElementById("proc-submit-btn");
     if (!urls.length) {
-      resultEl.style.color = "var(--err)"; resultEl.textContent = "URL を入力してください"; return;
+      resultEl.style.color = "var(--err)"; resultEl.textContent = "Enter a URL"; return;
     }
-    btn.disabled = true; resultEl.style.color = "var(--text-dim)"; resultEl.textContent = "送信中…";
+    btn.disabled = true; resultEl.style.color = "var(--text-dim)"; resultEl.textContent = "Submitting…";
     try {
       const res = await api("/api/process-url", 10000, "POST", { urls, channel, lang });
       resultEl.style.color = "var(--green)";
-      resultEl.textContent = res.message || "処理を開始しました";
+      resultEl.textContent = res.message || "Processing started";
       document.getElementById("proc-urls").value = "";
     } catch (e) {
-      resultEl.style.color = "var(--err)"; resultEl.textContent = String(e.message) || "エラー";
+      resultEl.style.color = "var(--err)"; resultEl.textContent = String(e.message) || "Error";
     } finally {
       btn.disabled = false;
     }
@@ -1011,12 +1011,12 @@ document.addEventListener("DOMContentLoaded", () => {
     const resultEl = document.getElementById(resultId);
     const origText = btnEl.textContent;
     btnEl.disabled = true;
-    if (resultEl) { resultEl.style.color = "var(--text-dim)"; resultEl.textContent = "送信中…"; }
+    if (resultEl) { resultEl.style.color = "var(--text-dim)"; resultEl.textContent = "Submitting…"; }
     try {
       const res = await api(endpoint, 30000, "POST", payload);
-      if (resultEl) { resultEl.style.color = "var(--green)"; resultEl.textContent = res.message || "開始しました"; }
+      if (resultEl) { resultEl.style.color = "var(--green)"; resultEl.textContent = res.message || "Started"; }
     } catch (e) {
-      if (resultEl) { resultEl.style.color = "var(--err)"; resultEl.textContent = String(e.message) || "エラー"; }
+      if (resultEl) { resultEl.style.color = "var(--err)"; resultEl.textContent = String(e.message) || "Error"; }
     } finally {
       btnEl.disabled = false; btnEl.textContent = origText;
     }
@@ -1049,18 +1049,18 @@ document.addEventListener("DOMContentLoaded", () => {
     const url   = document.getElementById("modal-url").value.trim();
     const lang  = document.getElementById("modal-lang").value;
     const errEl = document.getElementById("modal-error");
-    if (!name || !url) { errEl.textContent = "名前と URL を入力してください"; return; }
+    if (!name || !url) { errEl.textContent = "Name and URL are required"; return; }
     try {
       await api("/api/channels", 10000, "POST", { name, url, lang });
       closeAddChannelModal();
       document.getElementById("modal-name").value = "";
       document.getElementById("modal-url").value  = "";
       reloadChannels();
-    } catch (e) { errEl.textContent = String(e.message) || "追加失敗"; }
+    } catch (e) { errEl.textContent = String(e.message) || "Failed to add"; }
   };
 
   window.deleteChannel = async function(name) {
-    const ok = await showConfirm(`"${name}" を削除しますか？`);
+    const ok = await showConfirm(`Delete "${name}"?`);
     if (!ok) return;
     try {
       const r = await fetch(`/api/channels?name=${encodeURIComponent(name)}`, { method: "DELETE" });
@@ -1069,7 +1069,7 @@ document.addEventListener("DOMContentLoaded", () => {
         throw new Error(j.error || r.status);
       }
       reloadChannels();
-    } catch (e) { await showConfirm(`削除失敗: ${e.message}`, "OK", false); }
+    } catch (e) { await showConfirm(`Delete failed: ${e.message}`, "OK", false); }
   };
 
   // ── 汎用確認ダイアログ ─────────────────────────────────────
@@ -1392,7 +1392,7 @@ document.addEventListener("DOMContentLoaded", () => {
     const resultsEl = document.getElementById("lib-results");
     const paginEl = document.getElementById("lib-pagination");
     if (!resultsEl) return;
-    resultsEl.innerHTML = placeholder("⏳", "読み込み中…");
+    resultsEl.innerHTML = placeholder("⏳", "Loading…");
     try {
       const chParam = [..._libSelectedChannels].join(",");
       let data;
@@ -1412,7 +1412,7 @@ document.addEventListener("DOMContentLoaded", () => {
       renderLibResults(data.results || []);
       updateLibPagination(data.total || 0, data.page || 1, data.pages || 1);
     } catch (e) {
-      resultsEl.innerHTML = placeholder("❌", `エラー: ${e.message}`);
+      resultsEl.innerHTML = placeholder("❌", `Error: ${e.message}`);
       if (paginEl) paginEl.style.display = "none";
     }
   }
@@ -1420,7 +1420,7 @@ document.addEventListener("DOMContentLoaded", () => {
   function renderLibResults(results) {
     const el = document.getElementById("lib-results");
     if (!el) return;
-    if (!results.length) { el.innerHTML = placeholder("🔍", "結果がありません"); return; }
+    if (!results.length) { el.innerHTML = placeholder("🔍", "No results"); return; }
 
     const groups = {};
     results.forEach(r => { if (!groups[r.channel]) groups[r.channel] = []; groups[r.channel].push(r); });
@@ -1466,7 +1466,7 @@ document.addEventListener("DOMContentLoaded", () => {
     if (!el) return;
     if (!total) { el.style.display = "none"; return; }
     el.style.display = "flex";
-    if (info) info.textContent = `${page} / ${pages} ページ（計 ${total} 件）`;
+    if (info) info.textContent = `${page} / ${pages} (${total} total)`;
     const btns = el.querySelectorAll("button");
     if (btns[0]) btns[0].disabled = page <= 1;
     if (btns[1]) btns[1].disabled = page >= pages;
@@ -1491,7 +1491,7 @@ document.addEventListener("DOMContentLoaded", () => {
     const label = document.getElementById("lib-chat-ctx-label");
     if (!label) return;
     const n = _libCheckedPaths.size;
-    label.textContent = n > 0 ? `選択 ${n} 件` : "ライブラリ全体";
+    label.textContent = n > 0 ? `${n} selected` : "All Library";
     if (n > 0) {
       label.classList.add("lib-chat-ctx-clickable");
       label.onclick = () => openLibSelected();
@@ -1507,7 +1507,7 @@ document.addEventListener("DOMContentLoaded", () => {
     const list    = document.getElementById("lib-selected-list");
     const countEl = document.getElementById("lib-selected-count");
     if (!modal || !list) return;
-    countEl.textContent = `${_libCheckedPaths.size} 件`;
+    countEl.textContent = `${_libCheckedPaths.size} selected`;
     list.innerHTML = "";
     [..._libCheckedPaths].forEach(path => {
       const parts   = path.split("/");
@@ -1546,7 +1546,7 @@ document.addEventListener("DOMContentLoaded", () => {
     }
     btn.closest(".lib-selected-row")?.remove();
     const countEl = document.getElementById("lib-selected-count");
-    if (countEl) countEl.textContent = `${_libCheckedPaths.size} 件`;
+    if (countEl) countEl.textContent = `${_libCheckedPaths.size} selected`;
     _updateChatContextLabel();
     if (_libCheckedPaths.size === 0) closeLibSelected();
   };
@@ -1577,7 +1577,7 @@ document.addEventListener("DOMContentLoaded", () => {
     const fileChatDiv = document.getElementById("lib-file-chat");
     if (fileChatDiv) fileChatDiv.style.height = "";
 
-    contentEl.innerHTML = placeholder("⏳", "読み込み中…");
+    contentEl.innerHTML = placeholder("⏳", "Loading…");
     modal.style.display = "flex";
 
     try {
@@ -1598,7 +1598,7 @@ document.addEventListener("DOMContentLoaded", () => {
         contentEl.textContent = content;
       }
     } catch (e) {
-      contentEl.innerHTML = placeholder("❌", `エラー: ${e.message}`);
+      contentEl.innerHTML = placeholder("❌", `Error: ${e.message}`);
     }
   };
 
@@ -1646,14 +1646,14 @@ document.addEventListener("DOMContentLoaded", () => {
           }
           if (d.usage) { _libLastUsage = d.usage; _updateContextChart(); }
           if (d.error) {
-            bubble.textContent = `エラー: ${String(d.error)}`;
+            bubble.textContent = `Error: ${String(d.error)}`;
             break;
           }
           if (d.done) break;
         }
       }
     } catch (e) {
-      if (e.name !== "AbortError") bubble.textContent = `エラー: ${e.message}`;
+      if (e.name !== "AbortError") bubble.textContent = `Error: ${e.message}`;
     } finally {
       _libChatSSE = null;
     }
@@ -1796,12 +1796,12 @@ document.addEventListener("DOMContentLoaded", () => {
             messagesEl.scrollTop = 999999;
           }
           if (d.usage) { _homeLastUsage = d.usage; _updateHomeChart(); }
-          if (d.error) { bubble.textContent = `エラー: ${String(d.error)}`; break; }
+          if (d.error) { bubble.textContent = `Error: ${String(d.error)}`; break; }
           if (d.done) break;
         }
       }
     } catch (e) {
-      if (e.name !== "AbortError") bubble.textContent = `エラー: ${e.message}`;
+      if (e.name !== "AbortError") bubble.textContent = `Error: ${e.message}`;
     } finally {
       _homeChatSSE = null;
     }

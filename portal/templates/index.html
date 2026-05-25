@@ -41,14 +41,14 @@
       <div>
         <div class="card">
           <div class="card-title-row">
-            <span class="card-title" style="margin-bottom:0">登録チャンネル</span>
+            <span class="card-title" style="margin-bottom:0">Subscribed Channels</span>
             <div style="display:flex;gap:6px">
               <button class="refresh-btn" onclick="openAddChannelModal()">+ Add</button>
               <button class="refresh-btn" onclick="reloadChannels()">↻ Refresh</button>
             </div>
           </div>
           <div class="channel-list" id="channel-list">
-            <div class="placeholder"><div class="placeholder-icon">📡</div><span>読み込み中…</span></div>
+            <div class="placeholder"><div class="placeholder-icon">📡</div><span>Loading…</span></div>
           </div>
         </div>
       </div>
@@ -56,10 +56,10 @@
         <!-- クイック実行 -->
         <div class="card">
           <div class="card-title-row">
-            <span class="card-title" style="margin-bottom:0">クイック実行 <span style="font-size:11px;color:var(--text-dim);font-weight:400;margin-left:4px">autonomous.sh</span></span>
-            <span id="run-badge" class="badge badge-gray">確認中…</span>
+            <span class="card-title" style="margin-bottom:0">Quick Run <span style="font-size:11px;color:var(--text-dim);font-weight:400;margin-left:4px">autonomous.sh</span></span>
+            <span id="run-badge" class="badge badge-gray">checking…</span>
           </div>
-          <div id="run-wsl-warn" class="run-warn" style="display:none">WSL 環境専用機能です</div>
+          <div id="run-wsl-warn" class="run-warn" style="display:none">WSL only</div>
           <div class="run-btns" style="margin-top:4px;display:flex;align-items:center;gap:8px">
             <button id="run-start-btn" class="btn-primary" onclick="startRun()">▶ Start</button>
             <button id="run-log-btn" class="refresh-btn" style="display:none;font-size:11px;padding:2px 8px;margin-left:auto" onclick="openLogByPath(this.dataset.logPath)">Open Log →</button>
@@ -68,19 +68,19 @@
 
         <!-- URL 処理 -->
         <div class="card">
-          <div class="card-title">URL 処理</div>
+          <div class="card-title">URL Process</div>
           <div class="run-form">
             <div class="form-row">
-              <label class="form-label">YouTube URL（1行1件、複数可）</label>
+              <label class="form-label">YouTube URL</label>
               <textarea id="proc-urls" class="form-input form-textarea" rows="3"
                 placeholder="https://www.youtube.com/watch?v=...&#10;https://www.youtube.com/watch?v=..."></textarea>
             </div>
             <div class="form-row">
-              <label class="form-label">チャンネル名（保存先）</label>
+              <label class="form-label">Channel</label>
               <select id="proc-channel" class="form-input"></select>
             </div>
             <div class="form-row">
-              <label class="form-label">言語</label>
+              <label class="form-label">Language</label>
               <select id="proc-lang" class="form-input">
                 <option value="ja">ja</option>
                 <option value="en">en</option>
@@ -93,12 +93,12 @@
           <div id="proc-result" class="proc-result"></div>
         </div>
 
-        <!-- その他 -->
+        <!-- Other -->
         <div class="card">
-          <div class="card-title">その他</div>
+          <div class="card-title">Other</div>
           <div class="run-form">
             <div class="form-row">
-              <label class="form-label">Threshold（summarize 用、単語数未満をスキップ）</label>
+              <label class="form-label">Threshold</label>
               <input id="batch-threshold" type="number" class="form-input" value="20" min="1" max="1000">
             </div>
           </div>
@@ -116,30 +116,30 @@
   <div id="pane-status" class="pane">
     <!-- ヘッダー -->
     <div class="card status-header-card" id="status-header-card">
-      <div class="placeholder"><div class="placeholder-icon">⏳</div><span>読み込み中…</span></div>
+      <div class="placeholder"><div class="placeholder-icon">⏳</div><span>Loading…</span></div>
     </div>
 
     <!-- 左右パネル（高さ揃え） -->
     <div class="grid-2">
       <div class="card status-videos-card">
         <div class="card-title-row">
-          <span class="card-title" style="margin-bottom:0">処理済み動画（今セッション）</span>
+          <span class="card-title" style="margin-bottom:0">Processed Videos</span>
           <button class="refresh-btn" onclick="reloadStatus()">↻ Refresh</button>
         </div>
         <div class="status-videos-scroll" id="status-videos">
-          <div class="placeholder"><div class="placeholder-icon">🎞️</div><span>読み込み中…</span></div>
+          <div class="placeholder"><div class="placeholder-icon">🎞️</div><span>Loading…</span></div>
         </div>
       </div>
       <div class="card status-stats-card">
-        <div class="card-title">統計</div>
-        <div id="status-stats"><div class="placeholder"><div class="placeholder-icon">📊</div><span>読み込み中…</span></div></div>
+        <div class="card-title">Statistics</div>
+        <div id="status-stats"><div class="placeholder"><div class="placeholder-icon">📊</div><span>Loading…</span></div></div>
       </div>
     </div>
 
     <!-- GPU（下段 full-width） -->
     <div class="card">
-      <div class="card-title">GPU 使用率</div>
-      <div id="gpu-init" class="placeholder"><div class="placeholder-icon">⏳</div><span>読み込み中…</span></div>
+      <div class="card-title">GPU Utilization</div>
+      <div id="gpu-init" class="placeholder"><div class="placeholder-icon">⏳</div><span>Loading…</span></div>
       <div id="gpu-canvas-wrap" style="display:none">
         <div class="gpu-meta-row" id="gpu-meta-row"></div>
         <canvas id="gpu-canvas" height="80" style="width:100%;display:block;border-radius:6px"></canvas>
@@ -150,8 +150,8 @@
 
   <!-- LIBRARY -->
   <div id="pane-library" class="pane">
-    <div id="lib-wsl-warn" class="run-warn" style="display:none">WSL 環境専用機能です</div>
-    <div id="lib-gpu-warn" class="lib-gpu-warn" style="display:none">GPU 使用中 — Ollama と競合する可能性があります</div>
+    <div id="lib-wsl-warn" class="run-warn" style="display:none">WSL only</div>
+    <div id="lib-gpu-warn" class="lib-gpu-warn" style="display:none">GPU in use — may conflict with Ollama</div>
 
     <div class="card lib-search-card" id="lib-search-card" style="display:{{ '' if is_wsl else 'none' }}">
       <div class="lib-search-row">
@@ -160,8 +160,8 @@
                oninput="libSearchInstant()"
                onkeydown="if(event.key==='Escape'){this.value='';libSearchInstant()}">
         <select id="lib-scope" class="form-input lib-scope-select" onchange="libSearchInstant()">
-          <option value="points">ポイントのみ</option>
-          <option value="full">全文</option>
+          <option value="points">Points</option>
+          <option value="full">Full Text</option>
         </select>
       </div>
       <div id="lib-channel-chips" class="lib-chips"></div>
@@ -180,11 +180,11 @@
     <div class="grid-2 logs-grid">
       <div class="card">
         <div class="card-title-row">
-          <span class="card-title" style="margin-bottom:0">ログファイル一覧</span>
+          <span class="card-title" style="margin-bottom:0">Log Files</span>
           <button class="refresh-btn" onclick="reloadLogs()">↻ Refresh</button>
         </div>
         <div class="channel-list" id="log-list">
-          <div class="placeholder"><div class="placeholder-icon">📄</div><span>読み込み中…</span></div>
+          <div class="placeholder"><div class="placeholder-icon">📄</div><span>Loading…</span></div>
         </div>
       </div>
       <div class="card" id="log-viewer-card" style="display:none">
@@ -204,7 +204,7 @@
         <span class="card-title" style="margin-bottom:0">README.md</span>
         <button class="refresh-btn" onclick="reloadReadme()">↻ Reload</button>
       </div>
-      <div class="markdown-body" id="readme-body">読み込み中…</div>
+      <div class="markdown-body" id="readme-body">Loading…</div>
     </div>
   </div>
 
@@ -214,7 +214,7 @@
 <div id="lib-chat-panel" class="lib-chat-panel">
   <div id="lib-panel-resize-handle" class="lib-panel-resize-handle"></div>
   <div class="lib-chat-header">
-    <span id="lib-chat-ctx-label" class="lib-chat-ctx">ライブラリ全体</span>
+    <span id="lib-chat-ctx-label" class="lib-chat-ctx">All Library</span>
     <button class="refresh-btn btn-sm" onclick="libChatClear()">Clear</button>
   </div>
   <div class="lib-model-row" style="padding:4px 14px 0">
@@ -248,7 +248,7 @@
 
 <div id="home-chat-panel" class="lib-chat-panel">
   <div class="lib-chat-header">
-    <span class="lib-chat-ctx">yt-learn アシスタント</span>
+    <span class="lib-chat-ctx">yt-learn assistant</span>
     <button class="refresh-btn btn-sm" onclick="homeChatClear()">Clear</button>
   </div>
   <div class="lib-model-row" style="padding:4px 14px 0">
@@ -288,10 +288,10 @@
 <div id="add-channel-modal" class="modal-backdrop" style="display:none"
      onclick="if(event.target===this)closeAddChannelModal()">
   <div class="modal-box">
-    <div class="modal-title">チャンネルを追加</div>
+    <div class="modal-title">Add Channel</div>
     <div class="run-form">
       <div class="form-row">
-        <label class="form-label">チャンネル名</label>
+        <label class="form-label">Channel Name</label>
         <input id="modal-name" type="text" class="form-input" placeholder="ひろゆき">
       </div>
       <div class="form-row">
@@ -299,7 +299,7 @@
         <input id="modal-url" type="url" class="form-input" placeholder="https://www.youtube.com/@...">
       </div>
       <div class="form-row">
-        <label class="form-label">言語</label>
+        <label class="form-label">Language</label>
         <select id="modal-lang" class="form-input">
           <option value="ja">ja</option>
           <option value="en">en</option>
@@ -369,7 +369,7 @@
      onclick="if(event.target===this)closeLibSelected()">
   <div class="modal-box modal-box-wide">
     <div class="modal-title-row">
-      <span class="modal-title" style="margin-bottom:0">選択中の動画</span>
+      <span class="modal-title" style="margin-bottom:0">Selected Videos</span>
       <span id="lib-selected-count" style="font-size:12px;color:var(--text-faint)"></span>
       <span style="flex:1"></span>
       <button class="refresh-btn btn-sm" onclick="deselectAllCards()">Clear All</button>
