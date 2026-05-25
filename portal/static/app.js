@@ -756,7 +756,7 @@ document.addEventListener("DOMContentLoaded", () => {
       if (!logs.length) { el.innerHTML = placeholder("📭", "ログファイルなし"); return; }
       el.innerHTML = logs.map(l => {
         const badgeCls = !l.is_done ? "badge-blue" : l.has_error ? "badge-err" : "badge-green";
-        const badgeText = !l.is_done ? "live" : l.has_error ? "error" : "done";
+        const badgeText = !l.is_done ? "running" : l.has_error ? "error" : "done";
         return `
         <div class="channel-item log-file-item" data-path="${esc(l.path)}" data-is-done="${l.is_done}" onclick="openLog(this)">
           <span class="badge ${badgeCls}" data-live-badge>${badgeText}</span>
