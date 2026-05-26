@@ -724,6 +724,8 @@ async def _build_status_data(log_path: str | None = None) -> dict:
             status = "rate-limit"; break
         if "[done]" in l or "[download]" in l or "[saved]" in l or "[skip]" in l:
             status = "running"; break
+    if status == "unknown" and (yt_session or active_jobs or processes):
+        status = "running"
 
     session_type = "idle"
     if yt_session:
