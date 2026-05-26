@@ -17,4 +17,4 @@ if [[ -n "$OLD_PIDS" ]]; then
   sleep 1
 fi
 
-exec uvicorn portal.main:app --host 0.0.0.0 --port 8080
+exec uvicorn portal.main:app --host 0.0.0.0 --port 8080 --reload --reload-dir portal
