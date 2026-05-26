@@ -7,6 +7,7 @@ document.addEventListener("DOMContentLoaded", () => {
   let _statusData = null;
   let _statusEventSource = null;
   let _logEventSource = null;
+  let _currentLogPath = null;
   let _isWsl = document.documentElement.dataset.wsl === "true";
   let _pendingLogPath = null;
   const _gpuHistory = [];
@@ -786,6 +787,7 @@ document.addEventListener("DOMContentLoaded", () => {
     card.style.display = "flex";
     titleEl.textContent = path.split("/").pop();
     content.textContent = "Loading…";
+    _currentLogPath = path;
 
     stopLogStream();
 
@@ -859,8 +861,23 @@ document.addEventListener("DOMContentLoaded", () => {
 
   window.closeLogViewer = function() {
     stopLogStream();
+    _currentLogPath = null;
     document.getElementById("log-viewer-card").style.display = "none";
     document.querySelectorAll(".log-file-item").forEach(e => e.classList.remove("active-log"));
+  };
+
+  window.copyLogPath = async function() {
+    if (!_currentLogPath) return;
+    const btn = document.getElementById("log-copy-path-btn");
+    try {
+      await navigator.clipboard.writeText(_currentLogPath);
+      const orig = btn.textContent;
+      btn.textContent = "✓ Copied";
+      setTimeout(() => { btn.textContent = orig; }, 1500);
+    } catch {
+      btn.textContent = "Failed";
+      setTimeout(() => { btn.textContent = "⎘ Copy Path"; }, 1500);
+    }
   };
 
   // ── utils ────────────────────────────────────────────────

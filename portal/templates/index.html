@@ -190,7 +190,10 @@
       <div class="card" id="log-viewer-card" style="display:none">
         <div class="card-title-row">
           <span class="card-title" id="log-viewer-title" style="margin-bottom:0"></span>
-          <button class="refresh-btn" onclick="closeLogViewer()">✕ Close</button>
+          <div style="display:flex;gap:6px">
+            <button class="refresh-btn" id="log-copy-path-btn" onclick="copyLogPath()">⎘ Copy Path</button>
+            <button class="refresh-btn" onclick="closeLogViewer()">✕ Close</button>
+          </div>
         </div>
         <div class="log-output" id="log-viewer-content"></div>
       </div>
