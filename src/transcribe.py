@@ -80,6 +80,7 @@ _SUPPRESSED_ERR_MARKERS = (
     "Got error",          # ネットワーク切断（一時的）
     "Read timed out",     # ソケットタイムアウト（一時的）
     "Connection reset",   # 接続リセット（一時的）
+    "HTTP Error 403",     # アクセス禁止（geo制限・非公開等、恒久的に失敗）
 )
 
 
@@ -895,6 +896,9 @@ def _process_channel(channel_name: str, channel_url: str, lang: str = "ja", limi
             if "Got error" in msg or "Read timed out" in msg or "Connection reset" in msg:
                 _err(f"[warn] {v['title']}: ネットワークエラー → スキップ")
                 continue
+            if "HTTP Error 403" in msg:
+                _err(f"[warn] {v['title']}: アクセス禁止(403) → スキップ")
+                continue
             _err(f"[error] {v['title']}: {e}")
 
     if sort == "popular" and processed > 0:
@@ -974,6 +978,9 @@ def _download_channel_to_queue(
                 continue
             if "Got error" in msg or "Read timed out" in msg or "Connection reset" in msg:
                 _err(f"[warn] {v['title']}: ネットワークエラー → スキップ")
+                continue
+            if "HTTP Error 403" in msg:
+                _err(f"[warn] {v['title']}: アクセス禁止(403) → スキップ")
                 continue
             _err(f"[error] {v['title']}: {e}")
 
