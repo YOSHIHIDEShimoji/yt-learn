@@ -541,12 +541,19 @@ async def _get_active_processes() -> list[dict]:
             logs = sorted(log_dir.glob("*.log"), key=lambda x: x.stat().st_mtime, reverse=True)
             if logs:
                 log_file = str(logs[0].relative_to(ROOT))
+        session_started_at = ""
+        suffix = yt_session.removeprefix(_YT_SESSION_PREFIX)
+        if suffix and suffix[0].isdigit():
+            try:
+                session_started_at = datetime.strptime(suffix, "%Y%m%d_%H%M%S").strftime("%Y-%m-%d %H:%M:%S")
+            except ValueError:
+                pass
         procs.append({
             "id": f"autonomous_{yt_session}",
             "type": "autonomous",
             "label": "autonomous.sh",
             "log_file": log_file,
-            "started_at": "",
+            "started_at": session_started_at,
         })
     return procs
 
