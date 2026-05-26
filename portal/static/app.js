@@ -1224,6 +1224,7 @@ document.addEventListener("DOMContentLoaded", () => {
   let _libFileChatMessages = [];
   let _libCurrentFilePath = "";
   let _libModelPref = "ollama";
+  let _libFileModelPref = "ollama";
 
   // ── Gemini コンテキスト管理 ──────────────────────────────────
   const _GEMINI_CTX_MAX = 1_048_576;
@@ -1279,6 +1280,10 @@ document.addEventListener("DOMContentLoaded", () => {
   window.setHomeModel = function(v) {
     _homeModelPref = v;
     _updateHomeChart();
+  };
+
+  window.setLibFileModel = function(v) {
+    _libFileModelPref = v;
   };
 
   // 重複段落除去（同じ段落が2回出る問題の後処理）
@@ -1627,7 +1632,7 @@ document.addEventListener("DOMContentLoaded", () => {
   window.closeLibViewer = closeLibViewer;
 
   // ── Library: SSE チャットストリーム ─────────────────────────
-  async function _libStreamChat(messages, paths, messagesEl) {
+  async function _libStreamChat(messages, paths, messagesEl, modelPref = _libModelPref) {
     if (_libChatSSE) { _libChatSSE.abort(); _libChatSSE = null; }
     const ctrl = new AbortController();
     _libChatSSE = ctrl;
@@ -1639,7 +1644,7 @@ document.addEventListener("DOMContentLoaded", () => {
       const resp = await fetch("/api/library/chat", {
         method: "POST", signal: ctrl.signal,
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ messages, paths, model_pref: _libModelPref }),
+        body: JSON.stringify({ messages, paths, model_pref: modelPref }),
       });
       if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
       const reader = resp.body.getReader();
@@ -1863,7 +1868,7 @@ document.addEventListener("DOMContentLoaded", () => {
     _libFileChatMessages.push({ role: "user", content: text });
     _appendChatBubble("user", text, messagesEl);
     const paths = _libCurrentFilePath ? [_libCurrentFilePath] : [];
-    const aiText = await _libStreamChat([..._libFileChatMessages], paths, messagesEl);
+    const aiText = await _libStreamChat([..._libFileChatMessages], paths, messagesEl, _libFileModelPref);
     if (aiText) _libFileChatMessages.push({ role: "assistant", content: aiText });
   };
 

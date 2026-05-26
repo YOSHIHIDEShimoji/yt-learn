@@ -340,6 +340,17 @@
     <div id="lib-file-chat" class="lib-file-chat">
       <div id="lib-file-chat-resize-handle" class="lib-file-chat-resize-handle"></div>
       <div id="lib-file-chat-messages" class="lib-chat-messages lib-chat-messages-sm"></div>
+      <div class="lib-model-row" style="padding:4px 14px 0">
+        <span class="lib-model-label">AI:</span>
+        <label class="lib-model-opt">
+          <input type="radio" name="file-model" value="ollama" checked onchange="setLibFileModel('ollama')">
+          qwen2.5:14b (Local)
+        </label>
+        <label class="lib-model-opt">
+          <input type="radio" name="file-model" value="gemini" onchange="setLibFileModel('gemini')">
+          Gemini 2.5 Flash Lite
+        </label>
+      </div>
       <div class="lib-chat-input-row">
         <textarea id="lib-file-chat-input" class="form-input lib-chat-textarea"
                placeholder="Ask a question..."
