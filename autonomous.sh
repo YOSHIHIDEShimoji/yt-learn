@@ -60,6 +60,7 @@ LOG_FILE="$LOG_DIR/$(date '+%Y%m%d_%H%M%S')_autonomous.log"
 
 SESSION_START=$(date +%s)
 DL_PID=""
+SUMMARIZE_FLAG="$SCRIPT_DIR/.summarize_running"
 
 log() {
   local msg="[$(date '+%Y-%m-%d %H:%M:%S')] ${WORKER:+$WORKER }$1"
@@ -103,6 +104,7 @@ cleanup() {
   local h=$(( elapsed / 3600 ))
   local m=$(( (elapsed % 3600) / 60 ))
   [ -n "$DL_PID" ] && kill "$DL_PID" 2>/dev/null
+  rm -f "$SUMMARIZE_FLAG"
   local total; total=$(grep -c '^\[saved\]' "$LOG_FILE" 2>/dev/null || echo 0)
   local summary="[session-end] mode=autonomous, transcribed=${total}件, elapsed=${h}h${m}m"
   echo "$summary" | tee -a "$LOG_FILE"
@@ -169,9 +171,12 @@ dl_worker() {
     # 全チャンネルを一周したら要約・git pushを実行（rate-limit で中断した場合はスキップ）
     if ! $rate_limited; then
       WORKER="[SUM]"
-      log "DL 1周完了 → summarize.py 実行"
+      log "DL 1周完了 → summarize.py 実行（文字起こし一時停止）"
+      touch "$SUMMARIZE_FLAG"
       python "$SCRIPT_DIR/src/summarize.py" all 2>&1 \
         | stamp | tee -a "$LOG_FILE"
+      rm -f "$SUMMARIZE_FLAG"
+      log "summarize 完了 → 文字起こし再開"
 
       WORKER="[GIT]"
       log "cache/index を push（WSL優先）"
@@ -210,6 +215,15 @@ dl_worker() {
 transcribe_worker() {
   WORKER="[TX]"
   while true; do
+    # summarize 実行中は GPU を譲る
+    if [[ -f "$SUMMARIZE_FLAG" ]]; then
+      log "summarize 実行中 → GPU を譲って待機..."
+      while [[ -f "$SUMMARIZE_FLAG" ]]; do
+        sleep 10
+      done
+      log "summarize 完了を検知 → 文字起こし再開"
+    fi
+
     python "$SCRIPT_DIR/src/transcribe.py" drain-queue \
       --model "$MODEL" 2>&1 \
       | stamp | tee -a "$LOG_FILE"
