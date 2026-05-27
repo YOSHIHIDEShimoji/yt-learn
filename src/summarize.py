@@ -121,6 +121,18 @@ def _save_processed(channel_name: str, processed: set) -> None:
 
 # ── ローカルLLM / Gemini 共通ユーティリティ ──────────────────────────────────
 
+def _is_timeout_error(e: Exception) -> bool:
+    """タイムアウト起因の例外かどうかを判定する。"""
+    import urllib.error
+    if isinstance(e, TimeoutError):
+        return True
+    if isinstance(e, urllib.error.URLError):
+        reason = getattr(e, "reason", None)
+        if isinstance(reason, (TimeoutError, OSError)) and "timed out" in str(reason):
+            return True
+    return "timed out" in str(e).lower()
+
+
 def _call_ollama(prompt: str, base_url: str, model: str) -> str | None:
     import urllib.request
     payload = json.dumps({
@@ -135,7 +147,7 @@ def _call_ollama(prompt: str, base_url: str, model: str) -> str | None:
         headers={"Content-Type": "application/json"},
         method="POST",
     )
-    with urllib.request.urlopen(req, timeout=120) as resp:
+    with urllib.request.urlopen(req, timeout=180) as resp:
         data = json.loads(resp.read().decode("utf-8"))
     return (data.get("response") or "").strip() or None
 
@@ -259,7 +271,10 @@ def _summarize_channel(channel_name: str, force: bool = False, threshold: int = 
             _save_processed(channel_name, processed)
             done_count += 1
         except Exception as e:
-            _err(f"  [error] {t.name}: {e}")
+            if _is_timeout_error(e):
+                _err(f"  [warn] {t.name}: Ollama タイムアウト（GPU 占有中などの可能性）— スキップ")
+            else:
+                _err(f"  [error] {t.name}: {e}")
 
     _err(f"[done] {channel_name}: サマリー更新完了")
 
