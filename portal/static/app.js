@@ -426,7 +426,7 @@ document.addEventListener("DOMContentLoaded", () => {
         <div class="stat-item"><span class="stat-label">phase</span><span class="stat-val" style="font-size:13px">${esc(d.phase)}</span></div>
       </div>
       <div style="margin-top:12px;display:flex;justify-content:space-between;align-items:center;font-size:11px;color:var(--text-faint)">
-        <span title="${esc(d.log_file_path || "")}">ログ: ${esc(d.log_file || "—")}</span>
+        <span title="${esc(d.log_file_path || "")}">log: ${esc(d.log_file || "—")}</span>
         ${d.log_file_path ? `<button class="refresh-btn" style="font-size:11px;padding:2px 8px" data-log-path="${esc(d.log_file_path)}" onclick="openLogByPath(this.dataset.logPath)">Open Log →</button>` : ""}
       </div>`;
   }
