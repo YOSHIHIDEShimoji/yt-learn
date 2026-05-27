@@ -1177,20 +1177,11 @@ document.addEventListener("DOMContentLoaded", () => {
       startY = e.clientY;
       startH = fileChat.offsetHeight;
 
-      // <hr>（---区切り）の位置を基準に最大高さを計算
-      const viewerContent = document.getElementById("lib-viewer-content");
-      const hr = viewerContent?.querySelector("hr");
-      maxH = window.innerHeight * 0.8;
-      if (hr && viewerContent) {
-        const modalBox = fileChat.closest(".modal-box-viewer");
-        if (modalBox) {
-          const modalRect  = modalBox.getBoundingClientRect();
-          const hrRect     = hr.getBoundingClientRect();
-          // hr の下端からモーダル下端までの距離 = fileChat の最大高さ
-          const fromHrBottom = modalRect.bottom - hrRect.bottom - 8;
-          maxH = Math.max(70, fromHrBottom);
-        }
-      }
+      // モーダル高さの 75% を上限とする（hr のスクロール位置に依存しない）
+      const modalBox = fileChat.closest(".modal-box-viewer");
+      maxH = modalBox
+        ? Math.round(modalBox.getBoundingClientRect().height * 0.75)
+        : Math.round(window.innerHeight * 0.7);
 
       handle.classList.add("dragging");
       const move = ev => {
