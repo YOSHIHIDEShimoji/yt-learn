@@ -194,6 +194,33 @@ def _save_index(channel_name: str, index: dict) -> None:
     p.write_text(json.dumps(index, ensure_ascii=False, indent=2), encoding="utf-8")
 
 
+def _repair_index() -> None:
+    """_index.json から対応する .md ファイルが存在しないエントリを削除する。"""
+    if not TRANSCRIPTS_DIR.exists():
+        _err("[warn] transcripts/ が存在しません")
+        return
+    total_removed = 0
+    for index_path in sorted(TRANSCRIPTS_DIR.glob("*/_index.json")):
+        try:
+            index = json.loads(index_path.read_text(encoding="utf-8"))
+        except Exception as e:
+            _err(f"[warn] {index_path} 読み込み失敗: {e}")
+            continue
+        to_remove = [
+            vid_id for vid_id, info in index.items()
+            if info.get("file") and not Path(info["file"]).exists()
+        ]
+        if not to_remove:
+            continue
+        for vid_id in to_remove:
+            title = index[vid_id].get("title", vid_id)
+            _err(f"[repair] 削除: {index_path.parent.name} / {title}")
+            del index[vid_id]
+        index_path.write_text(json.dumps(index, ensure_ascii=False, indent=2), encoding="utf-8")
+        total_removed += len(to_remove)
+    _err(f"[repair] 完了: {total_removed} 件削除")
+
+
 def _is_globally_processed(vid_id: str) -> tuple[bool, str, str]:
     """全チャンネルの _index.json を横断して vid_id を検索。
     Returns (found, channel_name, title)"""
@@ -1247,6 +1274,8 @@ AI要約は別スクリプト:
 
     sub.add_parser("refresh-cookies", help="Windows Chrome からクッキーを取得して cookies.txt を更新")
 
+    sub.add_parser("repair-index", help="_index.json からファイルが存在しないエントリを削除")
+
     p_sync = sub.add_parser("sync", help="transcripts/ と summaries/ を Google Drive に同期")
     p_sync.add_argument("--only", choices=["transcripts", "summaries"],
                         help="同期対象を絞る（省略時は両方）")
@@ -1317,6 +1346,9 @@ AI要約は別スクリプト:
     elif args.cmd == "sync":
         dirs = [args.only] if args.only else None
         _sync_drive(dirs)
+
+    elif args.cmd == "repair-index":
+        _repair_index()
 
     elif args.cmd == "all":
         channels = _load_channels()

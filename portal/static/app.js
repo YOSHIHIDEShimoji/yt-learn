@@ -388,10 +388,11 @@ document.addEventListener("DOMContentLoaded", () => {
     }
     if (d.done_videos && d.done_videos.length) {
       d.done_videos.forEach((v, i) => {
+        const hasMd = v.has_md !== false;
         cards.push(`
-          <div class="video-card video-card-lib" data-idx="${i}"
+          <div class="video-card${hasMd ? " video-card-lib" : ""}" data-idx="${i}"
                data-channel="${esc(v.channel)}" data-title="${esc(v.title)}"
-               onclick="openVideoInLibrary(this)" title="LIBRARY で開く">
+               ${hasMd ? `onclick="openVideoInLibrary(this)" title="LIBRARY で開く"` : 'title="文字起こしファイルなし"'}>
             <span class="badge badge-green" style="flex-shrink:0">done</span>
             <div class="video-info">
               <div class="video-title">${esc(v.title)}</div>

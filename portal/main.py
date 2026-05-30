@@ -706,6 +706,8 @@ async def _build_status_data(log_path: str | None = None) -> dict:
         for v in done_videos:
             file_map = ch_url_map.get(v.get("channel", ""), {})
             v["drive_url"] = file_map.get(v.get("title", ""), "")
+            md_path = ROOT / "transcripts" / v.get("channel", "") / f"{v.get('title', '')}.md"
+            v["has_md"] = md_path.exists()
 
     phase = "idle"
     for l in reversed(lines[-20:]):
