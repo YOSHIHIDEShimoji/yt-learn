@@ -1852,5 +1852,125 @@
     "url": "https://www.youtube.com/watch?v=r5NQecwZs1A",
     "file": "/home/wsl-yoshihide/my-projects/yt-learn/transcripts/Fireship/CPU vs GPU vs TPU vs DPU vs QPU.md",
     "transcribed_at": "2026-06-01"
+  },
+  "ravLFzIguCM": {
+    "title": "C# in 100 Seconds",
+    "url": "https://www.youtube.com/watch?v=ravLFzIguCM",
+    "file": "/home/wsl-yoshihide/my-projects/yt-learn/transcripts/Fireship/C# in 100 Seconds.md",
+    "transcribed_at": "2026-06-01"
+  },
+  "4yDm6xNeYas": {
+    "title": "Some bad code just broke a billion Windows machines",
+    "url": "https://www.youtube.com/watch?v=4yDm6xNeYas",
+    "file": "/home/wsl-yoshihide/my-projects/yt-learn/transcripts/Fireship/Some bad code just broke a billion Windows machines.md",
+    "transcribed_at": "2026-06-01"
+  },
+  "A4_TFHzqAAg": {
+    "title": "How to get rich as a solo software developer - The Ultimate Guide",
+    "url": "https://www.youtube.com/watch?v=A4_TFHzqAAg",
+    "file": "/home/wsl-yoshihide/my-projects/yt-learn/transcripts/Fireship/How to get rich as a solo software developer - The Ultimate Guide.md",
+    "transcribed_at": "2026-06-01"
+  },
+  "hpwoGjpYygI": {
+    "title": "DeepSeek stole our tech... says OpenAI",
+    "url": "https://www.youtube.com/watch?v=hpwoGjpYygI",
+    "file": "/home/wsl-yoshihide/my-projects/yt-learn/transcripts/Fireship/DeepSeek stole our tech... says OpenAI.md",
+    "transcribed_at": "2026-06-01"
+  },
+  "goy4lZfDtCE": {
+    "title": "Reacting to Controversial Opinions of Software Engineers",
+    "url": "https://www.youtube.com/watch?v=goy4lZfDtCE",
+    "file": "/home/wsl-yoshihide/my-projects/yt-learn/transcripts/Fireship/Reacting to Controversial Opinions of Software Engineers.md",
+    "transcribed_at": "2026-06-01"
+  },
+  "Qhaz36TZG5Y": {
+    "title": "10 CSS Pro Tips - Code this, NOT that!",
+    "url": "https://www.youtube.com/watch?v=Qhaz36TZG5Y",
+    "file": "/home/wsl-yoshihide/my-projects/yt-learn/transcripts/Fireship/10 CSS Pro Tips - Code this, NOT that!.md",
+    "transcribed_at": "2026-06-01"
+  },
+  "h7gf5M04hdg": {
+    "title": "TempleOS in 100 Seconds",
+    "url": "https://www.youtube.com/watch?v=h7gf5M04hdg",
+    "file": "/home/wsl-yoshihide/my-projects/yt-learn/transcripts/Fireship/TempleOS in 100 Seconds.md",
+    "transcribed_at": "2026-06-01"
+  },
+  "5C_HPTJg5ek": {
+    "title": "Rust in 100 Seconds",
+    "url": "https://www.youtube.com/watch?v=5C_HPTJg5ek",
+    "file": "/home/wsl-yoshihide/my-projects/yt-learn/transcripts/Fireship/Rust in 100 Seconds.md",
+    "transcribed_at": "2026-06-01"
+  },
+  "bOCHTHkBoAs": {
+    "title": "10 Math Concepts for Programmers",
+    "url": "https://www.youtube.com/watch?v=bOCHTHkBoAs",
+    "file": "/home/wsl-yoshihide/my-projects/yt-learn/transcripts/Fireship/10 Math Concepts for Programmers.md",
+    "transcribed_at": "2026-06-01"
+  },
+  "JYs_94znYy0": {
+    "title": "Julia in 100 Seconds",
+    "url": "https://www.youtube.com/watch?v=JYs_94znYy0",
+    "file": "/home/wsl-yoshihide/my-projects/yt-learn/transcripts/Fireship/Julia in 100 Seconds.md",
+    "transcribed_at": "2026-06-01"
+  },
+  "0XvOOi6g5Ok": {
+    "title": "Google’s Genie model makes realistic worlds in realtime…",
+    "url": "https://www.youtube.com/watch?v=0XvOOi6g5Ok",
+    "file": "/home/wsl-yoshihide/my-projects/yt-learn/transcripts/Fireship/Google’s Genie model makes realistic worlds in realtime….md",
+    "transcribed_at": "2026-06-01"
+  },
+  "DC2p3kFjcK0": {
+    "title": "There's a new Linux distro in town for developers...",
+    "url": "https://www.youtube.com/watch?v=DC2p3kFjcK0",
+    "file": "/home/wsl-yoshihide/my-projects/yt-learn/transcripts/Fireship/There's a new Linux distro in town for developers....md",
+    "transcribed_at": "2026-06-01"
+  },
+  "_rGXIXyNqpk": {
+    "title": "I built my own AutoGPT that makes videos",
+    "url": "https://www.youtube.com/watch?v=_rGXIXyNqpk",
+    "file": "/home/wsl-yoshihide/my-projects/yt-learn/transcripts/Fireship/I built my own AutoGPT that makes videos.md",
+    "transcribed_at": "2026-06-01"
+  },
+  "xRMPKQweySE": {
+    "title": "Ansible in 100 Seconds",
+    "url": "https://www.youtube.com/watch?v=xRMPKQweySE",
+    "file": "/home/wsl-yoshihide/my-projects/yt-learn/transcripts/Fireship/Ansible in 100 Seconds.md",
+    "transcribed_at": "2026-06-01"
+  },
+  "R6S-b_k-ZKY": {
+    "title": "The Dark Side of Open Source // What really happened to Faker.js?",
+    "url": "https://www.youtube.com/watch?v=R6S-b_k-ZKY",
+    "file": "/home/wsl-yoshihide/my-projects/yt-learn/transcripts/Fireship/The Dark Side of Open Source __ What really happened to Faker.js_.md",
+    "transcribed_at": "2026-06-01"
+  },
+  "hw3Bx5vxKl0": {
+    "title": "Solid in 100 Seconds",
+    "url": "https://www.youtube.com/watch?v=hw3Bx5vxKl0",
+    "file": "/home/wsl-yoshihide/my-projects/yt-learn/transcripts/Fireship/Solid in 100 Seconds.md",
+    "transcribed_at": "2026-06-01"
+  },
+  "1X3dV3D5EJg": {
+    "title": "Grafana is the goat... Let's deploy the LGTM stack",
+    "url": "https://www.youtube.com/watch?v=1X3dV3D5EJg",
+    "file": "/home/wsl-yoshihide/my-projects/yt-learn/transcripts/Fireship/Grafana is the goat... Let's deploy the LGTM stack.md",
+    "transcribed_at": "2026-06-01"
+  },
+  "mBFf-aYoV6Q": {
+    "title": "17 weird new tech products at CES 2025 you need right now...",
+    "url": "https://www.youtube.com/watch?v=mBFf-aYoV6Q",
+    "file": "/home/wsl-yoshihide/my-projects/yt-learn/transcripts/Fireship/17 weird new tech products at CES 2025 you need right now....md",
+    "transcribed_at": "2026-06-01"
+  },
+  "_w0Ikk4JY7U": {
+    "title": "Next.js 13… this changes everything",
+    "url": "https://www.youtube.com/watch?v=_w0Ikk4JY7U",
+    "file": "/home/wsl-yoshihide/my-projects/yt-learn/transcripts/Fireship/Next.js 13… this changes everything.md",
+    "transcribed_at": "2026-06-01"
+  },
+  "-atblwgc63E": {
+    "title": "BEST Web Dev Setup? Windows & Linux at the same time (WSL)",
+    "url": "https://www.youtube.com/watch?v=-atblwgc63E",
+    "file": "/home/wsl-yoshihide/my-projects/yt-learn/transcripts/Fireship/BEST Web Dev Setup_ Windows & Linux at the same time (WSL).md",
+    "transcribed_at": "2026-06-01"
   }
 }
