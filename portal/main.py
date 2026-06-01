@@ -707,7 +707,10 @@ async def _build_status_data(log_path: str | None = None) -> dict:
             file_map = ch_url_map.get(v.get("channel", ""), {})
             v["drive_url"] = file_map.get(v.get("title", ""), "")
             md_path = ROOT / "transcripts" / v.get("channel", "") / f"{v.get('title', '')}.md"
-            v["has_md"] = md_path.exists()
+            try:
+                v["has_md"] = md_path.exists()
+            except OSError:
+                v["has_md"] = False
 
     phase = "idle"
     for l in reversed(lines[-20:]):
