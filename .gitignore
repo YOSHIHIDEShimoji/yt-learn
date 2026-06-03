@@ -1,5 +1,7 @@
-transcripts/
+transcripts/**
+!transcripts/*/
 !transcripts/*/_index.json
+!transcripts/*/_ranking.json
 summaries/
 logs/loop/
 logs/benchmark/

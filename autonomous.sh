@@ -77,19 +77,19 @@ queue_size() {
 }
 
 git_push_cache() {
-  local idx_files=()
+  local json_files=()
   while IFS= read -r f; do
-    idx_files+=("$f")
-  done < <(find "$SCRIPT_DIR/transcripts" -name "_index.json" 2>/dev/null)
+    json_files+=("$f")
+  done < <(find "$SCRIPT_DIR/transcripts" -name "*.json" 2>/dev/null)
 
   local changed
-  changed=$(git -C "$SCRIPT_DIR" status --porcelain cache/ "${idx_files[@]}" 2>/dev/null)
+  changed=$(git -C "$SCRIPT_DIR" status --porcelain cache/ "${json_files[@]}" 2>/dev/null)
   if [[ -z "$changed" ]]; then
     log "[git] 変更なし、スキップ"
     return
   fi
 
-  git -C "$SCRIPT_DIR" add cache/ "${idx_files[@]}"
+  git -C "$SCRIPT_DIR" add cache/ "${json_files[@]}"
   git -C "$SCRIPT_DIR" commit -m "chore: update cache ($(date '+%Y-%m-%d'))" 2>&1 \
     | stamp | tee -a "$LOG_FILE"
   git -C "$SCRIPT_DIR" pull --rebase -X ours 2>&1 \

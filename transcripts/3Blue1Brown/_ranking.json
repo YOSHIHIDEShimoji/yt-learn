@@ -1,0 +1,1048 @@
+{
+  "updated_at": "2026-06-03",
+  "ranking": [
+    {
+      "rank": 1,
+      "video_id": "aircAruvnKk",
+      "title": "But what is a neural network? | Deep learning chapter 1",
+      "views": 23149350,
+      "file": "/home/wsl-yoshihide/my-projects/yt-learn/transcripts/3Blue1Brown/But what is a neural network_ _ Deep learning chapter 1.md"
+    },
+    {
+      "rank": 2,
+      "video_id": "r6sGWTCMz2k",
+      "title": "But what is a Fourier series?  From heat flow to drawing with circles | DE4",
+      "views": 18774005,
+      "file": "/home/wsl-yoshihide/my-projects/yt-learn/transcripts/3Blue1Brown/But what is a Fourier series_  From heat flow to drawing with circles _ DE4.md"
+    },
+    {
+      "rank": 3,
+      "video_id": "bBC-nXj3Ng4",
+      "title": "But how does bitcoin actually work?",
+      "views": 17949216,
+      "file": "/home/wsl-yoshihide/my-projects/yt-learn/transcripts/3Blue1Brown/But how does bitcoin actually work_.md"
+    },
+    {
+      "rank": 4,
+      "video_id": "OkmNXy7er84",
+      "title": "The hardest problem on the hardest test",
+      "views": 16393380,
+      "file": "/home/wsl-yoshihide/my-projects/yt-learn/transcripts/3Blue1Brown/The hardest problem on the hardest test.md"
+    },
+    {
+      "rank": 5,
+      "video_id": "HEfHFsfGXjs",
+      "title": "The most unexpected answer to a counting puzzle",
+      "views": 14271301,
+      "file": "/home/wsl-yoshihide/my-projects/yt-learn/transcripts/3Blue1Brown/The most unexpected answer to a counting puzzle.md"
+    },
+    {
+      "rank": 6,
+      "video_id": "spUNpyF58BY",
+      "title": "But what is the Fourier Transform?  A visual introduction.",
+      "views": 12089665,
+      "file": "/home/wsl-yoshihide/my-projects/yt-learn/transcripts/3Blue1Brown/But what is the Fourier Transform_  A visual introduction..md"
+    },
+    {
+      "rank": 7,
+      "video_id": "v68zYyaEmEA",
+      "title": "Solving Wordle using information theory",
+      "views": 11686910,
+      "file": "/home/wsl-yoshihide/my-projects/yt-learn/transcripts/3Blue1Brown/Solving Wordle using information theory.md"
+    },
+    {
+      "rank": 8,
+      "video_id": "fNk_zzaMoSs",
+      "title": "Vectors | Chapter 1, Essence of linear algebra",
+      "views": 11647041,
+      "file": "/home/wsl-yoshihide/my-projects/yt-learn/transcripts/3Blue1Brown/Vectors _ Chapter 1, Essence of linear algebra.md"
+    },
+    {
+      "rank": 9,
+      "video_id": "WUvTyaaNkzM",
+      "title": "The essence of calculus",
+      "views": 11186932,
+      "file": "/home/wsl-yoshihide/my-projects/yt-learn/transcripts/3Blue1Brown/The essence of calculus.md"
+    },
+    {
+      "rank": 10,
+      "video_id": "wjZofJX0v4M",
+      "title": "Transformers, the tech behind LLMs | Deep Learning Chapter 5",
+      "views": 10167103,
+      "file": "/home/wsl-yoshihide/my-projects/yt-learn/transcripts/3Blue1Brown/Transformers, the tech behind LLMs _ Deep Learning Chapter 5.md"
+    },
+    {
+      "rank": 11,
+      "video_id": "IHZwWFHWa-w",
+      "title": "Gradient descent, how neural networks learn | Deep Learning Chapter 2",
+      "views": 9209630,
+      "file": "/home/wsl-yoshihide/my-projects/yt-learn/transcripts/3Blue1Brown/Gradient descent, how neural networks learn _ Deep Learning Chapter 2.md"
+    },
+    {
+      "rank": 12,
+      "video_id": "GNcFjFmqEc8",
+      "title": "But why is a sphere's surface area four times its shadow?",
+      "views": 8711983,
+      "file": "/home/wsl-yoshihide/my-projects/yt-learn/transcripts/3Blue1Brown/But why is a sphere's surface area four times its shadow_.md"
+    },
+    {
+      "rank": 13,
+      "video_id": "EK32jo7i5LQ",
+      "title": "Why do prime numbers make these spirals? | Dirichlet’s theorem and pi approximations",
+      "views": 7491414,
+      "file": "/home/wsl-yoshihide/my-projects/yt-learn/transcripts/3Blue1Brown/Why do prime numbers make these spirals_ _ Dirichlet’s theorem and pi approximations.md"
+    },
+    {
+      "rank": 14,
+      "video_id": "d-o3eB9sfls",
+      "title": "Why is pi here?  And why is it squared?  A geometric answer to the Basel problem",
+      "views": 7180342,
+      "file": "/home/wsl-yoshihide/my-projects/yt-learn/transcripts/3Blue1Brown/Why is pi here_  And why is it squared_  A geometric answer to the Basel problem.md"
+    },
+    {
+      "rank": 15,
+      "video_id": "k7RM-ot2NWY",
+      "title": "Linear combinations, span, and basis vectors | Chapter 2, Essence of linear algebra",
+      "views": 7078633,
+      "file": "/home/wsl-yoshihide/my-projects/yt-learn/transcripts/3Blue1Brown/Linear combinations, span, and basis vectors _ Chapter 2, Essence of linear algebra.md"
+    },
+    {
+      "rank": 16,
+      "video_id": "kYB8IZa5AuE",
+      "title": "Linear transformations and matrices | Chapter 3, Essence of linear algebra",
+      "views": 6798166,
+      "file": "/home/wsl-yoshihide/my-projects/yt-learn/transcripts/3Blue1Brown/Linear transformations and matrices _ Chapter 3, Essence of linear algebra.md"
+    },
+    {
+      "rank": 17,
+      "video_id": "EmKQsSDlaa4",
+      "title": "How are holograms possible?",
+      "views": 6660427,
+      "file": "/home/wsl-yoshihide/my-projects/yt-learn/transcripts/3Blue1Brown/How are holograms possible_.md"
+    },
+    {
+      "rank": 18,
+      "video_id": "fRed0Xmc2Wg",
+      "title": "Oh, wait, actually the best Wordle opener is not “crane”…",
+      "views": 6639374,
+      "file": "/home/wsl-yoshihide/my-projects/yt-learn/transcripts/3Blue1Brown/Oh, wait, actually the best Wordle opener is not “crane”….md"
+    },
+    {
+      "rank": 19,
+      "video_id": "LPZh9BOjkQs",
+      "title": "Large Language Models explained briefly",
+      "views": 6237896,
+      "file": "/home/wsl-yoshihide/my-projects/yt-learn/transcripts/3Blue1Brown/Large Language Models explained briefly.md"
+    },
+    {
+      "rank": 20,
+      "video_id": "PFDu9oVAE-g",
+      "title": "Eigenvectors and eigenvalues | Chapter 14, Essence of linear algebra",
+      "views": 6107092,
+      "file": "/home/wsl-yoshihide/my-projects/yt-learn/transcripts/3Blue1Brown/Eigenvectors and eigenvalues _ Chapter 14, Essence of linear algebra.md"
+    },
+    {
+      "rank": 21,
+      "video_id": "Kas0tIxDvrg",
+      "title": "Exponential growth and epidemics",
+      "views": 6018038,
+      "file": "/home/wsl-yoshihide/my-projects/yt-learn/transcripts/3Blue1Brown/Exponential growth and epidemics.md"
+    },
+    {
+      "rank": 22,
+      "video_id": "Ilg3gGewQ5U",
+      "title": "Backpropagation, intuitively | Deep Learning Chapter 3",
+      "views": 6008605,
+      "file": "/home/wsl-yoshihide/my-projects/yt-learn/transcripts/3Blue1Brown/Backpropagation, intuitively _ Deep Learning Chapter 3.md"
+    },
+    {
+      "rank": 23,
+      "video_id": "6dTyOl1fmDo",
+      "title": "Why colliding blocks compute pi",
+      "views": 5750691,
+      "file": "/home/wsl-yoshihide/my-projects/yt-learn/transcripts/3Blue1Brown/Why colliding blocks compute pi.md"
+    },
+    {
+      "rank": 24,
+      "video_id": "p_di4Zn4wz4",
+      "title": "Differential equations, a tourist's guide | DE1",
+      "views": 5747772,
+      "file": "/home/wsl-yoshihide/my-projects/yt-learn/transcripts/3Blue1Brown/Differential equations, a tourist's guide _ DE1.md"
+    },
+    {
+      "rank": 25,
+      "video_id": "HZGCoVF3YvM",
+      "title": "Bayes theorem, the geometry of changing beliefs",
+      "views": 5725944,
+      "file": "/home/wsl-yoshihide/my-projects/yt-learn/transcripts/3Blue1Brown/Bayes theorem, the geometry of changing beliefs.md"
+    },
+    {
+      "rank": 26,
+      "video_id": "M64HUIJFTZM",
+      "title": "The unexpectedly hard windmill question (2011 IMO, Q2)",
+      "views": 5596875,
+      "file": "/home/wsl-yoshihide/my-projects/yt-learn/transcripts/3Blue1Brown/The unexpectedly hard windmill question (2011 IMO, Q2).md"
+    },
+    {
+      "rank": 27,
+      "video_id": "d4EgbgTm0Bg",
+      "title": "Visualizing the 4d numbers Quaternions",
+      "views": 5437032,
+      "file": "/home/wsl-yoshihide/my-projects/yt-learn/transcripts/3Blue1Brown/Visualizing the 4d numbers Quaternions.md"
+    },
+    {
+      "rank": 28,
+      "video_id": "YdOXS_9_P4U",
+      "title": "Terence Tao on the cosmic distance ladder",
+      "views": 5247575,
+      "file": "/home/wsl-yoshihide/my-projects/yt-learn/transcripts/3Blue1Brown/Terence Tao on the cosmic distance ladder.md"
+    },
+    {
+      "rank": 29,
+      "video_id": "gxAaO2rsdIs",
+      "title": "Simulating an epidemic",
+      "views": 5214358,
+      "file": "/home/wsl-yoshihide/my-projects/yt-learn/transcripts/3Blue1Brown/Simulating an epidemic.md"
+    },
+    {
+      "rank": 30,
+      "video_id": "sD0NjbwqlYw",
+      "title": "But what is the Riemann zeta function? Visualizing analytic continuation",
+      "views": 5212335,
+      "file": "/home/wsl-yoshihide/my-projects/yt-learn/transcripts/3Blue1Brown/But what is the Riemann zeta function_ Visualizing analytic continuation.md"
+    },
+    {
+      "rank": 31,
+      "video_id": "rB83DpBJQsE",
+      "title": "Divergence and curl:  The language of Maxwell's equations, fluid flow, and more",
+      "views": 5101117,
+      "file": "/home/wsl-yoshihide/my-projects/yt-learn/transcripts/3Blue1Brown/Divergence and curl_  The language of Maxwell's equations, fluid flow, and more.md"
+    },
+    {
+      "rank": 32,
+      "video_id": "m2MIpDrF7Es",
+      "title": "What's so special about Euler's number e? | Chapter 5, Essence of calculus",
+      "views": 5019376,
+      "file": "/home/wsl-yoshihide/my-projects/yt-learn/transcripts/3Blue1Brown/What's so special about Euler's number e_ _ Chapter 5, Essence of calculus.md"
+    },
+    {
+      "rank": 33,
+      "video_id": "3d6DsjIBzJ4",
+      "title": "Taylor series | Chapter 11, Essence of calculus",
+      "views": 4995193,
+      "file": "/home/wsl-yoshihide/my-projects/yt-learn/transcripts/3Blue1Brown/Taylor series _ Chapter 11, Essence of calculus.md"
+    },
+    {
+      "rank": 34,
+      "video_id": "Ip3X9LOh2dk",
+      "title": "The determinant | Chapter 6, Essence of linear algebra",
+      "views": 4748638,
+      "file": "/home/wsl-yoshihide/my-projects/yt-learn/transcripts/3Blue1Brown/The determinant _ Chapter 6, Essence of linear algebra.md"
+    },
+    {
+      "rank": 35,
+      "video_id": "851U557j6HE",
+      "title": "Researchers thought this was a bug (Borwein integrals)",
+      "views": 4579582,
+      "file": "/home/wsl-yoshihide/my-projects/yt-learn/transcripts/3Blue1Brown/Researchers thought this was a bug (Borwein integrals).md"
+    },
+    {
+      "rank": 36,
+      "video_id": "XFDM1ip5HdU",
+      "title": "What does it feel like to invent math?",
+      "views": 4519762,
+      "file": "/home/wsl-yoshihide/my-projects/yt-learn/transcripts/3Blue1Brown/What does it feel like to invent math_.md"
+    },
+    {
+      "rank": 37,
+      "video_id": "gB9n2gHsHN4",
+      "title": "Fractals are typically not self-similar",
+      "views": 4485242,
+      "file": "/home/wsl-yoshihide/my-projects/yt-learn/transcripts/3Blue1Brown/Fractals are typically not self-similar.md"
+    },
+    {
+      "rank": 38,
+      "video_id": "zeJD6dqJ5lo",
+      "title": "But what is the Central Limit Theorem?",
+      "views": 4400814,
+      "file": "/home/wsl-yoshihide/my-projects/yt-learn/transcripts/3Blue1Brown/But what is the Central Limit Theorem_.md"
+    },
+    {
+      "rank": 39,
+      "video_id": "9vKqVkMQHKk",
+      "title": "The paradox of the derivative | Chapter 2, Essence of calculus",
+      "views": 4321443,
+      "file": "/home/wsl-yoshihide/my-projects/yt-learn/transcripts/3Blue1Brown/The paradox of the derivative _ Chapter 2, Essence of calculus.md"
+    },
+    {
+      "rank": 40,
+      "video_id": "XkY2DOUCWMU",
+      "title": "Matrix multiplication as composition | Chapter 4, Essence of linear algebra",
+      "views": 4204010,
+      "file": "/home/wsl-yoshihide/my-projects/yt-learn/transcripts/3Blue1Brown/Matrix multiplication as composition _ Chapter 4, Essence of linear algebra.md"
+    },
+    {
+      "rank": 41,
+      "video_id": "VYQVlVoWoPY",
+      "title": "How to lie using visual proofs",
+      "views": 4162884,
+      "file": "/home/wsl-yoshihide/my-projects/yt-learn/transcripts/3Blue1Brown/How to lie using visual proofs.md"
+    },
+    {
+      "rank": 42,
+      "video_id": "eMlx5fFNoYc",
+      "title": "Attention in transformers, step-by-step | Deep Learning Chapter 6",
+      "views": 4080623,
+      "file": "/home/wsl-yoshihide/my-projects/yt-learn/transcripts/3Blue1Brown/Attention in transformers, step-by-step _ Deep Learning Chapter 6.md"
+    },
+    {
+      "rank": 43,
+      "video_id": "QJYmyhnaaek",
+      "title": "All possible pythagorean triples, visualized",
+      "views": 4010362,
+      "file": "/home/wsl-yoshihide/my-projects/yt-learn/transcripts/3Blue1Brown/All possible pythagorean triples, visualized.md"
+    },
+    {
+      "rank": 44,
+      "video_id": "tIeHLnjs5U8",
+      "title": "Backpropagation calculus | Deep Learning Chapter 4",
+      "views": 3774617,
+      "file": "/home/wsl-yoshihide/my-projects/yt-learn/transcripts/3Blue1Brown/Backpropagation calculus _ Deep Learning Chapter 4.md"
+    },
+    {
+      "rank": 45,
+      "video_id": "CfW845LNObM",
+      "title": "The other way to visualize derivatives | Chapter 12, Essence of calculus",
+      "views": 3761817,
+      "file": "/home/wsl-yoshihide/my-projects/yt-learn/transcripts/3Blue1Brown/The other way to visualize derivatives _ Chapter 12, Essence of calculus.md"
+    },
+    {
+      "rank": 46,
+      "video_id": "uQhTuRlWMxw",
+      "title": "Inverse matrices, column space and null space | Chapter 7, Essence of linear algebra",
+      "views": 3686805,
+      "file": "/home/wsl-yoshihide/my-projects/yt-learn/transcripts/3Blue1Brown/Inverse matrices, column space and null space _ Chapter 7, Essence of linear algebra.md"
+    },
+    {
+      "rank": 47,
+      "video_id": "mH0oCDa74tE",
+      "title": "Group theory, abstraction, and the 196,883-dimensional monster",
+      "views": 3663119,
+      "file": "/home/wsl-yoshihide/my-projects/yt-learn/transcripts/3Blue1Brown/Group theory, abstraction, and the 196,883-dimensional monster.md"
+    },
+    {
+      "rank": 48,
+      "video_id": "S9JGmA5_unY",
+      "title": "How secure is 256 bit security?",
+      "views": 3611784,
+      "file": "/home/wsl-yoshihide/my-projects/yt-learn/transcripts/3Blue1Brown/How secure is 256 bit security_.md"
+    },
+    {
+      "rank": 49,
+      "video_id": "KuXjwB4LzSA",
+      "title": "But what is a convolution?",
+      "views": 3560957,
+      "file": "/home/wsl-yoshihide/my-projects/yt-learn/transcripts/3Blue1Brown/But what is a convolution_.md"
+    },
+    {
+      "rank": 50,
+      "video_id": "RQWpF2Gb-gU",
+      "title": "But what is quantum computing?  (Grover's Algorithm)",
+      "views": 3505616,
+      "file": "/home/wsl-yoshihide/my-projects/yt-learn/transcripts/3Blue1Brown/But what is quantum computing_  (Grover's Algorithm).md"
+    },
+    {
+      "rank": 51,
+      "video_id": "S0_qX4VJhMQ",
+      "title": "Derivative formulas through geometry | Chapter 3, Essence of calculus",
+      "views": 3483485,
+      "file": "/home/wsl-yoshihide/my-projects/yt-learn/transcripts/3Blue1Brown/Derivative formulas through geometry _ Chapter 3, Essence of calculus.md"
+    },
+    {
+      "rank": 52,
+      "video_id": "O85OWBJ2ayo",
+      "title": "How (and why) to raise e to the power of a matrix | DE6",
+      "views": 3481402,
+      "file": "/home/wsl-yoshihide/my-projects/yt-learn/transcripts/3Blue1Brown/How (and why) to raise e to the power of a matrix _ DE6.md"
+    },
+    {
+      "rank": 53,
+      "video_id": "ltLUadnCyi0",
+      "title": "A tale of two problem solvers | Average cube shadow area",
+      "views": 3467970,
+      "file": "/home/wsl-yoshihide/my-projects/yt-learn/transcripts/3Blue1Brown/A tale of two problem solvers _ Average cube shadow area.md"
+    },
+    {
+      "rank": 54,
+      "video_id": "v0YEaeIClKY",
+      "title": "e^(iπ) in 3.14 minutes, using dynamics | DE5",
+      "views": 3324872,
+      "file": "/home/wsl-yoshihide/my-projects/yt-learn/transcripts/3Blue1Brown/e^(iπ) in 3.14 minutes, using dynamics _ DE5.md"
+    },
+    {
+      "rank": 55,
+      "video_id": "ZA4JkHKZM50",
+      "title": "Why “probability of 0” does not mean “impossible” | Probabilities of probabilities, part 2",
+      "views": 3310105,
+      "file": "/home/wsl-yoshihide/my-projects/yt-learn/transcripts/3Blue1Brown/Why “probability of 0” does not mean “impossible” _ Probabilities of probabilities, part 2.md"
+    },
+    {
+      "rank": 56,
+      "video_id": "AmgkSdhK4K8",
+      "title": "Who cares about topology?   (Old version)",
+      "views": 3283501,
+      "file": "/home/wsl-yoshihide/my-projects/yt-learn/transcripts/3Blue1Brown/Who cares about topology_   (Old version).md"
+    },
+    {
+      "rank": 57,
+      "video_id": "VvCytJvd4H0",
+      "title": "Why this puzzle is impossible",
+      "views": 3271540,
+      "file": "/home/wsl-yoshihide/my-projects/yt-learn/transcripts/3Blue1Brown/Why this puzzle is impossible.md"
+    },
+    {
+      "rank": 58,
+      "video_id": "LyGKycYT2v0",
+      "title": "Dot products and duality | Chapter 9, Essence of linear algebra",
+      "views": 3214197,
+      "file": "/home/wsl-yoshihide/my-projects/yt-learn/transcripts/3Blue1Brown/Dot products and duality _ Chapter 9, Essence of linear algebra.md"
+    },
+    {
+      "rank": 59,
+      "video_id": "ly4S0oi3Yz8",
+      "title": "But what is a partial differential equation?  | DE2",
+      "views": 3157545,
+      "file": "/home/wsl-yoshihide/my-projects/yt-learn/transcripts/3Blue1Brown/But what is a partial differential equation_  _ DE2.md"
+    },
+    {
+      "rank": 60,
+      "video_id": "zwAD6dRSVyI",
+      "title": "Thinking outside the 10-dimensional box",
+      "views": 3137538,
+      "file": "/home/wsl-yoshihide/my-projects/yt-learn/transcripts/3Blue1Brown/Thinking outside the 10-dimensional box.md"
+    },
+    {
+      "rank": 61,
+      "video_id": "-RdOwhmqP5s",
+      "title": "Newton’s fractal (which Newton knew nothing about)",
+      "views": 3125703,
+      "file": "/home/wsl-yoshihide/my-projects/yt-learn/transcripts/3Blue1Brown/Newton’s fractal (which Newton knew nothing about).md"
+    },
+    {
+      "rank": 62,
+      "video_id": "rbu7Zu5X1zI",
+      "title": "How I animate 3Blue1Brown | A Manim demo with Ben Sparks",
+      "views": 3058928,
+      "file": "/home/wsl-yoshihide/my-projects/yt-learn/transcripts/3Blue1Brown/How I animate 3Blue1Brown _ A Manim demo with Ben Sparks.md"
+    },
+    {
+      "rank": 63,
+      "video_id": "rfG8ce4nNh0",
+      "title": "Integration and the fundamental theorem of calculus | Chapter 8, Essence of calculus",
+      "views": 2974326,
+      "file": "/home/wsl-yoshihide/my-projects/yt-learn/transcripts/3Blue1Brown/Integration and the fundamental theorem of calculus _ Chapter 8, Essence of calculus.md"
+    },
+    {
+      "rank": 64,
+      "video_id": "X8jsijhllIA",
+      "title": "But what are Hamming codes? The origin of error correction",
+      "views": 2948992,
+      "file": "/home/wsl-yoshihide/my-projects/yt-learn/transcripts/3Blue1Brown/But what are Hamming codes_ The origin of error correction.md"
+    },
+    {
+      "rank": 65,
+      "video_id": "YtkIWDE36qU",
+      "title": "This pattern breaks, but for a good reason | Moser's circle problem",
+      "views": 2820417,
+      "file": "/home/wsl-yoshihide/my-projects/yt-learn/transcripts/3Blue1Brown/This pattern breaks, but for a good reason _ Moser's circle problem.md"
+    },
+    {
+      "rank": 66,
+      "video_id": "NaL_Cb42WyY",
+      "title": "Pi hiding in prime regularities",
+      "views": 2794675,
+      "file": "/home/wsl-yoshihide/my-projects/yt-learn/transcripts/3Blue1Brown/Pi hiding in prime regularities.md"
+    },
+    {
+      "rank": 67,
+      "video_id": "KTzGBJPuJwM",
+      "title": "But why would light \"slow down\"? | Visualizing Feynman's lecture on the refractive index",
+      "views": 2785004,
+      "file": "/home/wsl-yoshihide/my-projects/yt-learn/transcripts/3Blue1Brown/But why would light _slow down__ _ Visualizing Feynman's lecture on the refractive index.md"
+    },
+    {
+      "rank": 68,
+      "video_id": "F_0yfvm0UoU",
+      "title": "e to the pi i, a nontraditional take (old version)",
+      "views": 2754513,
+      "file": "/home/wsl-yoshihide/my-projects/yt-learn/transcripts/3Blue1Brown/e to the pi i, a nontraditional take (old version).md"
+    },
+    {
+      "rank": 69,
+      "video_id": "BHdbsHFs2P0",
+      "title": "The Hairy Ball Theorem",
+      "views": 2697805,
+      "file": "/home/wsl-yoshihide/my-projects/yt-learn/transcripts/3Blue1Brown/The Hairy Ball Theorem.md"
+    },
+    {
+      "rank": 70,
+      "video_id": "kjBOesZCoqc",
+      "title": "Essence of linear algebra preview",
+      "views": 2696471,
+      "file": "/home/wsl-yoshihide/my-projects/yt-learn/transcripts/3Blue1Brown/Essence of linear algebra preview.md"
+    },
+    {
+      "rank": 71,
+      "video_id": "mvmuCPvRoWQ",
+      "title": "Euler's formula with introductory group theory",
+      "views": 2690179,
+      "file": "/home/wsl-yoshihide/my-projects/yt-learn/transcripts/3Blue1Brown/Euler's formula with introductory group theory.md"
+    },
+    {
+      "rank": 72,
+      "video_id": "rHLEWRxRGiM",
+      "title": "Three-dimensional linear transformations | Chapter 5, Essence of linear algebra",
+      "views": 2585818,
+      "file": "/home/wsl-yoshihide/my-projects/yt-learn/transcripts/3Blue1Brown/Three-dimensional linear transformations _ Chapter 5, Essence of linear algebra.md"
+    },
+    {
+      "rank": 73,
+      "video_id": "8idr1WZ1A7Q",
+      "title": "Binomial distributions | Probabilities of probabilities, part 1",
+      "views": 2568999,
+      "file": "/home/wsl-yoshihide/my-projects/yt-learn/transcripts/3Blue1Brown/Binomial distributions _ Probabilities of probabilities, part 1.md"
+    },
+    {
+      "rank": 74,
+      "video_id": "kfF40MiS7zA",
+      "title": "Limits, L'Hôpital's rule, and epsilon delta definitions | Chapter 7, Essence of calculus",
+      "views": 2513823,
+      "file": "/home/wsl-yoshihide/my-projects/yt-learn/transcripts/3Blue1Brown/Limits, L'Hôpital's rule, and epsilon delta definitions _ Chapter 7, Essence of calculus.md"
+    },
+    {
+      "rank": 75,
+      "video_id": "P2LTAUO1TdA",
+      "title": "Change of basis | Chapter 13, Essence of linear algebra",
+      "views": 2453248,
+      "file": "/home/wsl-yoshihide/my-projects/yt-learn/transcripts/3Blue1Brown/Change of basis _ Chapter 13, Essence of linear algebra.md"
+    },
+    {
+      "rank": 76,
+      "video_id": "3s7h2MHQtxc",
+      "title": "Hilbert's Curve: Is infinite math useful?",
+      "views": 2403471,
+      "file": "/home/wsl-yoshihide/my-projects/yt-learn/transcripts/3Blue1Brown/Hilbert's Curve_ Is infinite math useful_.md"
+    },
+    {
+      "rank": 77,
+      "video_id": "pQa_tWZmlGs",
+      "title": "Why slicing a cone gives an ellipse (beautiful proof)",
+      "views": 2336716,
+      "file": "/home/wsl-yoshihide/my-projects/yt-learn/transcripts/3Blue1Brown/Why slicing a cone gives an ellipse (beautiful proof).md"
+    },
+    {
+      "rank": 78,
+      "video_id": "eu6i7WJeinw",
+      "title": "Cross products | Chapter 10, Essence of linear algebra",
+      "views": 2336329,
+      "file": "/home/wsl-yoshihide/my-projects/yt-learn/transcripts/3Blue1Brown/Cross products _ Chapter 10, Essence of linear algebra.md"
+    },
+    {
+      "rank": 79,
+      "video_id": "bOXCLR3Wric",
+      "title": "Olympiad level counting  (Generating functions)",
+      "views": 2317604,
+      "file": "/home/wsl-yoshihide/my-projects/yt-learn/transcripts/3Blue1Brown/Olympiad level counting  (Generating functions).md"
+    },
+    {
+      "rank": 80,
+      "video_id": "IQqtsm-bBRU",
+      "title": "This open problem taught me what topology is",
+      "views": 2300096,
+      "file": "/home/wsl-yoshihide/my-projects/yt-learn/transcripts/3Blue1Brown/This open problem taught me what topology is.md"
+    },
+    {
+      "rank": 81,
+      "video_id": "MBnnXbOM5S4",
+      "title": "The more general uncertainty principle, regarding Fourier transforms",
+      "views": 2285328,
+      "file": "/home/wsl-yoshihide/my-projects/yt-learn/transcripts/3Blue1Brown/The more general uncertainty principle, regarding Fourier transforms.md"
+    },
+    {
+      "rank": 82,
+      "video_id": "qb40J4N1fa4",
+      "title": "Implicit differentiation, what's going on here? | Chapter 6, Essence of calculus",
+      "views": 2250245,
+      "file": "/home/wsl-yoshihide/my-projects/yt-learn/transcripts/3Blue1Brown/Implicit differentiation, what's going on here_ _ Chapter 6, Essence of calculus.md"
+    },
+    {
+      "rank": 83,
+      "video_id": "YG15m2VwSjA",
+      "title": "Visualizing the chain rule and product rule | Chapter 4, Essence of calculus",
+      "views": 2244914,
+      "file": "/home/wsl-yoshihide/my-projects/yt-learn/transcripts/3Blue1Brown/Visualizing the chain rule and product rule _ Chapter 4, Essence of calculus.md"
+    },
+    {
+      "rank": 84,
+      "video_id": "cy8r7WSuT1I",
+      "title": "Why π is in the normal distribution (beyond integral tricks)",
+      "views": 2159063,
+      "file": "/home/wsl-yoshihide/my-projects/yt-learn/transcripts/3Blue1Brown/Why π is in the normal distribution (beyond integral tricks).md"
+    },
+    {
+      "rank": 85,
+      "video_id": "MzRCDLre1b4",
+      "title": "Some light quantum mechanics (with minutephysics)",
+      "views": 2136334,
+      "file": "/home/wsl-yoshihide/my-projects/yt-learn/transcripts/3Blue1Brown/Some light quantum mechanics (with minutephysics).md"
+    },
+    {
+      "rank": 86,
+      "video_id": "wTJI_WuZSwE",
+      "title": "The impossible chessboard puzzle",
+      "views": 2131701,
+      "file": "/home/wsl-yoshihide/my-projects/yt-learn/transcripts/3Blue1Brown/The impossible chessboard puzzle.md"
+    },
+    {
+      "rank": 87,
+      "video_id": "RU0wScIj36o",
+      "title": "Fractal charm: Space filling curves",
+      "views": 2081250,
+      "file": "/home/wsl-yoshihide/my-projects/yt-learn/transcripts/3Blue1Brown/Fractal charm_ Space filling curves.md"
+    },
+    {
+      "rank": 88,
+      "video_id": "9-Jl0dxWQs8",
+      "title": "How might LLMs store facts | Deep Learning Chapter 7",
+      "views": 2062209,
+      "file": "/home/wsl-yoshihide/my-projects/yt-learn/transcripts/3Blue1Brown/How might LLMs store facts _ Deep Learning Chapter 7.md"
+    },
+    {
+      "rank": 89,
+      "video_id": "v8VSDg_WQlA",
+      "title": "Nonsquare matrices as transformations between dimensions | Chapter 8, Essence of linear algebra",
+      "views": 1974189,
+      "file": "/home/wsl-yoshihide/my-projects/yt-learn/transcripts/3Blue1Brown/Nonsquare matrices as transformations between dimensions _ Chapter 8, Essence of linear algebra.md"
+    },
+    {
+      "rank": 90,
+      "video_id": "iv-5mZ_9CPY",
+      "title": "But how do AI images and videos actually work? | Guest video by Welch Labs",
+      "views": 1854226,
+      "file": "/home/wsl-yoshihide/my-projects/yt-learn/transcripts/3Blue1Brown/But how do AI images and videos actually work_ _ Guest video by Welch Labs.md"
+    },
+    {
+      "rank": 91,
+      "video_id": "aXRTczANuIs",
+      "title": "How wiggling charges give rise to light",
+      "views": 1776491,
+      "file": "/home/wsl-yoshihide/my-projects/yt-learn/transcripts/3Blue1Brown/How wiggling charges give rise to light.md"
+    },
+    {
+      "rank": 92,
+      "video_id": "bcPTiiiYDs8",
+      "title": "How pi was almost 6.283185...",
+      "views": 1765060,
+      "file": "/home/wsl-yoshihide/my-projects/yt-learn/transcripts/3Blue1Brown/How pi was almost 6.283185....md"
+    },
+    {
+      "rank": 93,
+      "video_id": "LqbZpur38nw",
+      "title": "Beyond the Mandelbrot set, an intro to holomorphic dynamics",
+      "views": 1738932,
+      "file": "/home/wsl-yoshihide/my-projects/yt-learn/transcripts/3Blue1Brown/Beyond the Mandelbrot set, an intro to holomorphic dynamics.md"
+    },
+    {
+      "rank": 94,
+      "video_id": "ldxFjLJ3rVY",
+      "title": "How (and why) to take a logarithm of an image",
+      "views": 1731493,
+      "file": "/home/wsl-yoshihide/my-projects/yt-learn/transcripts/3Blue1Brown/How (and why) to take a logarithm of an image.md"
+    },
+    {
+      "rank": 95,
+      "video_id": "TgKwz5Ikpc8",
+      "title": "Abstract vector spaces | Chapter 16, Essence of linear algebra",
+      "views": 1717357,
+      "file": "/home/wsl-yoshihide/my-projects/yt-learn/transcripts/3Blue1Brown/Abstract vector spaces _ Chapter 16, Essence of linear algebra.md"
+    },
+    {
+      "rank": 96,
+      "video_id": "piJkuavhV50",
+      "title": "Five puzzles for thinking outside the box",
+      "views": 1664349,
+      "file": "/home/wsl-yoshihide/my-projects/yt-learn/transcripts/3Blue1Brown/Five puzzles for thinking outside the box.md"
+    },
+    {
+      "rank": 97,
+      "video_id": "cyW5z-M2yzw",
+      "title": "Music And Measure Theory",
+      "views": 1654027,
+      "file": "/home/wsl-yoshihide/my-projects/yt-learn/transcripts/3Blue1Brown/Music And Measure Theory.md"
+    },
+    {
+      "rank": 98,
+      "video_id": "FnJqaIESC2s",
+      "title": "What does area have to do with slope? | Chapter 9, Essence of calculus",
+      "views": 1653338,
+      "file": "/home/wsl-yoshihide/my-projects/yt-learn/transcripts/3Blue1Brown/What does area have to do with slope_ _ Chapter 9, Essence of calculus.md"
+    },
+    {
+      "rank": 99,
+      "video_id": "ToIXSwZ1pJU",
+      "title": "Solving the heat equation | DE3",
+      "views": 1633816,
+      "file": "/home/wsl-yoshihide/my-projects/yt-learn/transcripts/3Blue1Brown/Solving the heat equation _ DE3.md"
+    },
+    {
+      "rank": 100,
+      "video_id": "j0wJBEZdwLs",
+      "title": "But what is a Laplace Transform?",
+      "views": 1610996,
+      "file": "/home/wsl-yoshihide/my-projects/yt-learn/transcripts/3Blue1Brown/But what is a Laplace Transform_.md"
+    },
+    {
+      "rank": 101,
+      "video_id": "BaM7OCEm3G0",
+      "title": "Cross products in the light of linear transformations | Chapter 11, Essence of linear algebra",
+      "views": 1545751,
+      "file": "/home/wsl-yoshihide/my-projects/yt-learn/transcripts/3Blue1Brown/Cross products in the light of linear transformations _ Chapter 11, Essence of linear algebra.md"
+    },
+    {
+      "rank": 102,
+      "video_id": "hFMaT9oRbs4",
+      "title": "Terence Tao continuing history’s cleverest cosmological measurements",
+      "views": 1506656,
+      "file": "/home/wsl-yoshihide/my-projects/yt-learn/transcripts/3Blue1Brown/Terence Tao continuing history’s cleverest cosmological measurements.md"
+    },
+    {
+      "rank": 103,
+      "video_id": "zjMuIxRvygQ",
+      "title": "Quaternions and 3d rotation, explained interactively",
+      "views": 1498261,
+      "file": "/home/wsl-yoshihide/my-projects/yt-learn/transcripts/3Blue1Brown/Quaternions and 3d rotation, explained interactively.md"
+    },
+    {
+      "rank": 104,
+      "video_id": "jBsC34PxzoM",
+      "title": "Cramer's rule, explained geometrically | Chapter 12, Essence of linear algebra",
+      "views": 1485465,
+      "file": "/home/wsl-yoshihide/my-projects/yt-learn/transcripts/3Blue1Brown/Cramer's rule, explained geometrically _ Chapter 12, Essence of linear algebra.md"
+    },
+    {
+      "rank": 105,
+      "video_id": "W3I3kAg2J7w",
+      "title": "What \"Follow Your Dreams\" Misses | Harvey Mudd Commencement Speech 2024",
+      "views": 1479190,
+      "file": "/home/wsl-yoshihide/my-projects/yt-learn/transcripts/3Blue1Brown/What _Follow Your Dreams_ Misses _ Harvey Mudd Commencement Speech 2024.md"
+    },
+    {
+      "rank": 106,
+      "video_id": "Cld0p3a43fU",
+      "title": "The Brachistochrone, with Steven Strogatz",
+      "views": 1405541,
+      "file": "/home/wsl-yoshihide/my-projects/yt-learn/transcripts/3Blue1Brown/The Brachistochrone, with Steven Strogatz.md"
+    },
+    {
+      "rank": 107,
+      "video_id": "lG4VkPoG3ko",
+      "title": "The medical test paradox, and redesigning Bayes' rule",
+      "views": 1401056,
+      "file": "/home/wsl-yoshihide/my-projects/yt-learn/transcripts/3Blue1Brown/The medical test paradox, and redesigning Bayes' rule.md"
+    },
+    {
+      "rank": 108,
+      "video_id": "brU5yLm9DZM",
+      "title": "How colliding blocks act like a beam of light...to compute pi.",
+      "views": 1376955,
+      "file": "/home/wsl-yoshihide/my-projects/yt-learn/transcripts/3Blue1Brown/How colliding blocks act like a beam of light...to compute pi..md"
+    },
+    {
+      "rank": 109,
+      "video_id": "QCX62YJCmGk",
+      "title": "This tests your understanding of light | The barber pole effect",
+      "views": 1370319,
+      "file": "/home/wsl-yoshihide/my-projects/yt-learn/transcripts/3Blue1Brown/This tests your understanding of light _ The barber pole effect.md"
+    },
+    {
+      "rank": 110,
+      "video_id": "e50Bj7jn9IQ",
+      "title": "A quick trick for computing eigenvalues | Chapter 15, Essence of linear algebra",
+      "views": 1299273,
+      "file": "/home/wsl-yoshihide/my-projects/yt-learn/transcripts/3Blue1Brown/A quick trick for computing eigenvalues _ Chapter 15, Essence of linear algebra.md"
+    },
+    {
+      "rank": 111,
+      "video_id": "NOCsdhzo6Jg",
+      "title": "How They Fool Ya (live) | Math parody of Hallelujah",
+      "views": 1149626,
+      "file": "/home/wsl-yoshihide/my-projects/yt-learn/transcripts/3Blue1Brown/How They Fool Ya (live) _ Math parody of Hallelujah.md"
+    },
+    {
+      "rank": 112,
+      "video_id": "Cz4Q4QOuoo8",
+      "title": "Answering viewer questions about refraction",
+      "views": 1077745,
+      "file": "/home/wsl-yoshihide/my-projects/yt-learn/transcripts/3Blue1Brown/Answering viewer questions about refraction.md"
+    },
+    {
+      "rank": 113,
+      "video_id": "fsLh-NYhOoU",
+      "title": "The most beautiful formula not enough people understand",
+      "views": 1064417,
+      "file": "/home/wsl-yoshihide/my-projects/yt-learn/transcripts/3Blue1Brown/The most beautiful formula not enough people understand.md"
+    },
+    {
+      "rank": 114,
+      "video_id": "-j8PzkZ70Lg",
+      "title": "The Physics of Euler's Formula | Laplace Transform Prelude",
+      "views": 1008839,
+      "file": "/home/wsl-yoshihide/my-projects/yt-learn/transcripts/3Blue1Brown/The Physics of Euler's Formula _ Laplace Transform Prelude.md"
+    },
+    {
+      "rank": 115,
+      "video_id": "b7FxPsqfkOY",
+      "title": "Winding numbers and domain coloring",
+      "views": 966656,
+      "file": "/home/wsl-yoshihide/my-projects/yt-learn/transcripts/3Blue1Brown/Winding numbers and domain coloring.md"
+    },
+    {
+      "rank": 116,
+      "video_id": "IaSGqQa5O-M",
+      "title": "Convolutions | Why X+Y in probability is a beautiful mess",
+      "views": 961327,
+      "file": "/home/wsl-yoshihide/my-projects/yt-learn/transcripts/3Blue1Brown/Convolutions _ Why X+Y in probability is a beautiful mess.md"
+    },
+    {
+      "rank": 117,
+      "video_id": "ppWPuXsnf1Q",
+      "title": "Lockdown math announcement",
+      "views": 958631,
+      "file": "/home/wsl-yoshihide/my-projects/yt-learn/transcripts/3Blue1Brown/Lockdown math announcement.md"
+    },
+    {
+      "rank": 118,
+      "video_id": "yuVqxCSsE7c",
+      "title": "Using topology for discrete problems | The Borsuk-Ulam theorem and stolen necklaces",
+      "views": 951602,
+      "file": "/home/wsl-yoshihide/my-projects/yt-learn/transcripts/3Blue1Brown/Using topology for discrete problems _ The Borsuk-Ulam theorem and stolen necklaces.md"
+    },
+    {
+      "rank": 119,
+      "video_id": "b3NxrZOu_CE",
+      "title": "Hamming codes part 2: The one-line implementation",
+      "views": 937729,
+      "file": "/home/wsl-yoshihide/my-projects/yt-learn/transcripts/3Blue1Brown/Hamming codes part 2_ The one-line implementation.md"
+    },
+    {
+      "rank": 120,
+      "video_id": "d_qvLDhkg00",
+      "title": "A pretty reason why Gaussian + Gaussian = Gaussian",
+      "views": 937702,
+      "file": "/home/wsl-yoshihide/my-projects/yt-learn/transcripts/3Blue1Brown/A pretty reason why Gaussian + Gaussian = Gaussian.md"
+    },
+    {
+      "rank": 121,
+      "video_id": "8GPy_UMV-08",
+      "title": "The Wallis product for pi, proved geometrically",
+      "views": 900357,
+      "file": "/home/wsl-yoshihide/my-projects/yt-learn/transcripts/3Blue1Brown/The Wallis product for pi, proved geometrically.md"
+    },
+    {
+      "rank": 122,
+      "video_id": "BLkz5LGWihw",
+      "title": "Higher order derivatives | Chapter 10, Essence of calculus",
+      "views": 885361,
+      "file": "/home/wsl-yoshihide/my-projects/yt-learn/transcripts/3Blue1Brown/Higher order derivatives _ Chapter 10, Essence of calculus.md"
+    },
+    {
+      "rank": 123,
+      "video_id": "Qe6o9j4IjTo",
+      "title": "Q&A with Grant Sanderson (3blue1brown)",
+      "views": 825127,
+      "file": "/home/wsl-yoshihide/my-projects/yt-learn/transcripts/3Blue1Brown/Q&A with Grant Sanderson (3blue1brown).md"
+    },
+    {
+      "rank": 124,
+      "video_id": "sULa9Lc4pck",
+      "title": "Triangle of Power",
+      "views": 806834,
+      "file": "/home/wsl-yoshihide/my-projects/yt-learn/transcripts/3Blue1Brown/Triangle of Power.md"
+    },
+    {
+      "rank": 125,
+      "video_id": "F3Qixy-r_rQ",
+      "title": "2021 Summer of Math Exposition results",
+      "views": 797575,
+      "file": "/home/wsl-yoshihide/my-projects/yt-learn/transcripts/3Blue1Brown/2021 Summer of Math Exposition results.md"
+    },
+    {
+      "rank": 126,
+      "video_id": "_UoTTq651dE",
+      "title": "Why 5/3 is a fundamental constant for turbulence",
+      "views": 785109,
+      "file": "/home/wsl-yoshihide/my-projects/yt-learn/transcripts/3Blue1Brown/Why 5_3 is a fundamental constant for turbulence.md"
+    },
+    {
+      "rank": 127,
+      "video_id": "cDofhN-RJqg",
+      "title": "What makes a great math explanation? | SoME2 results",
+      "views": 764156,
+      "file": "/home/wsl-yoshihide/my-projects/yt-learn/transcripts/3Blue1Brown/What makes a great math explanation_ _ SoME2 results.md"
+    },
+    {
+      "rank": 128,
+      "video_id": "IxNb1WG_Ido",
+      "title": "Tattoos on Math",
+      "views": 762608,
+      "file": "/home/wsl-yoshihide/my-projects/yt-learn/transcripts/3Blue1Brown/Tattoos on Math.md"
+    },
+    {
+      "rank": 129,
+      "video_id": "2SUvWfNJSsM",
+      "title": "Binary, Hanoi and Sierpinski, part 1",
+      "views": 760148,
+      "file": "/home/wsl-yoshihide/my-projects/yt-learn/transcripts/3Blue1Brown/Binary, Hanoi and Sierpinski, part 1.md"
+    },
+    {
+      "rank": 130,
+      "video_id": "M-MgQC6z3VU",
+      "title": "What was Euclid really doing? | Guest video by Ben Syversen",
+      "views": 740793,
+      "file": "/home/wsl-yoshihide/my-projects/yt-learn/transcripts/3Blue1Brown/What was Euclid really doing_ _ Guest video by Ben Syversen.md"
+    },
+    {
+      "rank": 131,
+      "video_id": "ojjzXyQCzso",
+      "title": "Make math videos! | Summer of Math Exposition announcement",
+      "views": 737904,
+      "file": "/home/wsl-yoshihide/my-projects/yt-learn/transcripts/3Blue1Brown/Make math videos! _ Summer of Math Exposition announcement.md"
+    },
+    {
+      "rank": 132,
+      "video_id": "FE-hM1kRK4Y",
+      "title": "Why Laplace transforms are so useful",
+      "views": 724666,
+      "file": "/home/wsl-yoshihide/my-projects/yt-learn/transcripts/3Blue1Brown/Why Laplace transforms are so useful.md"
+    },
+    {
+      "rank": 133,
+      "video_id": "-qgreAUpPwM",
+      "title": "Pure Fourier series animation montage",
+      "views": 684993,
+      "file": "/home/wsl-yoshihide/my-projects/yt-learn/transcripts/3Blue1Brown/Pure Fourier series animation montage.md"
+    },
+    {
+      "rank": 134,
+      "video_id": "Dlsa9EBKDGI",
+      "title": "Where my explanation of Grover’s algorithm failed",
+      "views": 642915,
+      "file": "/home/wsl-yoshihide/my-projects/yt-learn/transcripts/3Blue1Brown/Where my explanation of Grover’s algorithm failed.md"
+    },
+    {
+      "rank": 135,
+      "video_id": "6a1fLEToyvU",
+      "title": "25 Math explainers you may enjoy | SoME3 results",
+      "views": 638560,
+      "file": "/home/wsl-yoshihide/my-projects/yt-learn/transcripts/3Blue1Brown/25 Math explainers you may enjoy _ SoME3 results.md"
+    },
+    {
+      "rank": 136,
+      "video_id": "U_85TaXbeIo",
+      "title": "The quick proof of Bayes' theorem",
+      "views": 555340,
+      "file": "/home/wsl-yoshihide/my-projects/yt-learn/transcripts/3Blue1Brown/The quick proof of Bayes' theorem.md"
+    },
+    {
+      "rank": 137,
+      "video_id": "-9OUyo8NFZg",
+      "title": "Euler's Formula and Graph Duality",
+      "views": 520728,
+      "file": "/home/wsl-yoshihide/my-projects/yt-learn/transcripts/3Blue1Brown/Euler's Formula and Graph Duality.md"
+    },
+    {
+      "rank": 138,
+      "video_id": "_BrFKp-U8GI",
+      "title": "Exploration & Epiphany | Guest video by Paul Dancstep",
+      "views": 495609,
+      "file": "/home/wsl-yoshihide/my-projects/yt-learn/transcripts/3Blue1Brown/Exploration & Epiphany _ Guest video by Paul Dancstep.md"
+    },
+    {
+      "rank": 139,
+      "video_id": "1SMmc9gQmHQ",
+      "title": "How to count to 1000 on two hands",
+      "views": 450880,
+      "file": "/home/wsl-yoshihide/my-projects/yt-learn/transcripts/3Blue1Brown/How to count to 1000 on two hands.md"
+    },
+    {
+      "rank": 140,
+      "video_id": "Agbh95KyWxY",
+      "title": "Q&A with Grant, windy walk edition",
+      "views": 449024,
+      "file": "/home/wsl-yoshihide/my-projects/yt-learn/transcripts/3Blue1Brown/Q&A with Grant, windy walk edition.md"
+    },
+    {
+      "rank": 141,
+      "video_id": "itRV2jEtV8Q",
+      "title": "Simulating and understanding phase change | Guest video by Vilas Winstein",
+      "views": 442852,
+      "file": "/home/wsl-yoshihide/my-projects/yt-learn/transcripts/3Blue1Brown/Simulating and understanding phase change _ Guest video by Vilas Winstein.md"
+    },
+    {
+      "rank": 142,
+      "video_id": "R7p-nPg8t_g",
+      "title": "3blue1brown channel trailer",
+      "views": 408409,
+      "file": "/home/wsl-yoshihide/my-projects/yt-learn/transcripts/3Blue1Brown/3blue1brown channel trailer.md"
+    },
+    {
+      "rank": 143,
+      "video_id": "4NlrfOl0l8U",
+      "title": "The AI that solved IMO Geometry Problems | Guest video by @Aleph 0",
+      "views": 397609,
+      "file": "/home/wsl-yoshihide/my-projects/yt-learn/transcripts/3Blue1Brown/The AI that solved IMO Geometry Problems _ Guest video by @Aleph 0.md"
+    },
+    {
+      "rank": 144,
+      "video_id": "D__UaR5MQao",
+      "title": "The DP-3T algorithm for contact tracing (with Nicky Case)",
+      "views": 363203,
+      "file": "/home/wsl-yoshihide/my-projects/yt-learn/transcripts/3Blue1Brown/The DP-3T algorithm for contact tracing (with Nicky Case).md"
+    },
+    {
+      "rank": 145,
+      "video_id": "bdMfjfT0lKk",
+      "title": "Binary, Hanoi, and Sierpinski, part 2",
+      "views": 324765,
+      "file": "/home/wsl-yoshihide/my-projects/yt-learn/transcripts/3Blue1Brown/Binary, Hanoi, and Sierpinski, part 2.md"
+    },
+    {
+      "rank": 146,
+      "video_id": "VcgJro0sTiM",
+      "title": "Other math channels you'd enjoy",
+      "views": 239140,
+      "file": "/home/wsl-yoshihide/my-projects/yt-learn/transcripts/3Blue1Brown/Other math channels you'd enjoy.md"
+    },
+    {
+      "rank": 147,
+      "video_id": "Iq1a_KJTWJ8",
+      "title": "Snell's law proof using springs",
+      "views": 219122,
+      "file": "/home/wsl-yoshihide/my-projects/yt-learn/transcripts/3Blue1Brown/Snell's law proof using springs.md"
+    },
+    {
+      "rank": 148,
+      "video_id": "zLzLxVeqdQg",
+      "title": "Euler's Formula Poem",
+      "views": 180767,
+      "file": "/home/wsl-yoshihide/my-projects/yt-learn/transcripts/3Blue1Brown/Euler's Formula Poem.md"
+    },
+    {
+      "rank": 149,
+      "video_id": "liL66CApESk",
+      "title": "Q&A #2 + Net Neutrality Nuance",
+      "views": 148792,
+      "file": "/home/wsl-yoshihide/my-projects/yt-learn/transcripts/3Blue1Brown/Q&A #2 + Net Neutrality Nuance.md"
+    }
+  ]
+}

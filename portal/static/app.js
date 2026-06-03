@@ -203,7 +203,7 @@ document.addEventListener("DOMContentLoaded", () => {
   function startGpuPoll() {
     if (_gpuPollTimer) return;
     _pollGpu();
-    _gpuPollTimer = setInterval(_pollGpu, 1000);
+    _gpuPollTimer = setInterval(_pollGpu, 5000);
   }
 
   function stopGpuPoll() {

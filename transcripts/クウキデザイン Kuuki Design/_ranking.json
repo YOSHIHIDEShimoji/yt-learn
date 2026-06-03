@@ -1,0 +1,509 @@
+{
+  "updated_at": "2026-06-03",
+  "ranking": [
+    {
+      "rank": 1,
+      "video_id": "sv0sxYhmIyg",
+      "title": "3000時間の結論を20分で教えます シリコンバレープロが辿り着いた「2026年のAI正解スタック」",
+      "views": 155101,
+      "file": "/home/wsl-yoshihide/my-projects/yt-learn/transcripts/クウキデザイン Kuuki Design/3000時間の結論を20分で教えます シリコンバレープロが辿り着いた「2026年のAI正解スタック」.md"
+    },
+    {
+      "rank": 2,
+      "video_id": "UeKIDco-ssE",
+      "title": "突然ですがGoogle、辞めました",
+      "views": 75607,
+      "file": "/home/wsl-yoshihide/my-projects/yt-learn/transcripts/クウキデザイン Kuuki Design/突然ですがGoogle、辞めました.md"
+    },
+    {
+      "rank": 3,
+      "video_id": "K1JBWvTIc2Y",
+      "title": "シリコンバレー17年のプロが本気でAIエージェント使い込んだ結果全部見せます",
+      "views": 69652,
+      "file": "/home/wsl-yoshihide/my-projects/yt-learn/transcripts/クウキデザイン Kuuki Design/シリコンバレー17年のプロが本気でAIエージェント使い込んだ結果全部見せます.md"
+    },
+    {
+      "rank": 4,
+      "video_id": "u8Hk1AJM4tc",
+      "title": "AIエージェントOpenClaw全力解説：金食う・洗脳・重要データ筒抜けやりたい放題",
+      "views": 50948,
+      "file": "/home/wsl-yoshihide/my-projects/yt-learn/transcripts/クウキデザイン Kuuki Design/AIエージェントOpenClaw全力解説：金食う・洗脳・重要データ筒抜けやりたい放題.md"
+    },
+    {
+      "rank": 5,
+      "video_id": "PGPMocgdIiA",
+      "title": "AIがあなたを知らない間に差は開いていく",
+      "views": 48738,
+      "file": "/home/wsl-yoshihide/my-projects/yt-learn/transcripts/クウキデザイン Kuuki Design/AIがあなたを知らない間に差は開いていく.md"
+    },
+    {
+      "rank": 6,
+      "video_id": "rMt6OfOyDCE",
+      "title": "AI時代 「作れない人」はマジで腐る:シリコンバレー流・爆速AIワークフロー",
+      "views": 48049,
+      "file": "/home/wsl-yoshihide/my-projects/yt-learn/transcripts/クウキデザイン Kuuki Design/AI時代 「作れない人」はマジで腐る_シリコンバレー流・爆速AIワークフロー.md"
+    },
+    {
+      "rank": 7,
+      "video_id": "tyQe9JwX4Zw",
+      "title": "【プロはこう使う】シリコンバレーデザイナーによる最新AIワークフロー実演",
+      "views": 46508,
+      "file": "/home/wsl-yoshihide/my-projects/yt-learn/transcripts/クウキデザイン Kuuki Design/【プロはこう使う】シリコンバレーデザイナーによる最新AIワークフロー実演.md"
+    },
+    {
+      "rank": 8,
+      "video_id": "lECkrKfKSq4",
+      "title": "AIエージェントが生む「新・階級社会」　個人が勝ち残るためのポジショニング",
+      "views": 42214,
+      "file": "/home/wsl-yoshihide/my-projects/yt-learn/transcripts/クウキデザイン Kuuki Design/AIエージェントが生む「新・階級社会」　個人が勝ち残るためのポジショニング.md"
+    },
+    {
+      "rank": 9,
+      "video_id": "GTENtW-3BrY",
+      "title": "【これから必須の選択肢】無料安全OllamaローカルAIで自動化する方法",
+      "views": 34799,
+      "file": "/home/wsl-yoshihide/my-projects/yt-learn/transcripts/クウキデザイン Kuuki Design/【これから必須の選択肢】無料安全OllamaローカルAIで自動化する方法.md"
+    },
+    {
+      "rank": 10,
+      "video_id": "-v-0QAReLxg",
+      "title": "非エンジニアの為の「AIエージェント」完全講義",
+      "views": 33283,
+      "file": "/home/wsl-yoshihide/my-projects/yt-learn/transcripts/クウキデザイン Kuuki Design/非エンジニアの為の「AIエージェント」完全講義.md"
+    },
+    {
+      "rank": 11,
+      "video_id": "airbxOE8PyQ",
+      "title": "今年中に決まる - 管理職、お荷物か指揮者か：シリコンバレーでもう起こり始めてる変化",
+      "views": 26970,
+      "file": "/home/wsl-yoshihide/my-projects/yt-learn/transcripts/クウキデザイン Kuuki Design/今年中に決まる - 管理職、お荷物か指揮者か：シリコンバレーでもう起こり始めてる変化.md"
+    },
+    {
+      "rank": 12,
+      "video_id": "mY5KE8Zsce0",
+      "title": "Openclaw+Ollamaが正解、ってことでもう良いかもしれない",
+      "views": 23229,
+      "file": "/home/wsl-yoshihide/my-projects/yt-learn/transcripts/クウキデザイン Kuuki Design/Openclaw+Ollamaが正解、ってことでもう良いかもしれない.md"
+    },
+    {
+      "rank": 13,
+      "video_id": "DDOSQueFnho",
+      "title": "顔だけで自分と家族の名前バレする超危険社会【プロからの警鐘】",
+      "views": 23120,
+      "file": "/home/wsl-yoshihide/my-projects/yt-learn/transcripts/クウキデザイン Kuuki Design/顔だけで自分と家族の名前バレする超危険社会【プロからの警鐘】.md"
+    },
+    {
+      "rank": 14,
+      "video_id": "Ljkr7kMADc8",
+      "title": "AIの忖度で裸の王様化する日本人",
+      "views": 19924,
+      "file": "/home/wsl-yoshihide/my-projects/yt-learn/transcripts/クウキデザイン Kuuki Design/AIの忖度で裸の王様化する日本人.md"
+    },
+    {
+      "rank": 15,
+      "video_id": "dijTp7iXTGc",
+      "title": "元Googleキャリアコーチによる『成し遂げる人のマインドセット』",
+      "views": 18439,
+      "file": "/home/wsl-yoshihide/my-projects/yt-learn/transcripts/クウキデザイン Kuuki Design/元Googleキャリアコーチによる『成し遂げる人のマインドセット』.md"
+    },
+    {
+      "rank": 16,
+      "video_id": "HEBtCmk45Sg",
+      "title": "AIを本格的に勉強するべきか不安に思ってる皆さんへ【本質解体】",
+      "views": 17914,
+      "file": "/home/wsl-yoshihide/my-projects/yt-learn/transcripts/クウキデザイン Kuuki Design/AIを本格的に勉強するべきか不安に思ってる皆さんへ【本質解体】.md"
+    },
+    {
+      "rank": 17,
+      "video_id": "a0c0If_2X1o",
+      "title": "AIが勝手に仕事を拾う仕組み【AI運用記】",
+      "views": 17102,
+      "file": "/home/wsl-yoshihide/my-projects/yt-learn/transcripts/クウキデザイン Kuuki Design/AIが勝手に仕事を拾う仕組み【AI運用記】.md"
+    },
+    {
+      "rank": 18,
+      "video_id": "aneFu9WR5YU",
+      "title": "転職・解雇を繰り返して気づいたこと１０選【転職するなら必見】",
+      "views": 13939,
+      "file": "/home/wsl-yoshihide/my-projects/yt-learn/transcripts/クウキデザイン Kuuki Design/転職・解雇を繰り返して気づいたこと１０選【転職するなら必見】.md"
+    },
+    {
+      "rank": 19,
+      "video_id": "JHdPRzGm2pU",
+      "title": "AIツールを追うな。年200時間を奪う『スペック病』の正体」【モジュラー思考】",
+      "views": 12854,
+      "file": "/home/wsl-yoshihide/my-projects/yt-learn/transcripts/クウキデザイン Kuuki Design/AIツールを追うな。年200時間を奪う『スペック病』の正体」【モジュラー思考】.md"
+    },
+    {
+      "rank": 20,
+      "video_id": "4q4zAv9z-dw",
+      "title": "【プロはこう使う】AIは「嘘」を吐く、ならどうする？シリコンバレープロが実演する実践アプローチ",
+      "views": 12012,
+      "file": "/home/wsl-yoshihide/my-projects/yt-learn/transcripts/クウキデザイン Kuuki Design/【プロはこう使う】AIは「嘘」を吐く、ならどうする？シリコンバレープロが実演する実践アプローチ.md"
+    },
+    {
+      "rank": 21,
+      "video_id": "asB--GLeojg",
+      "title": "初代iPhoneチームの一員が語る「AI時代のクリエイティブ」",
+      "views": 11999,
+      "file": "/home/wsl-yoshihide/my-projects/yt-learn/transcripts/クウキデザイン Kuuki Design/初代iPhoneチームの一員が語る「AI時代のクリエイティブ」.md"
+    },
+    {
+      "rank": 22,
+      "video_id": "OiVaiunqBK4",
+      "title": "AIによる思考誘導:シリコンバレープロによるAI憲法解剖で見る傾向",
+      "views": 10513,
+      "file": "/home/wsl-yoshihide/my-projects/yt-learn/transcripts/クウキデザイン Kuuki Design/AIによる思考誘導_シリコンバレープロによるAI憲法解剖で見る傾向.md"
+    },
+    {
+      "rank": 23,
+      "video_id": "N4OW6OXHjIo",
+      "title": "そのAI画像　仕事で使えません。シリコンバレープロが解説するAI著作権の線引",
+      "views": 9394,
+      "file": "/home/wsl-yoshihide/my-projects/yt-learn/transcripts/クウキデザイン Kuuki Design/そのAI画像　仕事で使えません。シリコンバレープロが解説するAI著作権の線引.md"
+    },
+    {
+      "rank": 24,
+      "video_id": "fPPW5gnbRJI",
+      "title": "【エグゼクティブ・プレゼンス】人に話を聴かせる科学・キャリア生存に不可欠な人間力",
+      "views": 9049,
+      "file": "/home/wsl-yoshihide/my-projects/yt-learn/transcripts/クウキデザイン Kuuki Design/【エグゼクティブ・プレゼンス】人に話を聴かせる科学・キャリア生存に不可欠な人間力.md"
+    },
+    {
+      "rank": 25,
+      "video_id": "V-Wdk2TvkTE",
+      "title": "止まるな・ゴミのような批判に耳を傾けてはいけない【雑感】",
+      "views": 8278,
+      "file": "/home/wsl-yoshihide/my-projects/yt-learn/transcripts/クウキデザイン Kuuki Design/止まるな・ゴミのような批判に耳を傾けてはいけない【雑感】.md"
+    },
+    {
+      "rank": 26,
+      "video_id": "cLTCNU6z6zM",
+      "title": "【AI時代の新教養】それ、AIに食わせて大丈夫？キャリアを壊すうっかりと自分を守るデータ戦略",
+      "views": 8038,
+      "file": "/home/wsl-yoshihide/my-projects/yt-learn/transcripts/クウキデザイン Kuuki Design/【AI時代の新教養】それ、AIに食わせて大丈夫？キャリアを壊すうっかりと自分を守るデータ戦略.md"
+    },
+    {
+      "rank": 27,
+      "video_id": "IsdGvB3Bu7g",
+      "title": "面倒くさいと戦うな：出来る・出来ないを分けるたった一つのマインドセット【雑感】",
+      "views": 5829,
+      "file": "/home/wsl-yoshihide/my-projects/yt-learn/transcripts/クウキデザイン Kuuki Design/面倒くさいと戦うな：出来る・出来ないを分けるたった一つのマインドセット【雑感】.md"
+    },
+    {
+      "rank": 28,
+      "video_id": "54kDBa3J2-4",
+      "title": "シリコンバレーデザイナー・AIを使い倒して音楽プロデューサーになる【Spotifyアルバム配信】",
+      "views": 5382,
+      "file": "/home/wsl-yoshihide/my-projects/yt-learn/transcripts/クウキデザイン Kuuki Design/シリコンバレーデザイナー・AIを使い倒して音楽プロデューサーになる【Spotifyアルバム配信】.md"
+    },
+    {
+      "rank": 29,
+      "video_id": "gGl798I2l0k",
+      "title": "資料を「動画」で撮ってAIに投げるだけ。Figma, PDF, 複雑な図表…あらゆる入力をWebサイトへ変換する「ビデオハック」実装術",
+      "views": 4479,
+      "file": "/home/wsl-yoshihide/my-projects/yt-learn/transcripts/クウキデザイン Kuuki Design/資料を「動画」で撮ってAIに投げるだけ。Figma, PDF, 複雑な図表…あらゆる入力をWebサイトへ変換する「ビデオハック」実装術.md"
+    },
+    {
+      "rank": 30,
+      "video_id": "euF2cUSlWvc",
+      "title": "【英語コンプレックス破壊】「自分には無理」は勘違い。海外で働くための実践英語ロードマップ",
+      "views": 4378,
+      "file": "/home/wsl-yoshihide/my-projects/yt-learn/transcripts/クウキデザイン Kuuki Design/【英語コンプレックス破壊】「自分には無理」は勘違い。海外で働くための実践英語ロードマップ.md"
+    },
+    {
+      "rank": 31,
+      "video_id": "JXHCbkJpTak",
+      "title": "「疲れた…」をなくす秘訣。トップパフォーマーの精神的断捨離",
+      "views": 4362,
+      "file": "/home/wsl-yoshihide/my-projects/yt-learn/transcripts/クウキデザイン Kuuki Design/「疲れた…」をなくす秘訣。トップパフォーマーの精神的断捨離.md"
+    },
+    {
+      "rank": 32,
+      "video_id": "s4RkxrwIHsM",
+      "title": "なぜ日本はこんなに息苦しいのか。「こうあるべき」という呪縛について【雑感】",
+      "views": 3202,
+      "file": "/home/wsl-yoshihide/my-projects/yt-learn/transcripts/クウキデザイン Kuuki Design/なぜ日本はこんなに息苦しいのか。「こうあるべき」という呪縛について【雑感】.md"
+    },
+    {
+      "rank": 33,
+      "video_id": "TgXTP2PHttg",
+      "title": "就職氷河期のJTCがどれだけヤバかったのか語る動画【雑感】",
+      "views": 2820,
+      "file": "/home/wsl-yoshihide/my-projects/yt-learn/transcripts/クウキデザイン Kuuki Design/就職氷河期のJTCがどれだけヤバかったのか語る動画【雑感】.md"
+    },
+    {
+      "rank": 34,
+      "video_id": "0MHyhHmi-jk",
+      "title": "世界で通用するパフォーマンスの作り方：精神的断捨離",
+      "views": 2771,
+      "file": "/home/wsl-yoshihide/my-projects/yt-learn/transcripts/クウキデザイン Kuuki Design/世界で通用するパフォーマンスの作り方：精神的断捨離.md"
+    },
+    {
+      "rank": 35,
+      "video_id": "Xvt172iO5vY",
+      "title": "「年収」で選ぶと地獄を見ます。7回の転職で学んだ「生存戦略」",
+      "views": 2412,
+      "file": "/home/wsl-yoshihide/my-projects/yt-learn/transcripts/クウキデザイン Kuuki Design/「年収」で選ぶと地獄を見ます。7回の転職で学んだ「生存戦略」.md"
+    },
+    {
+      "rank": 36,
+      "video_id": "CcvY4d0KW_Q",
+      "title": "「週5」がしんどいのは、あなたのせいじゃない【雑感】",
+      "views": 2339,
+      "file": "/home/wsl-yoshihide/my-projects/yt-learn/transcripts/クウキデザイン Kuuki Design/「週5」がしんどいのは、あなたのせいじゃない【雑感】.md"
+    },
+    {
+      "rank": 37,
+      "video_id": "j27DAK76vMg",
+      "title": "日本のウェブサイトがクソな件について【雑感】",
+      "views": 2130,
+      "file": "/home/wsl-yoshihide/my-projects/yt-learn/transcripts/クウキデザイン Kuuki Design/日本のウェブサイトがクソな件について【雑感】.md"
+    },
+    {
+      "rank": 38,
+      "video_id": "CeQ8k8elQo8",
+      "title": "《雑感０４》年齢差別大国｜海外住んで分かった日本の異様さ",
+      "views": 1849,
+      "file": "/home/wsl-yoshihide/my-projects/yt-learn/transcripts/クウキデザイン Kuuki Design/《雑感０４》年齢差別大国｜海外住んで分かった日本の異様さ.md"
+    },
+    {
+      "rank": 39,
+      "video_id": "wXBNKRjdYUI",
+      "title": "【大手テック企業面接官が解説】「この人と働きたくない」と面接で思われるヤバい共通点",
+      "views": 1692,
+      "file": "/home/wsl-yoshihide/my-projects/yt-learn/transcripts/クウキデザイン Kuuki Design/【大手テック企業面接官が解説】「この人と働きたくない」と面接で思われるヤバい共通点.md"
+    },
+    {
+      "rank": 40,
+      "video_id": "PoAIwKA8HCc",
+      "title": "JTCから海外テック大手へ-米国移住とキャリアチェンジ:在米現役UXデザイナーが解説",
+      "views": 1684,
+      "file": "/home/wsl-yoshihide/my-projects/yt-learn/transcripts/クウキデザイン Kuuki Design/JTCから海外テック大手へ-米国移住とキャリアチェンジ_在米現役UXデザイナーが解説.md"
+    },
+    {
+      "rank": 41,
+      "video_id": "KvwOEvkM9P4",
+      "title": "クウキデザイン1周年・10000人・感謝とこれから",
+      "views": 1570,
+      "file": "/home/wsl-yoshihide/my-projects/yt-learn/transcripts/クウキデザイン Kuuki Design/クウキデザイン1周年・10000人・感謝とこれから.md"
+    },
+    {
+      "rank": 42,
+      "video_id": "Czq6n6CtzZc",
+      "title": "教材では絶対学べない超実戦英語　ネイティブのように喋るコツ",
+      "views": 1464,
+      "file": "/home/wsl-yoshihide/my-projects/yt-learn/transcripts/クウキデザイン Kuuki Design/教材では絶対学べない超実戦英語　ネイティブのように喋るコツ.md"
+    },
+    {
+      "rank": 43,
+      "video_id": "yif0ZERmq5c",
+      "title": "美大卒・センスは関係ない　UXデザイナーに本当に必要な「５つの性質」",
+      "views": 1395,
+      "file": "/home/wsl-yoshihide/my-projects/yt-learn/transcripts/クウキデザイン Kuuki Design/美大卒・センスは関係ない　UXデザイナーに本当に必要な「５つの性質」.md"
+    },
+    {
+      "rank": 44,
+      "video_id": "Kuht3_GP3WA",
+      "title": "海外テック企業転職で必須だったスキル５選【初級編】",
+      "views": 1310,
+      "file": "/home/wsl-yoshihide/my-projects/yt-learn/transcripts/クウキデザイン Kuuki Design/海外テック企業転職で必須だったスキル５選【初級編】.md"
+    },
+    {
+      "rank": 45,
+      "video_id": "Xn-UU6bAlCs",
+      "title": "UXの本質と『UI』との違い",
+      "views": 1044,
+      "file": "/home/wsl-yoshihide/my-projects/yt-learn/transcripts/クウキデザイン Kuuki Design/UXの本質と『UI』との違い.md"
+    },
+    {
+      "rank": 46,
+      "video_id": "T2k8uyqu9I4",
+      "title": "【徹底解説】どうやってUXデザイナーになるの？(前編 ) | シリコンバレーのプロが解説",
+      "views": 981,
+      "file": "/home/wsl-yoshihide/my-projects/yt-learn/transcripts/クウキデザイン Kuuki Design/【徹底解説】どうやってUXデザイナーになるの？(前編 ) _ シリコンバレーのプロが解説.md"
+    },
+    {
+      "rank": 47,
+      "video_id": "pGD7EBGXJkU",
+      "title": "《雑感０１》無駄なことなんて何もない",
+      "views": 833,
+      "file": "/home/wsl-yoshihide/my-projects/yt-learn/transcripts/クウキデザイン Kuuki Design/《雑感０１》無駄なことなんて何もない.md"
+    },
+    {
+      "rank": 48,
+      "video_id": "cmfCl9_FaSI",
+      "title": "元Google社員がなんでも質問に答えるー内側から見たGoogle",
+      "views": 822,
+      "file": "/home/wsl-yoshihide/my-projects/yt-learn/transcripts/クウキデザイン Kuuki Design/元Google社員がなんでも質問に答えるー内側から見たGoogle.md"
+    },
+    {
+      "rank": 49,
+      "video_id": "zb7_4Qgzoic",
+      "title": "海外テック企業転職で必須だったスキル５選【中級編】",
+      "views": 768,
+      "file": "/home/wsl-yoshihide/my-projects/yt-learn/transcripts/クウキデザイン Kuuki Design/海外テック企業転職で必須だったスキル５選【中級編】.md"
+    },
+    {
+      "rank": 50,
+      "video_id": "7AYqJ0DeBX0",
+      "title": "海外テック企業転職で必須だったスキル５選【上級編】",
+      "views": 719,
+      "file": "/home/wsl-yoshihide/my-projects/yt-learn/transcripts/クウキデザイン Kuuki Design/海外テック企業転職で必須だったスキル５選【上級編】.md"
+    },
+    {
+      "rank": 51,
+      "video_id": "jqGTthIOufI",
+      "title": "Google辞めて独立：今こういうことやってます【雑感】",
+      "views": 699,
+      "file": "/home/wsl-yoshihide/my-projects/yt-learn/transcripts/クウキデザイン Kuuki Design/Google辞めて独立：今こういうことやってます【雑感】.md"
+    },
+    {
+      "rank": 52,
+      "video_id": "UvmsGnUg2cQ",
+      "title": "スタートアップ転職で失敗しないために知っておくべきこと",
+      "views": 650,
+      "file": "/home/wsl-yoshihide/my-projects/yt-learn/transcripts/クウキデザイン Kuuki Design/スタートアップ転職で失敗しないために知っておくべきこと.md"
+    },
+    {
+      "rank": 53,
+      "video_id": "Jr_qnmZlvEo",
+      "title": "《雑感０３》日本：上澄みだけ助かるどんどん熱くなる地獄鍋",
+      "views": 647,
+      "file": "/home/wsl-yoshihide/my-projects/yt-learn/transcripts/クウキデザイン Kuuki Design/《雑感０３》日本：上澄みだけ助かるどんどん熱くなる地獄鍋.md"
+    },
+    {
+      "rank": 54,
+      "video_id": "2Jmjgys_XpU",
+      "title": "燃え尽きました",
+      "views": 565,
+      "file": "/home/wsl-yoshihide/my-projects/yt-learn/transcripts/クウキデザイン Kuuki Design/燃え尽きました.md"
+    },
+    {
+      "rank": 55,
+      "video_id": "mRN2n3yGCbY",
+      "title": "【徹底解説】どうやってUXデザイナーになるの？(中編 ) | シリコンバレーのプロが解説",
+      "views": 553,
+      "file": "/home/wsl-yoshihide/my-projects/yt-learn/transcripts/クウキデザイン Kuuki Design/【徹底解説】どうやってUXデザイナーになるの？(中編 ) _ シリコンバレーのプロが解説.md"
+    },
+    {
+      "rank": 56,
+      "video_id": "-QrzBigDC1U",
+      "title": "億人に届けるデザインの第一歩 | 世界基準のデザインに求められるアクセシビリティ",
+      "views": 529,
+      "file": "/home/wsl-yoshihide/my-projects/yt-learn/transcripts/クウキデザイン Kuuki Design/億人に届けるデザインの第一歩 _ 世界基準のデザインに求められるアクセシビリティ.md"
+    },
+    {
+      "rank": 57,
+      "video_id": "8htbeuDHN1s",
+      "title": "《雑感０５》明日死ぬかもしれない",
+      "views": 476,
+      "file": "/home/wsl-yoshihide/my-projects/yt-learn/transcripts/クウキデザイン Kuuki Design/《雑感０５》明日死ぬかもしれない.md"
+    },
+    {
+      "rank": 58,
+      "video_id": "k99bNWAwzE0",
+      "title": "Amazonで働くには | その独特の企業風土を元社員が徹底解説",
+      "views": 468,
+      "file": "/home/wsl-yoshihide/my-projects/yt-learn/transcripts/クウキデザイン Kuuki Design/Amazonで働くには _ その独特の企業風土を元社員が徹底解説.md"
+    },
+    {
+      "rank": 59,
+      "video_id": "nLQs2-N6sFI",
+      "title": "株式報酬の罠（ストックオプション解説）：スタートアップ就職指南",
+      "views": 386,
+      "file": "/home/wsl-yoshihide/my-projects/yt-learn/transcripts/クウキデザイン Kuuki Design/株式報酬の罠（ストックオプション解説）：スタートアップ就職指南.md"
+    },
+    {
+      "rank": 60,
+      "video_id": "LSozLdPM4HI",
+      "title": "《雑感０２》AIは世界を破滅させるか",
+      "views": 375,
+      "file": "/home/wsl-yoshihide/my-projects/yt-learn/transcripts/クウキデザイン Kuuki Design/《雑感０２》AIは世界を破滅させるか.md"
+    },
+    {
+      "rank": 61,
+      "video_id": "jlrs0jUVeD8",
+      "title": "良いデザインとはどういうもの？ | シリコンバレープロが解説",
+      "views": 339,
+      "file": "/home/wsl-yoshihide/my-projects/yt-learn/transcripts/クウキデザイン Kuuki Design/良いデザインとはどういうもの？ _ シリコンバレープロが解説.md"
+    },
+    {
+      "rank": 62,
+      "video_id": "oW4nn4TfKd8",
+      "title": "海外IT企業のデザイン職 | 色々あるけどどういう意味？",
+      "views": 312,
+      "file": "/home/wsl-yoshihide/my-projects/yt-learn/transcripts/クウキデザイン Kuuki Design/海外IT企業のデザイン職 _ 色々あるけどどういう意味？.md"
+    },
+    {
+      "rank": 63,
+      "video_id": "mNdJSxxDPMM",
+      "title": "【徹底解説】どうやってUXデザイナーになるの？(後編 ) | シリコンバレーのプロが解説",
+      "views": 312,
+      "file": "/home/wsl-yoshihide/my-projects/yt-learn/transcripts/クウキデザイン Kuuki Design/【徹底解説】どうやってUXデザイナーになるの？(後編 ) _ シリコンバレーのプロが解説.md"
+    },
+    {
+      "rank": 64,
+      "video_id": "yMTnUZf1WDk",
+      "title": "海外転職はコストに見合う価値があるの？ | モデルを作って計算してみた",
+      "views": 309,
+      "file": "/home/wsl-yoshihide/my-projects/yt-learn/transcripts/クウキデザイン Kuuki Design/海外転職はコストに見合う価値があるの？ _ モデルを作って計算してみた.md"
+    },
+    {
+      "rank": 65,
+      "video_id": "TTaLRMGg3CE",
+      "title": "《雑感》オマエ常識ないんか！？",
+      "views": 292,
+      "file": "/home/wsl-yoshihide/my-projects/yt-learn/transcripts/クウキデザイン Kuuki Design/《雑感》オマエ常識ないんか！？.md"
+    },
+    {
+      "rank": 66,
+      "video_id": "3RbmGJLuHPw",
+      "title": "努力を無駄にするな！シリコンバレー式「真の価値創造」とは？",
+      "views": 290,
+      "file": "/home/wsl-yoshihide/my-projects/yt-learn/transcripts/クウキデザイン Kuuki Design/努力を無駄にするな！シリコンバレー式「真の価値創造」とは？.md"
+    },
+    {
+      "rank": 67,
+      "video_id": "9PI2Qptrhb8",
+      "title": "《雑感》この不確実な世界で生きる皆さんへ",
+      "views": 281,
+      "file": "/home/wsl-yoshihide/my-projects/yt-learn/transcripts/クウキデザイン Kuuki Design/《雑感》この不確実な世界で生きる皆さんへ.md"
+    },
+    {
+      "rank": 68,
+      "video_id": "9ZfQIXacy7k",
+      "title": "プロが解説するUXデザイン：アマゾンアレクサ",
+      "views": 251,
+      "file": "/home/wsl-yoshihide/my-projects/yt-learn/transcripts/クウキデザイン Kuuki Design/プロが解説するUXデザイン：アマゾンアレクサ.md"
+    },
+    {
+      "rank": 69,
+      "video_id": "J76OjJJ0FXI",
+      "title": "デザイナーとして許されないこと・守るべきこと",
+      "views": 249,
+      "file": "/home/wsl-yoshihide/my-projects/yt-learn/transcripts/クウキデザイン Kuuki Design/デザイナーとして許されないこと・守るべきこと.md"
+    },
+    {
+      "rank": 70,
+      "video_id": "Xqjsyz-TxAE",
+      "title": "会議や面接で主導権を取る‼️１０のワザ",
+      "views": 224,
+      "file": "/home/wsl-yoshihide/my-projects/yt-learn/transcripts/クウキデザイン Kuuki Design/会議や面接で主導権を取る‼️１０のワザ.md"
+    },
+    {
+      "rank": 71,
+      "video_id": "TAKs3ZP-TFQ",
+      "title": "海外転職時にやらかしたヤバいミス１０選 【絶対やるな】",
+      "views": 201,
+      "file": "/home/wsl-yoshihide/my-projects/yt-learn/transcripts/クウキデザイン Kuuki Design/海外転職時にやらかしたヤバいミス１０選 【絶対やるな】.md"
+    },
+    {
+      "rank": 72,
+      "video_id": "3JmzuFgKJJQ",
+      "title": "外資系テック企業への英語履歴書作成 2025年版【徹底解説❗️】",
+      "views": 164,
+      "file": "/home/wsl-yoshihide/my-projects/yt-learn/transcripts/クウキデザイン Kuuki Design/外資系テック企業への英語履歴書作成 2025年版【徹底解説❗️】.md"
+    }
+  ]
+}
