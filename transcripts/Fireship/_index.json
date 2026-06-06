@@ -4036,5 +4036,125 @@
     "url": "https://www.youtube.com/watch?v=I6Q5VM1ao2k",
     "file": "/home/wsl-yoshihide/my-projects/yt-learn/transcripts/Fireship/Faster Firestore via Data Aggregation.md",
     "transcribed_at": "2026-06-06"
+  },
+  "iVHRy_uVtm0": {
+    "title": "Firebase Analytics + Remote Config on the Web",
+    "url": "https://www.youtube.com/watch?v=iVHRy_uVtm0",
+    "file": "/home/wsl-yoshihide/my-projects/yt-learn/transcripts/Fireship/Firebase Analytics + Remote Config on the Web.md",
+    "transcribed_at": "2026-06-06"
+  },
+  "JVy0JpCOuNI": {
+    "title": "SendGrid Transactional Email via a Firestore Cloud Function",
+    "url": "https://www.youtube.com/watch?v=JVy0JpCOuNI",
+    "file": "/home/wsl-yoshihide/my-projects/yt-learn/transcripts/Fireship/SendGrid Transactional Email via a Firestore Cloud Function.md",
+    "transcribed_at": "2026-06-06"
+  },
+  "yFlhTvxcrQ8": {
+    "title": "Firestore Pagination - It Just Got Easier",
+    "url": "https://www.youtube.com/watch?v=yFlhTvxcrQ8",
+    "file": "/home/wsl-yoshihide/my-projects/yt-learn/transcripts/Fireship/Firestore Pagination - It Just Got Easier.md",
+    "transcribed_at": "2026-06-06"
+  },
+  "wvRVfyPKOA0": {
+    "title": "Your Form was Autosaved with Vue & Firestore",
+    "url": "https://www.youtube.com/watch?v=wvRVfyPKOA0",
+    "file": "/home/wsl-yoshihide/my-projects/yt-learn/transcripts/Fireship/Your Form was Autosaved with Vue & Firestore.md",
+    "transcribed_at": "2026-06-06"
+  },
+  "NLWHEiH1FZY": {
+    "title": "Custom Usernames with Firebase Authentication",
+    "url": "https://www.youtube.com/watch?v=NLWHEiH1FZY",
+    "file": "/home/wsl-yoshihide/my-projects/yt-learn/transcripts/Fireship/Custom Usernames with Firebase Authentication.md",
+    "transcribed_at": "2026-06-06"
+  },
+  "MlbLcUF77eU": {
+    "title": "Add Toast Message Notifications to your Angular App",
+    "url": "https://www.youtube.com/watch?v=MlbLcUF77eU",
+    "file": "/home/wsl-yoshihide/my-projects/yt-learn/transcripts/Fireship/Add Toast Message Notifications to your Angular App.md",
+    "transcribed_at": "2026-06-06"
+  },
+  "dWn9iBYiJrk": {
+    "title": "Location-based Queries with GeoFire and Angular Google Maps",
+    "url": "https://www.youtube.com/watch?v=dWn9iBYiJrk",
+    "file": "/home/wsl-yoshihide/my-projects/yt-learn/transcripts/Fireship/Location-based Queries with GeoFire and Angular Google Maps.md",
+    "transcribed_at": "2026-06-06"
+  },
+  "zTj0FZHunNE": {
+    "title": "Stripe Elements & Checkout with Angular - Monetize your PWA",
+    "url": "https://www.youtube.com/watch?v=zTj0FZHunNE",
+    "file": "/home/wsl-yoshihide/my-projects/yt-learn/transcripts/Fireship/Stripe Elements & Checkout with Angular - Monetize your PWA.md",
+    "transcribed_at": "2026-06-06"
+  },
+  "8PfiY0U_PBI": {
+    "title": "Reflectly-Inspired Animated Slideshow with Flutter + Firebase",
+    "url": "https://www.youtube.com/watch?v=8PfiY0U_PBI",
+    "file": "/home/wsl-yoshihide/my-projects/yt-learn/transcripts/Fireship/Reflectly-Inspired Animated Slideshow with Flutter + Firebase.md",
+    "transcribed_at": "2026-06-06"
+  },
+  "NrkFBmBFA6k": {
+    "title": "Host Multiple Apps or Websites on Firebase",
+    "url": "https://www.youtube.com/watch?v=NrkFBmBFA6k",
+    "file": "/home/wsl-yoshihide/my-projects/yt-learn/transcripts/Fireship/Host Multiple Apps or Websites on Firebase.md",
+    "transcribed_at": "2026-06-06"
+  },
+  "e_5W-JF_E2U": {
+    "title": "Visualize 140k Gun Violence Incidents with Deck.gl & Google Maps",
+    "url": "https://www.youtube.com/watch?v=e_5W-JF_E2U",
+    "file": "/home/wsl-yoshihide/my-projects/yt-learn/transcripts/Fireship/Visualize 140k Gun Violence Incidents with Deck.gl & Google Maps.md",
+    "transcribed_at": "2026-06-06"
+  },
+  "8Wy1AqY5gqE": {
+    "title": "Learn @ngrx/entity and Feature Modules",
+    "url": "https://www.youtube.com/watch?v=8Wy1AqY5gqE",
+    "file": "/home/wsl-yoshihide/my-projects/yt-learn/transcripts/Fireship/Learn @ngrx_entity and Feature Modules.md",
+    "transcribed_at": "2026-06-06"
+  },
+  "6N_1vUPlhvk": {
+    "title": "Angular Firebase CRUD App with NoSQL Database Tutorial",
+    "url": "https://www.youtube.com/watch?v=6N_1vUPlhvk",
+    "file": "/home/wsl-yoshihide/my-projects/yt-learn/transcripts/Fireship/Angular Firebase CRUD App with NoSQL Database Tutorial.md",
+    "transcribed_at": "2026-06-06"
+  },
+  "lO1S-FAcZU8": {
+    "title": "Firestore Geoquery",
+    "url": "https://www.youtube.com/watch?v=lO1S-FAcZU8",
+    "file": "/home/wsl-yoshihide/my-projects/yt-learn/transcripts/Fireship/Firestore Geoquery.md",
+    "transcribed_at": "2026-06-06"
+  },
+  "8Ejn1FLRRaw": {
+    "title": "Firestore Increment - Counters that Scale",
+    "url": "https://www.youtube.com/watch?v=8Ejn1FLRRaw",
+    "file": "/home/wsl-yoshihide/my-projects/yt-learn/transcripts/Fireship/Firestore Increment - Counters that Scale.md",
+    "transcribed_at": "2026-06-06"
+  },
+  "_lZc2O2oUJk": {
+    "title": "Stripe Checkout Payments with Angular and Firebase - Part 1",
+    "url": "https://www.youtube.com/watch?v=_lZc2O2oUJk",
+    "file": "/home/wsl-yoshihide/my-projects/yt-learn/transcripts/Fireship/Stripe Checkout Payments with Angular and Firebase - Part 1.md",
+    "transcribed_at": "2026-06-06"
+  },
+  "IVy3Tm8iHQ0": {
+    "title": "Nest on Cloud Functions",
+    "url": "https://www.youtube.com/watch?v=IVy3Tm8iHQ0",
+    "file": "/home/wsl-yoshihide/my-projects/yt-learn/transcripts/Fireship/Nest on Cloud Functions.md",
+    "transcribed_at": "2026-06-06"
+  },
+  "RVh6nngPuNw": {
+    "title": "Ionic 4 Theme Builder with CSS Variables",
+    "url": "https://www.youtube.com/watch?v=RVh6nngPuNw",
+    "file": "/home/wsl-yoshihide/my-projects/yt-learn/transcripts/Fireship/Ionic 4 Theme Builder with CSS Variables.md",
+    "transcribed_at": "2026-06-06"
+  },
+  "m_P1Q0vhOHs": {
+    "title": "Push Notifications with Ionic4 and Firebase Cloud Messaging",
+    "url": "https://www.youtube.com/watch?v=m_P1Q0vhOHs",
+    "file": "/home/wsl-yoshihide/my-projects/yt-learn/transcripts/Fireship/Push Notifications with Ionic4 and Firebase Cloud Messaging.md",
+    "transcribed_at": "2026-06-06"
+  },
+  "MflUMIeADZU": {
+    "title": "Big JavaScript Projects - Code Sharing",
+    "url": "https://www.youtube.com/watch?v=MflUMIeADZU",
+    "file": "/home/wsl-yoshihide/my-projects/yt-learn/transcripts/Fireship/Big JavaScript Projects - Code Sharing.md",
+    "transcribed_at": "2026-06-06"
   }
 }
