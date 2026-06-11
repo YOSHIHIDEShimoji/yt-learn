@@ -1,5 +1,5 @@
 {
-  "updated_at": "2026-06-03",
+  "updated_at": "2026-06-11",
   "ranking": [
     {
       "rank": 1,
@@ -1043,6 +1043,13 @@
       "title": "Q&A #2 + Net Neutrality Nuance",
       "views": 148792,
       "file": "/home/wsl-yoshihide/my-projects/yt-learn/transcripts/3Blue1Brown/Q&A #2 + Net Neutrality Nuance.md"
+    },
+    {
+      "rank": 150,
+      "video_id": "l6DKRf-fAAM",
+      "title": "Reinventing Entropy | Compression & Intelligence Part 1",
+      "views": 7249,
+      "file": "/home/wsl-yoshihide/my-projects/yt-learn/transcripts/3Blue1Brown/Reinventing Entropy _ Compression & Intelligence Part 1.md"
     }
   ]
 }
