@@ -4350,993 +4350,1000 @@
     },
     {
       "rank": 622,
+      "video_id": "1PBRhm5ZnjU",
+      "title": "Anthropic begged the world to stop AI… then shipped this",
+      "views": 113768,
+      "file": "/home/wsl-yoshihide/my-projects/yt-learn/transcripts/Fireship/Anthropic begged the world to stop AI… then shipped this.md"
+    },
+    {
+      "rank": 623,
       "video_id": "e1KpKBHJOrA",
       "title": "CSS Pseudo-elements :: in 100 Seconds",
       "views": 113379,
       "file": "/home/wsl-yoshihide/my-projects/yt-learn/transcripts/Fireship/CSS Pseudo-elements __ in 100 Seconds.md"
     },
     {
-      "rank": 623,
+      "rank": 624,
       "video_id": "kpXKwDGtjGE",
       "title": "CSS Pseudo-classes: in 100 Seconds",
       "views": 111061,
       "file": "/home/wsl-yoshihide/my-projects/yt-learn/transcripts/Fireship/CSS Pseudo-classes_ in 100 Seconds.md"
     },
     {
-      "rank": 624,
+      "rank": 625,
       "video_id": "mVqQDEtRBwA",
       "title": "Learn Angular Animations with 5 Examples",
       "views": 110105,
       "file": "/home/wsl-yoshihide/my-projects/yt-learn/transcripts/Fireship/Learn Angular Animations with 5 Examples.md"
     },
     {
-      "rank": 625,
+      "rank": 626,
       "video_id": "8tBQI5grhbE",
       "title": "Lazy Loading Components in Angular 4",
       "views": 108317,
       "file": "/home/wsl-yoshihide/my-projects/yt-learn/transcripts/Fireship/Lazy Loading Components in Angular 4.md"
     },
     {
-      "rank": 626,
+      "rank": 627,
       "video_id": "cHFV6JPp-6A",
       "title": "Flutter - Google SignIn from Scratch",
       "views": 108132,
       "file": "/home/wsl-yoshihide/my-projects/yt-learn/transcripts/Fireship/Flutter - Google SignIn from Scratch.md"
     },
     {
-      "rank": 627,
+      "rank": 628,
       "video_id": "SGj11j4hxmg",
       "title": "NGXS - Angular State Management",
       "views": 107644,
       "file": "/home/wsl-yoshihide/my-projects/yt-learn/transcripts/Fireship/NGXS - Angular State Management.md"
     },
     {
-      "rank": 628,
+      "rank": 629,
       "video_id": "N5WojMutddQ",
       "title": "Run VS Code in the browser with massive computing resources",
       "views": 107146,
       "file": "/home/wsl-yoshihide/my-projects/yt-learn/transcripts/Fireship/Run VS Code in the browser with massive computing resources.md"
     },
     {
-      "rank": 629,
+      "rank": 630,
       "video_id": "UafqYgRoIC0",
       "title": "Sign in with Apple from a Firebase Web App",
       "views": 105426,
       "file": "/home/wsl-yoshihide/my-projects/yt-learn/transcripts/Fireship/Sign in with Apple from a Firebase Web App.md"
     },
     {
-      "rank": 630,
+      "rank": 631,
       "video_id": "z27IroVNFLI",
       "title": "Send Push Notifications in Angular with Firebase Cloud Messaging",
       "views": 105183,
       "file": "/home/wsl-yoshihide/my-projects/yt-learn/transcripts/Fireship/Send Push Notifications in Angular with Firebase Cloud Messaging.md"
     },
     {
-      "rank": 631,
+      "rank": 632,
       "video_id": "qP5zw7fjQgo",
       "title": "Firebase Google SignIn + Firestore w/ Angular",
       "views": 104502,
       "file": "/home/wsl-yoshihide/my-projects/yt-learn/transcripts/Fireship/Firebase Google SignIn + Firestore w_ Angular.md"
     },
     {
-      "rank": 632,
+      "rank": 633,
       "video_id": "3qODuvp1Zp8",
       "title": "Role-Based User Permissions in Firebase",
       "views": 102249,
       "file": "/home/wsl-yoshihide/my-projects/yt-learn/transcripts/Fireship/Role-Based User Permissions in Firebase.md"
     },
     {
-      "rank": 633,
+      "rank": 634,
       "video_id": "dTXzxSlhTDM",
       "title": "Fullstack Autocomplete Search with Algolia",
       "views": 101877,
       "file": "/home/wsl-yoshihide/my-projects/yt-learn/transcripts/Fireship/Fullstack Autocomplete Search with Algolia.md"
     },
     {
-      "rank": 634,
+      "rank": 635,
       "video_id": "Bj15-6rBHQw",
       "title": "Google Calendar + Firebase Auth",
       "views": 100764,
       "file": "/home/wsl-yoshihide/my-projects/yt-learn/transcripts/Fireship/Google Calendar + Firebase Auth.md"
     },
     {
-      "rank": 635,
+      "rank": 636,
       "video_id": "Mx24wiPilHg",
       "title": "Flutter Firebase Setup for Power Users",
       "views": 99910,
       "file": "/home/wsl-yoshihide/my-projects/yt-learn/transcripts/Fireship/Flutter Firebase Setup for Power Users.md"
     },
     {
-      "rank": 636,
+      "rank": 637,
       "video_id": "IDZyZMYn3H0",
       "title": "How to Become a Google Developer Expert (GDE)",
       "views": 99436,
       "file": "/home/wsl-yoshihide/my-projects/yt-learn/transcripts/Fireship/How to Become a Google Developer Expert (GDE).md"
     },
     {
-      "rank": 637,
+      "rank": 638,
       "video_id": "qLrDWBKTUZo",
       "title": "Firebase Database Rules Tutorial",
       "views": 98923,
       "file": "/home/wsl-yoshihide/my-projects/yt-learn/transcripts/Fireship/Firebase Database Rules Tutorial.md"
     },
     {
-      "rank": 638,
+      "rank": 639,
       "video_id": "Zn3Xx-TSrM8",
       "title": "Realtime Maps with Mapbox + Firebase + Angular",
       "views": 98422,
       "file": "/home/wsl-yoshihide/my-projects/yt-learn/transcripts/Fireship/Realtime Maps with Mapbox + Firebase + Angular.md"
     },
     {
-      "rank": 639,
+      "rank": 640,
       "video_id": "5Z2C0wy4bmg",
       "title": "Swipe, Tap, Pinch - HammerJS + Angular Animations",
       "views": 98155,
       "file": "/home/wsl-yoshihide/my-projects/yt-learn/transcripts/Fireship/Swipe, Tap, Pinch - HammerJS + Angular Animations.md"
     },
     {
-      "rank": 640,
+      "rank": 641,
       "video_id": "sSDHdWrSqLY",
       "title": "MySQL with Firebase?",
       "views": 94346,
       "file": "/home/wsl-yoshihide/my-projects/yt-learn/transcripts/Fireship/MySQL with Firebase_.md"
     },
     {
-      "rank": 641,
+      "rank": 642,
       "video_id": "HCmAwk2fnZc",
       "title": "Flutter File Upload - Pick, Crop, and Save Images to the Cloud",
       "views": 92767,
       "file": "/home/wsl-yoshihide/my-projects/yt-learn/transcripts/Fireship/Flutter File Upload - Pick, Crop, and Save Images to the Cloud.md"
     },
     {
-      "rank": 642,
+      "rank": 643,
       "video_id": "aUjBvuUdkhg",
       "title": "Lazy-Loaded Images - Code This, Not That",
       "views": 92586,
       "file": "/home/wsl-yoshihide/my-projects/yt-learn/transcripts/Fireship/Lazy-Loaded Images - Code This, Not That.md"
     },
     {
-      "rank": 643,
+      "rank": 644,
       "video_id": "AtZGoueL4Vs",
       "title": "PayPal Checkout 2.0 - Monetize React, Angular, & Vue Quickly",
       "views": 91757,
       "file": "/home/wsl-yoshihide/my-projects/yt-learn/transcripts/Fireship/PayPal Checkout 2.0 - Monetize React, Angular, & Vue Quickly.md"
     },
     {
-      "rank": 644,
+      "rank": 645,
       "video_id": "fQ4u1J717ys",
       "title": "Collection Group Queries in Firestore",
       "views": 90097,
       "file": "/home/wsl-yoshihide/my-projects/yt-learn/transcripts/Fireship/Collection Group Queries in Firestore.md"
     },
     {
-      "rank": 645,
+      "rank": 646,
       "video_id": "UnEPBQvkNrg",
       "title": "State of JavaScript - Real Analysis of Angular, React, and Vue",
       "views": 87747,
       "file": "/home/wsl-yoshihide/my-projects/yt-learn/transcripts/Fireship/State of JavaScript - Real Analysis of Angular, React, and Vue.md"
     },
     {
-      "rank": 646,
+      "rank": 647,
       "video_id": "4u9_kdkvTsc",
       "title": "Angular Elements Quick Start",
       "views": 86593,
       "file": "/home/wsl-yoshihide/my-projects/yt-learn/transcripts/Fireship/Angular Elements Quick Start.md"
     },
     {
-      "rank": 647,
+      "rank": 648,
       "video_id": "vThujL5-fZQ",
       "title": "Transactional Email 101 📧 with SendGrid & Firebase Cloud Functions",
       "views": 85892,
       "file": "/home/wsl-yoshihide/my-projects/yt-learn/transcripts/Fireship/Transactional Email 101 📧 with SendGrid & Firebase Cloud Functions.md"
     },
     {
-      "rank": 648,
+      "rank": 649,
       "video_id": "WZY_in9oAjA",
       "title": "Google Assistant Quick Start for Developers",
       "views": 84785,
       "file": "/home/wsl-yoshihide/my-projects/yt-learn/transcripts/Fireship/Google Assistant Quick Start for Developers.md"
     },
     {
-      "rank": 649,
+      "rank": 650,
       "video_id": "Ga0vrqed6Ho",
       "title": "Realtime Graphs and Charts with Plotly and Firebase",
       "views": 84430,
       "file": "/home/wsl-yoshihide/my-projects/yt-learn/transcripts/Fireship/Realtime Graphs and Charts with Plotly and Firebase.md"
     },
     {
-      "rank": 650,
+      "rank": 651,
       "video_id": "51Nd_mTpugY",
       "title": "Progressive Web Apps with Angular",
       "views": 83408,
       "file": "/home/wsl-yoshihide/my-projects/yt-learn/transcripts/Fireship/Progressive Web Apps with Angular.md"
     },
     {
-      "rank": 651,
+      "rank": 652,
       "video_id": "-GjF9pSeFTs",
       "title": "Firestore with AngularFire5 Quick Start Tutorial",
       "views": 80941,
       "file": "/home/wsl-yoshihide/my-projects/yt-learn/transcripts/Fireship/Firestore with AngularFire5 Quick Start Tutorial.md"
     },
     {
-      "rank": 652,
+      "rank": 653,
       "video_id": "gxixM90vo9Y",
       "title": "Top 7 Ways to Debug Angular 4 Apps",
       "views": 80545,
       "file": "/home/wsl-yoshihide/my-projects/yt-learn/transcripts/Fireship/Top 7 Ways to Debug Angular 4 Apps.md"
     },
     {
-      "rank": 653,
+      "rank": 654,
       "video_id": "ZszeF3laTc8",
       "title": "Advanced Firebase Data Filtering (Multi-Property)",
       "views": 80316,
       "file": "/home/wsl-yoshihide/my-projects/yt-learn/transcripts/Fireship/Advanced Firebase Data Filtering (Multi-Property).md"
     },
     {
-      "rank": 654,
+      "rank": 655,
       "video_id": "yrrw6KdGuxc",
       "title": "Animated CSS Login Form w/ Password Validation Meter",
       "views": 80021,
       "file": "/home/wsl-yoshihide/my-projects/yt-learn/transcripts/Fireship/Animated CSS Login Form w_ Password Validation Meter.md"
     },
     {
-      "rank": 655,
+      "rank": 656,
       "video_id": "vIWXoaR_VnQ",
       "title": "Send SMS Text Messages with Twilio and Firebase",
       "views": 77190,
       "file": "/home/wsl-yoshihide/my-projects/yt-learn/transcripts/Fireship/Send SMS Text Messages with Twilio and Firebase.md"
     },
     {
-      "rank": 656,
+      "rank": 657,
       "video_id": "5qoU1EirSmo",
       "title": "Upload Files from Angular to Firebase Storage",
       "views": 76829,
       "file": "/home/wsl-yoshihide/my-projects/yt-learn/transcripts/Fireship/Upload Files from Angular to Firebase Storage.md"
     },
     {
-      "rank": 657,
+      "rank": 658,
       "video_id": "KOh6CkX-d6U",
       "title": "Flutter Drag & Drop for Two-Year-Olds",
       "views": 75800,
       "file": "/home/wsl-yoshihide/my-projects/yt-learn/transcripts/Fireship/Flutter Drag & Drop for Two-Year-Olds.md"
     },
     {
-      "rank": 658,
+      "rank": 659,
       "video_id": "yJ5agkia4o8",
       "title": "Invite Only! Use FOMO to grow your app // Exclusive Phone SignIn Tutorial",
       "views": 75280,
       "file": "/home/wsl-yoshihide/my-projects/yt-learn/transcripts/Fireship/Invite Only! Use FOMO to grow your app __ Exclusive Phone SignIn Tutorial.md"
     },
     {
-      "rank": 659,
+      "rank": 660,
       "video_id": "u0e2L5yoxFI",
       "title": "Flutter Layouts for the CSS Developer",
       "views": 75251,
       "file": "/home/wsl-yoshihide/my-projects/yt-learn/transcripts/Fireship/Flutter Layouts for the CSS Developer.md"
     },
     {
-      "rank": 660,
+      "rank": 661,
       "video_id": "e8GA1UOj8mE",
       "title": "Google Sign-In with Firestore Custom User Data",
       "views": 74638,
       "file": "/home/wsl-yoshihide/my-projects/yt-learn/transcripts/Fireship/Google Sign-In with Firestore Custom User Data.md"
     },
     {
-      "rank": 661,
+      "rank": 662,
       "video_id": "MhQI-ysRyrk",
       "title": "Flutter Animation -  Radial Menu at 60FPS",
       "views": 74061,
       "file": "/home/wsl-yoshihide/my-projects/yt-learn/transcripts/Fireship/Flutter Animation -  Radial Menu at 60FPS.md"
     },
     {
-      "rank": 662,
+      "rank": 663,
       "video_id": "aICeVhu2mAE",
       "title": "How to Deploy an Angular App to Firebase Hosting",
       "views": 72764,
       "file": "/home/wsl-yoshihide/my-projects/yt-learn/transcripts/Fireship/How to Deploy an Angular App to Firebase Hosting.md"
     },
     {
-      "rank": 663,
+      "rank": 664,
       "video_id": "1__Leh5MBEM",
       "title": "Stripe Billing - Get Paid for your SaaS",
       "views": 67722,
       "file": "/home/wsl-yoshihide/my-projects/yt-learn/transcripts/Fireship/Stripe Billing - Get Paid for your SaaS.md"
     },
     {
-      "rank": 664,
+      "rank": 665,
       "video_id": "qR-Cj1dGgkM",
       "title": "Loading Spinners for Asynchronous Firebase Data",
       "views": 67553,
       "file": "/home/wsl-yoshihide/my-projects/yt-learn/transcripts/Fireship/Loading Spinners for Asynchronous Firebase Data.md"
     },
     {
-      "rank": 665,
+      "rank": 666,
       "video_id": "w6vhJhv4fps",
       "title": "Ionic Google Login for iOS and Android",
       "views": 67382,
       "file": "/home/wsl-yoshihide/my-projects/yt-learn/transcripts/Fireship/Ionic Google Login for iOS and Android.md"
     },
     {
-      "rank": 666,
+      "rank": 667,
       "video_id": "WUPEUjvSBW8",
       "title": "Cloud Scheduler - Time Triggers for Cloud Functions",
       "views": 66880,
       "file": "/home/wsl-yoshihide/my-projects/yt-learn/transcripts/Fireship/Cloud Scheduler - Time Triggers for Cloud Functions.md"
     },
     {
-      "rank": 667,
+      "rank": 668,
       "video_id": "IZEolKjcjks",
       "title": "Angular CLI - The Basics",
       "views": 66269,
       "file": "/home/wsl-yoshihide/my-projects/yt-learn/transcripts/Fireship/Angular CLI - The Basics.md"
     },
     {
-      "rank": 668,
+      "rank": 669,
       "video_id": "2agJoqviGY4",
       "title": "Contentful - CMS for Angular Progressive Web Apps",
       "views": 66174,
       "file": "/home/wsl-yoshihide/my-projects/yt-learn/transcripts/Fireship/Contentful - CMS for Angular Progressive Web Apps.md"
     },
     {
-      "rank": 669,
+      "rank": 670,
       "video_id": "ujaMvl5M8nY",
       "title": "Advanced Angular Elements",
       "views": 65448,
       "file": "/home/wsl-yoshihide/my-projects/yt-learn/transcripts/Fireship/Advanced Angular Elements.md"
     },
     {
-      "rank": 670,
+      "rank": 671,
       "video_id": "iaXhn5Wuk2c",
       "title": "Angular 4 Development and Production Environments with Firebase",
       "views": 65277,
       "file": "/home/wsl-yoshihide/my-projects/yt-learn/transcripts/Fireship/Angular 4 Development and Production Environments with Firebase.md"
     },
     {
-      "rank": 671,
+      "rank": 672,
       "video_id": "rjfO2AKEsA8",
       "title": "Learn to Code in 2020? Things are looking pretty BAD out there",
       "views": 64366,
       "file": "/home/wsl-yoshihide/my-projects/yt-learn/transcripts/Fireship/Learn to Code in 2020_ Things are looking pretty BAD out there.md"
     },
     {
-      "rank": 672,
+      "rank": 673,
       "video_id": "fsv0rty7QhU",
       "title": "ML Engine - Machine Learning in the Cloud",
       "views": 64037,
       "file": "/home/wsl-yoshihide/my-projects/yt-learn/transcripts/Fireship/ML Engine - Machine Learning in the Cloud.md"
     },
     {
-      "rank": 673,
+      "rank": 674,
       "video_id": "4t2eHrFW_0M",
       "title": "Firestore Array Query",
       "views": 63026,
       "file": "/home/wsl-yoshihide/my-projects/yt-learn/transcripts/Fireship/Firestore Array Query.md"
     },
     {
-      "rank": 674,
+      "rank": 675,
       "video_id": "I6Q5VM1ao2k",
       "title": "Faster Firestore via Data Aggregation",
       "views": 62224,
       "file": "/home/wsl-yoshihide/my-projects/yt-learn/transcripts/Fireship/Faster Firestore via Data Aggregation.md"
     },
     {
-      "rank": 675,
+      "rank": 676,
       "video_id": "iVHRy_uVtm0",
       "title": "Firebase Analytics + Remote Config on the Web",
       "views": 61332,
       "file": "/home/wsl-yoshihide/my-projects/yt-learn/transcripts/Fireship/Firebase Analytics + Remote Config on the Web.md"
     },
     {
-      "rank": 676,
+      "rank": 677,
       "video_id": "JVy0JpCOuNI",
       "title": "SendGrid Transactional Email via a Firestore Cloud Function",
       "views": 61289,
       "file": "/home/wsl-yoshihide/my-projects/yt-learn/transcripts/Fireship/SendGrid Transactional Email via a Firestore Cloud Function.md"
     },
     {
-      "rank": 677,
+      "rank": 678,
       "video_id": "yFlhTvxcrQ8",
       "title": "Firestore Pagination - It Just Got Easier",
       "views": 60743,
       "file": "/home/wsl-yoshihide/my-projects/yt-learn/transcripts/Fireship/Firestore Pagination - It Just Got Easier.md"
     },
     {
-      "rank": 678,
+      "rank": 679,
       "video_id": "wvRVfyPKOA0",
       "title": "Your Form was Autosaved with Vue & Firestore",
       "views": 58791,
       "file": "/home/wsl-yoshihide/my-projects/yt-learn/transcripts/Fireship/Your Form was Autosaved with Vue & Firestore.md"
     },
     {
-      "rank": 679,
+      "rank": 680,
       "video_id": "NLWHEiH1FZY",
       "title": "Custom Usernames with Firebase Authentication",
       "views": 58660,
       "file": "/home/wsl-yoshihide/my-projects/yt-learn/transcripts/Fireship/Custom Usernames with Firebase Authentication.md"
     },
     {
-      "rank": 680,
+      "rank": 681,
       "video_id": "MlbLcUF77eU",
       "title": "Add Toast Message Notifications to your Angular App",
       "views": 58304,
       "file": "/home/wsl-yoshihide/my-projects/yt-learn/transcripts/Fireship/Add Toast Message Notifications to your Angular App.md"
     },
     {
-      "rank": 681,
+      "rank": 682,
       "video_id": "dWn9iBYiJrk",
       "title": "Location-based Queries with GeoFire and Angular Google Maps",
       "views": 57544,
       "file": "/home/wsl-yoshihide/my-projects/yt-learn/transcripts/Fireship/Location-based Queries with GeoFire and Angular Google Maps.md"
     },
     {
-      "rank": 682,
+      "rank": 683,
       "video_id": "zTj0FZHunNE",
       "title": "Stripe Elements & Checkout with Angular - Monetize your PWA",
       "views": 57362,
       "file": "/home/wsl-yoshihide/my-projects/yt-learn/transcripts/Fireship/Stripe Elements & Checkout with Angular - Monetize your PWA.md"
     },
     {
-      "rank": 683,
+      "rank": 684,
       "video_id": "8PfiY0U_PBI",
       "title": "Reflectly-Inspired Animated Slideshow with Flutter + Firebase",
       "views": 57281,
       "file": "/home/wsl-yoshihide/my-projects/yt-learn/transcripts/Fireship/Reflectly-Inspired Animated Slideshow with Flutter + Firebase.md"
     },
     {
-      "rank": 684,
+      "rank": 685,
       "video_id": "NrkFBmBFA6k",
       "title": "Host Multiple Apps or Websites on Firebase",
       "views": 57071,
       "file": "/home/wsl-yoshihide/my-projects/yt-learn/transcripts/Fireship/Host Multiple Apps or Websites on Firebase.md"
     },
     {
-      "rank": 685,
+      "rank": 686,
       "video_id": "e_5W-JF_E2U",
       "title": "Visualize 140k Gun Violence Incidents with Deck.gl & Google Maps",
       "views": 56873,
       "file": "/home/wsl-yoshihide/my-projects/yt-learn/transcripts/Fireship/Visualize 140k Gun Violence Incidents with Deck.gl & Google Maps.md"
     },
     {
-      "rank": 686,
+      "rank": 687,
       "video_id": "8Wy1AqY5gqE",
       "title": "Learn @ngrx/entity and Feature Modules",
       "views": 55186,
       "file": "/home/wsl-yoshihide/my-projects/yt-learn/transcripts/Fireship/Learn @ngrx_entity and Feature Modules.md"
     },
     {
-      "rank": 687,
+      "rank": 688,
       "video_id": "6N_1vUPlhvk",
       "title": "Angular Firebase CRUD App with NoSQL Database Tutorial",
       "views": 55016,
       "file": "/home/wsl-yoshihide/my-projects/yt-learn/transcripts/Fireship/Angular Firebase CRUD App with NoSQL Database Tutorial.md"
     },
     {
-      "rank": 688,
+      "rank": 689,
       "video_id": "lO1S-FAcZU8",
       "title": "Firestore Geoquery",
       "views": 54700,
       "file": "/home/wsl-yoshihide/my-projects/yt-learn/transcripts/Fireship/Firestore Geoquery.md"
     },
     {
-      "rank": 689,
+      "rank": 690,
       "video_id": "8Ejn1FLRRaw",
       "title": "Firestore Increment - Counters that Scale",
       "views": 54692,
       "file": "/home/wsl-yoshihide/my-projects/yt-learn/transcripts/Fireship/Firestore Increment - Counters that Scale.md"
     },
     {
-      "rank": 690,
+      "rank": 691,
       "video_id": "_lZc2O2oUJk",
       "title": "Stripe Checkout Payments with Angular and Firebase - Part 1",
       "views": 54394,
       "file": "/home/wsl-yoshihide/my-projects/yt-learn/transcripts/Fireship/Stripe Checkout Payments with Angular and Firebase - Part 1.md"
     },
     {
-      "rank": 691,
+      "rank": 692,
       "video_id": "IVy3Tm8iHQ0",
       "title": "Nest on Cloud Functions",
       "views": 53881,
       "file": "/home/wsl-yoshihide/my-projects/yt-learn/transcripts/Fireship/Nest on Cloud Functions.md"
     },
     {
-      "rank": 692,
+      "rank": 693,
       "video_id": "RVh6nngPuNw",
       "title": "Ionic 4 Theme Builder with CSS Variables",
       "views": 53860,
       "file": "/home/wsl-yoshihide/my-projects/yt-learn/transcripts/Fireship/Ionic 4 Theme Builder with CSS Variables.md"
     },
     {
-      "rank": 693,
+      "rank": 694,
       "video_id": "m_P1Q0vhOHs",
       "title": "Push Notifications with Ionic4 and Firebase Cloud Messaging",
       "views": 51922,
       "file": "/home/wsl-yoshihide/my-projects/yt-learn/transcripts/Fireship/Push Notifications with Ionic4 and Firebase Cloud Messaging.md"
     },
     {
-      "rank": 694,
+      "rank": 695,
       "video_id": "MflUMIeADZU",
       "title": "Big JavaScript Projects - Code Sharing",
       "views": 51182,
       "file": "/home/wsl-yoshihide/my-projects/yt-learn/transcripts/Fireship/Big JavaScript Projects - Code Sharing.md"
     },
     {
-      "rank": 695,
+      "rank": 696,
       "video_id": "Cy5MjeXZobE",
       "title": "Infinite Scroll with Angular and Firebase",
       "views": 50666,
       "file": "/home/wsl-yoshihide/my-projects/yt-learn/transcripts/Fireship/Infinite Scroll with Angular and Firebase.md"
     },
     {
-      "rank": 696,
+      "rank": 697,
       "video_id": "Wc7bJ2uv694",
       "title": "Apollo Angular GraphQL Optimistic UI",
       "views": 50587,
       "file": "/home/wsl-yoshihide/my-projects/yt-learn/transcripts/Fireship/Apollo Angular GraphQL Optimistic UI.md"
     },
     {
-      "rank": 697,
+      "rank": 698,
       "video_id": "3Z0V3cvgns8",
       "title": "Algolia Firestore Instant Search",
       "views": 50383,
       "file": "/home/wsl-yoshihide/my-projects/yt-learn/transcripts/Fireship/Algolia Firestore Instant Search.md"
     },
     {
-      "rank": 698,
+      "rank": 699,
       "video_id": "JfPWbttemYE",
       "title": "The forgotten developer who saved JavaScript...",
       "views": 49806,
       "file": "/home/wsl-yoshihide/my-projects/yt-learn/transcripts/Fireship/The forgotten developer who saved JavaScript....md"
     },
     {
-      "rank": 699,
+      "rank": 700,
       "video_id": "ajTp60neMlc",
       "title": "Predict Horse Races with BigQuery #ML",
       "views": 49782,
       "file": "/home/wsl-yoshihide/my-projects/yt-learn/transcripts/Fireship/Predict Horse Races with BigQuery #ML.md"
     },
     {
-      "rank": 700,
+      "rank": 701,
       "video_id": "eQuVbyBGhHA",
       "title": "Autocomplete Search with Angular4 and Firebase",
       "views": 48600,
       "file": "/home/wsl-yoshihide/my-projects/yt-learn/transcripts/Fireship/Autocomplete Search with Angular4 and Firebase.md"
     },
     {
-      "rank": 701,
+      "rank": 702,
       "video_id": "BMFS9fWiv98",
       "title": "Puppeteer on Cloud Functions",
       "views": 48558,
       "file": "/home/wsl-yoshihide/my-projects/yt-learn/transcripts/Fireship/Puppeteer on Cloud Functions.md"
     },
     {
-      "rank": 702,
+      "rank": 703,
       "video_id": "h79xrJZAQ6I",
       "title": "Scheduled Cloud Functions - NOT for Robocallers",
       "views": 47830,
       "file": "/home/wsl-yoshihide/my-projects/yt-learn/transcripts/Fireship/Scheduled Cloud Functions - NOT for Robocallers.md"
     },
     {
-      "rank": 703,
+      "rank": 704,
       "video_id": "ANyOZIcGvB8",
       "title": "Angular SEO with Rendertron",
       "views": 45824,
       "file": "/home/wsl-yoshihide/my-projects/yt-learn/transcripts/Fireship/Angular SEO with Rendertron.md"
     },
     {
-      "rank": 704,
+      "rank": 705,
       "video_id": "OKW8x8-qYs0",
       "title": "Image Resize Cloud Function",
       "views": 44422,
       "file": "/home/wsl-yoshihide/my-projects/yt-learn/transcripts/Fireship/Image Resize Cloud Function.md"
     },
     {
-      "rank": 705,
+      "rank": 706,
       "video_id": "sWC0jwNyl2s",
       "title": "The Future of Checkout Forms - Payment Request API",
       "views": 43121,
       "file": "/home/wsl-yoshihide/my-projects/yt-learn/transcripts/Fireship/The Future of Checkout Forms - Payment Request API.md"
     },
     {
-      "rank": 706,
+      "rank": 707,
       "video_id": "Ec7hr2xOjUo",
       "title": "Passwordless Authentication with Firebase",
       "views": 42462,
       "file": "/home/wsl-yoshihide/my-projects/yt-learn/transcripts/Fireship/Passwordless Authentication with Firebase.md"
     },
     {
-      "rank": 707,
+      "rank": 708,
       "video_id": "-3rkY8X2EWc",
       "title": "OAuth with Angular and Firebase Tutorial",
       "views": 40388,
       "file": "/home/wsl-yoshihide/my-projects/yt-learn/transcripts/Fireship/OAuth with Angular and Firebase Tutorial.md"
     },
     {
-      "rank": 708,
+      "rank": 709,
       "video_id": "QYvANSdlKjQ",
       "title": "Subscription Payments with Stripe, Angular, and Firebase",
       "views": 40261,
       "file": "/home/wsl-yoshihide/my-projects/yt-learn/transcripts/Fireship/Subscription Payments with Stripe, Angular, and Firebase.md"
     },
     {
-      "rank": 709,
+      "rank": 710,
       "video_id": "wCtNjP9gcqk",
       "title": "Angular 4 Transactional Email with Google Firebase Cloud Functions",
       "views": 39523,
       "file": "/home/wsl-yoshihide/my-projects/yt-learn/transcripts/Fireship/Angular 4 Transactional Email with Google Firebase Cloud Functions.md"
     },
     {
-      "rank": 710,
+      "rank": 711,
       "video_id": "OVnrL4we2NM",
       "title": "Angular Drag-and-Drop File Uploads to Firebase Storage",
       "views": 39393,
       "file": "/home/wsl-yoshihide/my-projects/yt-learn/transcripts/Fireship/Angular Drag-and-Drop File Uploads to Firebase Storage.md"
     },
     {
-      "rank": 711,
+      "rank": 712,
       "video_id": "hG7v7quMMwM",
       "title": "Redux from Scratch",
       "views": 38632,
       "file": "/home/wsl-yoshihide/my-projects/yt-learn/transcripts/Fireship/Redux from Scratch.md"
     },
     {
-      "rank": 712,
+      "rank": 713,
       "video_id": "1FOfL6bDSF4",
       "title": "Short Imports with TypeScript Path Mapping",
       "views": 37229,
       "file": "/home/wsl-yoshihide/my-projects/yt-learn/transcripts/Fireship/Short Imports with TypeScript Path Mapping.md"
     },
     {
-      "rank": 713,
+      "rank": 714,
       "video_id": "13nWhUndQo4",
       "title": "Angular Ngrx Effects with Firebase Database",
       "views": 37112,
       "file": "/home/wsl-yoshihide/my-projects/yt-learn/transcripts/Fireship/Angular Ngrx Effects with Firebase Database.md"
     },
     {
-      "rank": 714,
+      "rank": 715,
       "video_id": "ok7633BVa4Y",
       "title": "Multiple Concurrent File Uploads with Firebase Storage + Angular",
       "views": 36089,
       "file": "/home/wsl-yoshihide/my-projects/yt-learn/transcripts/Fireship/Multiple Concurrent File Uploads with Firebase Storage + Angular.md"
     },
     {
-      "rank": 715,
+      "rank": 716,
       "video_id": "NsPGRIVOg0U",
       "title": "Process Stripe Payments with Firebase Cloud Functions - Part 2",
       "views": 34922,
       "file": "/home/wsl-yoshihide/my-projects/yt-learn/transcripts/Fireship/Process Stripe Payments with Firebase Cloud Functions - Part 2.md"
     },
     {
-      "rank": 716,
+      "rank": 717,
       "video_id": "lLwhEKLIXa8",
       "title": "Angular CDK Data Tables",
       "views": 34417,
       "file": "/home/wsl-yoshihide/my-projects/yt-learn/transcripts/Fireship/Angular CDK Data Tables.md"
     },
     {
-      "rank": 717,
+      "rank": 718,
       "video_id": "kl-UMCHpEsw",
       "title": "Angular Directives - Build a Hold-to-Delete Button",
       "views": 34398,
       "file": "/home/wsl-yoshihide/my-projects/yt-learn/transcripts/Fireship/Angular Directives - Build a Hold-to-Delete Button.md"
     },
     {
-      "rank": 718,
+      "rank": 719,
       "video_id": "VkTj1U_exwA",
       "title": "Learn Binary by Building a Binary Clock with Flutter",
       "views": 33453,
       "file": "/home/wsl-yoshihide/my-projects/yt-learn/transcripts/Fireship/Learn Binary by Building a Binary Clock with Flutter.md"
     },
     {
-      "rank": 719,
+      "rank": 720,
       "video_id": "VS0zsXvDJ08",
       "title": "Angular Universal on Cloud Functions or AppEngine",
       "views": 33335,
       "file": "/home/wsl-yoshihide/my-projects/yt-learn/transcripts/Fireship/Angular Universal on Cloud Functions or AppEngine.md"
     },
     {
-      "rank": 720,
+      "rank": 721,
       "video_id": "P9kRvgpIS8U",
       "title": "Airtable Quick Start with Firestore",
       "views": 33200,
       "file": "/home/wsl-yoshihide/my-projects/yt-learn/transcripts/Fireship/Airtable Quick Start with Firestore.md"
     },
     {
-      "rank": 721,
+      "rank": 722,
       "video_id": "twmh82lvs1Q",
       "title": "Use TypeScript with Firebase Cloud Functions",
       "views": 32601,
       "file": "/home/wsl-yoshihide/my-projects/yt-learn/transcripts/Fireship/Use TypeScript with Firebase Cloud Functions.md"
     },
     {
-      "rank": 722,
+      "rank": 723,
       "video_id": "wij2-gyG12E",
       "title": "Angular Universal with Firebase",
       "views": 32264,
       "file": "/home/wsl-yoshihide/my-projects/yt-learn/transcripts/Fireship/Angular Universal with Firebase.md"
     },
     {
-      "rank": 723,
+      "rank": 724,
       "video_id": "-yae3DNV1mY",
       "title": "Infinite Scroll Pagination with Firestore",
       "views": 31378,
       "file": "/home/wsl-yoshihide/my-projects/yt-learn/transcripts/Fireship/Infinite Scroll Pagination with Firestore.md"
     },
     {
-      "rank": 724,
+      "rank": 725,
       "video_id": "6OKssWCEnAw",
       "title": "Coinbase + Firebase - Build a Bitcoin App",
       "views": 30796,
       "file": "/home/wsl-yoshihide/my-projects/yt-learn/transcripts/Fireship/Coinbase + Firebase - Build a Bitcoin App.md"
     },
     {
-      "rank": 725,
+      "rank": 726,
       "video_id": "wRWZQwiNFnM",
       "title": "AngularFire2 Storage -  File Upload Dropzone",
       "views": 29916,
       "file": "/home/wsl-yoshihide/my-projects/yt-learn/transcripts/Fireship/AngularFire2 Storage -  File Upload Dropzone.md"
     },
     {
-      "rank": 726,
+      "rank": 727,
       "video_id": "9oYIepz4xvI",
       "title": "Angular 5 Service Worker - Hacker News PWA",
       "views": 29887,
       "file": "/home/wsl-yoshihide/my-projects/yt-learn/transcripts/Fireship/Angular 5 Service Worker - Hacker News PWA.md"
     },
     {
-      "rank": 727,
+      "rank": 728,
       "video_id": "agity_5plBU",
       "title": "Firebase Extensions Quickstart",
       "views": 29702,
       "file": "/home/wsl-yoshihide/my-projects/yt-learn/transcripts/Fireship/Firebase Extensions Quickstart.md"
     },
     {
-      "rank": 728,
+      "rank": 729,
       "video_id": "2ZDeT5hLIBQ",
       "title": "User Presence System in Realtime - Online, Offline, Away",
       "views": 29689,
       "file": "/home/wsl-yoshihide/my-projects/yt-learn/transcripts/Fireship/User Presence System in Realtime - Online, Offline, Away.md"
     },
     {
-      "rank": 729,
+      "rank": 730,
       "video_id": "taPczl94Eow",
       "title": "Seefood - Ionic + Firebase + Cloud Vision",
       "views": 28747,
       "file": "/home/wsl-yoshihide/my-projects/yt-learn/transcripts/Fireship/Seefood - Ionic + Firebase + Cloud Vision.md"
     },
     {
-      "rank": 730,
+      "rank": 731,
       "video_id": "bL3I7Pls-1w",
       "title": "Realtime User Presence with Firebase & Angular - Online | Offline | Away",
       "views": 28485,
       "file": "/home/wsl-yoshihide/my-projects/yt-learn/transcripts/Fireship/Realtime User Presence with Firebase & Angular - Online _ Offline _ Away.md"
     },
     {
-      "rank": 731,
+      "rank": 732,
       "video_id": "XIq_VU1Njw0",
       "title": "Firebase Phone Authentication in Angular 4",
       "views": 28153,
       "file": "/home/wsl-yoshihide/my-projects/yt-learn/transcripts/Fireship/Firebase Phone Authentication in Angular 4.md"
     },
     {
-      "rank": 732,
+      "rank": 733,
       "video_id": "_X5FbiW0L_8",
       "title": "Async Validation with Angular Reactive Forms + Firebase",
       "views": 27991,
       "file": "/home/wsl-yoshihide/my-projects/yt-learn/transcripts/Fireship/Async Validation with Angular Reactive Forms + Firebase.md"
     },
     {
-      "rank": 733,
+      "rank": 734,
       "video_id": "d2K2Cp8BJx0",
       "title": "Angular Console",
       "views": 27895,
       "file": "/home/wsl-yoshihide/my-projects/yt-learn/transcripts/Fireship/Angular Console.md"
     },
     {
-      "rank": 734,
+      "rank": 735,
       "video_id": "gun8OiGtlNc",
       "title": "Fireship.io - Channel Update",
       "views": 27544,
       "file": "/home/wsl-yoshihide/my-projects/yt-learn/transcripts/Fireship/Fireship.io - Channel Update.md"
     },
     {
-      "rank": 735,
+      "rank": 736,
       "video_id": "fq6UPn5H2Bs",
       "title": "RxFire - Firebase meets RxJS",
       "views": 24927,
       "file": "/home/wsl-yoshihide/my-projects/yt-learn/transcripts/Fireship/RxFire - Firebase meets RxJS.md"
     },
     {
-      "rank": 736,
+      "rank": 737,
       "video_id": "A8dvbFby-s0",
       "title": "iPod Classic UI with Flutter",
       "views": 24416,
       "file": "/home/wsl-yoshihide/my-projects/yt-learn/transcripts/Fireship/iPod Classic UI with Flutter.md"
     },
     {
-      "rank": 737,
+      "rank": 738,
       "video_id": "KYYjdWSrRjI",
       "title": "Firebase Performance on the Web QuickStart",
       "views": 24310,
       "file": "/home/wsl-yoshihide/my-projects/yt-learn/transcripts/Fireship/Firebase Performance on the Web QuickStart.md"
     },
     {
-      "rank": 738,
+      "rank": 739,
       "video_id": "KkNpEDU5RMA",
       "title": "5 Cool New Features in AngularFire",
       "views": 24009,
       "file": "/home/wsl-yoshihide/my-projects/yt-learn/transcripts/Fireship/5 Cool New Features in AngularFire.md"
     },
     {
-      "rank": 739,
+      "rank": 740,
       "video_id": "RxLI9_ub6PM",
       "title": "Angular Router Guards for Firebase Users",
       "views": 23772,
       "file": "/home/wsl-yoshihide/my-projects/yt-learn/transcripts/Fireship/Angular Router Guards for Firebase Users.md"
     },
     {
-      "rank": 740,
+      "rank": 741,
       "video_id": "MG8n8ggY0mk",
       "title": "Angular Reactive Forms with Firebase Database Backend",
       "views": 23671,
       "file": "/home/wsl-yoshihide/my-projects/yt-learn/transcripts/Fireship/Angular Reactive Forms with Firebase Database Backend.md"
     },
     {
-      "rank": 741,
+      "rank": 742,
       "video_id": "I2i3gXoTmcw",
       "title": "Star Review System from Scratch with Firestore + Angular",
       "views": 23625,
       "file": "/home/wsl-yoshihide/my-projects/yt-learn/transcripts/Fireship/Star Review System from Scratch with Firestore + Angular.md"
     },
     {
-      "rank": 742,
+      "rank": 743,
       "video_id": "r-n5lpG1hxY",
       "title": "Multi-Step Password Auth with Firebase and Reactive Forms",
       "views": 23048,
       "file": "/home/wsl-yoshihide/my-projects/yt-learn/transcripts/Fireship/Multi-Step Password Auth with Firebase and Reactive Forms.md"
     },
     {
-      "rank": 743,
+      "rank": 744,
       "video_id": "Rx4pVS1vPGY",
       "title": "Firestore Rules Testing with the Emulator - New Feature",
       "views": 21767,
       "file": "/home/wsl-yoshihide/my-projects/yt-learn/transcripts/Fireship/Firestore Rules Testing with the Emulator - New Feature.md"
     },
     {
-      "rank": 744,
+      "rank": 745,
       "video_id": "r5ZEqaW3A5c",
       "title": "Draggable Sortable Firestore",
       "views": 21632,
       "file": "/home/wsl-yoshihide/my-projects/yt-learn/transcripts/Fireship/Draggable Sortable Firestore.md"
     },
     {
-      "rank": 745,
+      "rank": 746,
       "video_id": "TIGj7KzXtxg",
       "title": "Simple Pagination with Firebase and Angular 4",
       "views": 21312,
       "file": "/home/wsl-yoshihide/my-projects/yt-learn/transcripts/Fireship/Simple Pagination with Firebase and Angular 4.md"
     },
     {
-      "rank": 746,
+      "rank": 747,
       "video_id": "JWjXBWINlzU",
       "title": "Custom RxJS Operators by Example",
       "views": 20630,
       "file": "/home/wsl-yoshihide/my-projects/yt-learn/transcripts/Fireship/Custom RxJS Operators by Example.md"
     },
     {
-      "rank": 747,
+      "rank": 748,
       "video_id": "_G5blkXLePY",
       "title": "Facebook-Inspired Reactions System with Angular and Firebase",
       "views": 19515,
       "file": "/home/wsl-yoshihide/my-projects/yt-learn/transcripts/Fireship/Facebook-Inspired Reactions System with Angular and Firebase.md"
     },
     {
-      "rank": 748,
+      "rank": 749,
       "video_id": "rv37jBygQ2g",
       "title": "NgRx + Firestore",
       "views": 18314,
       "file": "/home/wsl-yoshihide/my-projects/yt-learn/transcripts/Fireship/NgRx + Firestore.md"
     },
     {
-      "rank": 749,
+      "rank": 750,
       "video_id": "wOLF-3wNQh8",
       "title": "Angular Ngrx with Firebase Google OAuth User Authentication",
       "views": 15957,
       "file": "/home/wsl-yoshihide/my-projects/yt-learn/transcripts/Fireship/Angular Ngrx with Firebase Google OAuth User Authentication.md"
     },
     {
-      "rank": 750,
+      "rank": 751,
       "video_id": "OWy0e231eMI",
       "title": "What will we build next? Channel Update",
       "views": 15514,
       "file": "/home/wsl-yoshihide/my-projects/yt-learn/transcripts/Fireship/What will we build next_ Channel Update.md"
     },
     {
-      "rank": 751,
+      "rank": 752,
       "video_id": "dyQDAaDq2ag",
       "title": "Anonymous Authentication with Angular and Firebase - Lazy Registration",
       "views": 14630,
       "file": "/home/wsl-yoshihide/my-projects/yt-learn/transcripts/Fireship/Anonymous Authentication with Angular and Firebase - Lazy Registration.md"
     },
     {
-      "rank": 752,
+      "rank": 753,
       "video_id": "4u_Vd-c9uLI",
       "title": "Angular 4 Full Text Search with Algolia - Part 1",
       "views": 13805,
       "file": "/home/wsl-yoshihide/my-projects/yt-learn/transcripts/Fireship/Angular 4 Full Text Search with Algolia - Part 1.md"
     },
     {
-      "rank": 753,
+      "rank": 754,
       "video_id": "PwSyYZ35ftM",
       "title": "The Future of Angular Firebase - Channel Update",
       "views": 12002,
       "file": "/home/wsl-yoshihide/my-projects/yt-learn/transcripts/Fireship/The Future of Angular Firebase - Channel Update.md"
     },
     {
-      "rank": 754,
+      "rank": 755,
       "video_id": "zioTb3Alqz4",
       "title": "Text Translation with Firebase Cloud Functions onWrite and Angular 4",
       "views": 11645,
       "file": "/home/wsl-yoshihide/my-projects/yt-learn/transcripts/Fireship/Text Translation with Firebase Cloud Functions onWrite and Angular 4.md"
     },
     {
-      "rank": 755,
+      "rank": 756,
       "video_id": "q1dfDDV972s",
       "title": "Fireship without Borders & T-shirt winner(s) - Channel Update",
       "views": 10981,
       "file": "/home/wsl-yoshihide/my-projects/yt-learn/transcripts/Fireship/Fireship without Borders & T-shirt winner(s) - Channel Update.md"
     },
     {
-      "rank": 756,
+      "rank": 757,
       "video_id": "mBPURBO1kD8",
       "title": "Reddit Inspired Upvoting System with Angular and Firebase NoSQL",
       "views": 10951,
       "file": "/home/wsl-yoshihide/my-projects/yt-learn/transcripts/Fireship/Reddit Inspired Upvoting System with Angular and Firebase NoSQL.md"
     },
     {
-      "rank": 757,
+      "rank": 758,
       "video_id": "luady6ItI5M",
       "title": "Ionic4 + Firebase Master Course",
       "views": 9855,
       "file": "/home/wsl-yoshihide/my-projects/yt-learn/transcripts/Fireship/Ionic4 + Firebase Master Course.md"
     },
     {
-      "rank": 758,
+      "rank": 759,
       "video_id": "gNT5YBjLD2Q",
       "title": "Twitter-Inspired Follow Unfollow Feature with Firebase and Angular 4",
       "views": 9680,
       "file": "/home/wsl-yoshihide/my-projects/yt-learn/transcripts/Fireship/Twitter-Inspired Follow Unfollow Feature with Firebase and Angular 4.md"
     },
     {
-      "rank": 759,
+      "rank": 760,
       "video_id": "VlVnb98oBGo",
       "title": "Selling Digital Content in Angular with Stripe Payments - Part 3",
       "views": 8878,
       "file": "/home/wsl-yoshihide/my-projects/yt-learn/transcripts/Fireship/Selling Digital Content in Angular with Stripe Payments - Part 3.md"
     },
     {
-      "rank": 760,
+      "rank": 761,
       "video_id": "Njtbo3YUdH4",
       "title": "Algolia with Firebase Cloud Functions - Part 2",
       "views": 7887,
       "file": "/home/wsl-yoshihide/my-projects/yt-learn/transcripts/Fireship/Algolia with Firebase Cloud Functions - Part 2.md"
     },
     {
-      "rank": 761,
+      "rank": 762,
       "video_id": "tV9byUUfPQM",
       "title": "100K... Now what? Channel Update",
       "views": 7114,
       "file": "/home/wsl-yoshihide/my-projects/yt-learn/transcripts/Fireship/100K... Now what_ Channel Update.md"
     },
     {
-      "rank": 762,
+      "rank": 763,
       "video_id": "V0HW6h0Jzog",
       "title": "Episode 100 - NgConf and the Exciting Future of Angular",
       "views": 6653,
       "file": "/home/wsl-yoshihide/my-projects/yt-learn/transcripts/Fireship/Episode 100 - NgConf and the Exciting Future of Angular.md"
     },
     {
-      "rank": 763,
+      "rank": 764,
       "video_id": "8rAc-tJ_mJ0",
       "title": "Firebase Database Performance Profiling",
       "views": 5582,
