@@ -68,6 +68,15 @@ tail -30 logs/autonomous/*.log
 - LLM: Ollama（localhost）専用、`LOCAL_LLM_URL` 必須
 - `cookies.txt`: gitignore 対象。`python src/transcribe.py refresh-cookies` で Windows Firefox から自動更新（autonomous.sh 起動時に自動実行）
 
+### Mac / WSL の .env 差分（Ollama 接続先）
+
+Ollama は Windows 上で動く。`src/transcribe.py` / `src/summarize.py` は Ollama 専用で `LOCAL_LLM_URL` 必須（未設定は `[error]` + 終了）。Gemini はポータルのチャット機能のみで使用。接続先は環境で異なる:
+
+- **Mac の .env**: `LOCAL_LLM_URL=http://<Windows-TailscaleIP>:11434` / `LOCAL_LLM_MODEL=qwen2.5:14b`
+- **WSL の .env**: `LOCAL_LLM_URL=http://localhost:11434`（localhost 経由で Windows Ollama に接続）/ `LOCAL_LLM_MODEL=qwen2.5:14b`
+
+**.env の Mac→WSL 転送注意**: Mac と WSL で `LOCAL_LLM_URL` の値が異なるため `scp` で丸ごと上書きしないこと。WSL 側の `.env` は `.gitignore` 対象なので `git pull` では上書きされない。変更が必要なら WSL 側で直接編集するか、差分を意識して転送する。
+
 ### GPU 使用上の注意
 
 `repoint.py` が常時 tmux セッションで動いており、Local LLM（Ollama）が GPU を占有している場合がある。
