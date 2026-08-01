@@ -540,11 +540,17 @@ def _sort_by_popularity(videos: list, channel_name: str, sample_size: int) -> li
 
 def _download_audio(url: str, out_dir: str) -> str:
     import yt_dlp, time
-    # ios クライアントを優先（bot検知が緩い）。失敗時は web → mweb に自動フォールバック
+    # クライアントの指定順。ios/web/mweb は bot 検知が緩く長く使えていたが、
+    # YouTube 側の変更で「Requested format is not available」を返すようになることがある
+    # （2026-08 実測: ios/web/mweb は3つとも音声形式を返さず、android_vr と
+    #   yt-dlp の既定選択のみ成功）。
+    # 最後の attempt は None = extractor_args を渡さず **yt-dlp の既定選択に委ねる**。
+    # クライアントの優先順位は yt-dlp 側が追随して更新するため、ここを固定し続けるより
+    # 既定に委ねる枝を残しておくほうが陳腐化に強い。
     _CLIENT_SEQUENCES = [
         ["ios", "web", "mweb"],   # attempt 0: ios 優先
-        ["web", "mweb"],          # attempt 1: web（deno が PATH に必要）
-        ["mweb"],                 # attempt 2: mweb のみ
+        ["android_vr", "web"],    # attempt 1: android_vr（実測で現行有効）
+        None,                     # attempt 2: yt-dlp の既定選択に委ねる
     ]
     for attempt in range(3):
         ydl_opts = {
@@ -554,9 +560,12 @@ def _download_audio(url: str, out_dir: str) -> str:
             "quiet": True,
             "no_warnings": True,
             "logger": _TqdmLogger(),
-            "extractor_args": {"youtube": {"player_client": _CLIENT_SEQUENCES[attempt]}},
             **_cookie_opts(),
         }
+        if _CLIENT_SEQUENCES[attempt] is not None:
+            ydl_opts["extractor_args"] = {
+                "youtube": {"player_client": _CLIENT_SEQUENCES[attempt]}
+            }
         try:
             with yt_dlp.YoutubeDL(ydl_opts) as ydl:
                 ydl.download([url])
