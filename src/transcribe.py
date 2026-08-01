@@ -399,8 +399,17 @@ def _cookie_opts() -> dict:
 
 
 def _web_client_args() -> dict:
-    """web クライアント。deno が PATH に入っていれば n-challenge も解決できる。"""
-    return {"player_client": ["web"]}
+    """YouTube の player_client 指定を返す。
+
+    以前は web を固定していたが、YouTube 側の変更で web/ios/mweb が音声形式を
+    返さなくなり「Requested format is not available」で全件失敗するようになった
+    （2026-08-02 実測 / yt-dlp 2026.07.04。android_vr と yt-dlp の既定選択のみ成功）。
+
+    クライアントの優先順位は yt-dlp 側が追随して更新するため、ここで固定せず
+    **既定選択に委ねる**。特定クライアントに固定したい場合だけ値を返すこと。
+    なお n-challenge の解決には deno（JS ランタイム）が PATH に必要。
+    """
+    return {}
 
 def _yt_extract_with_retry(opts: dict, url: str, download: bool = False) -> dict:
     """yt-dlp の extract_info を実行。bot検知エラーで1度だけ3秒待ってリトライ。"""
