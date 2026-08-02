@@ -183,6 +183,69 @@ class TestClassifyAll:
 
 # ── 出力 ──────────────────────────────────────────────────────────────────────
 
+class TestSampleTitles:
+    def test_returns_all_when_within_budget(self):
+        items = [{"title": f"動画{i}"} for i in range(5)]
+        out = categorize._sample_titles(items, 1000)
+        assert out.count("\n") == 4
+
+    def test_samples_evenly_instead_of_truncating_tail(self, ):
+        # 後ろを切り捨てると古い時期の話題がカテゴリ候補から丸ごと消え、
+        # その時期の動画がまとめて「その他」に落ちる
+        items = [{"title": f"タイトル{i:03d}"} for i in range(200)]
+        out = categorize._sample_titles(items, 300)
+        assert "タイトル000" in out
+        assert "タイトル199" in out or "タイトル19" in out
+        assert len(out) <= 400
+
+    def test_never_returns_empty(self):
+        items = [{"title": "あ" * 500}]
+        assert categorize._sample_titles(items, 50).strip()
+
+
+class TestReduceSummaries:
+    def test_single_partial_is_returned_as_is(self):
+        with patch.object(categorize, "_call_llm", return_value="統合") as m:
+            out = categorize._reduce_summaries("CH", "服装", ["- 一つだけ"], "u", "m")
+        assert out == "- 一つだけ"
+        assert m.call_count == 0
+
+    def test_reduces_hierarchically_when_over_budget(self, monkeypatch):
+        # 単純に切り詰めると後ろのチャンクが黙って消える。段階的に畳むこと
+        monkeypatch.setattr(categorize, "REDUCE_CHARS", 100)
+        partials = [f"- 要点{i}" + "x" * 60 for i in range(8)]
+        calls = []
+
+        def fake(prompt, *a):
+            calls.append(prompt)
+            return "- 統合結果"
+
+        monkeypatch.setattr(categorize, "_call_llm", fake)
+        out = categorize._reduce_summaries("CH", "服装", partials, "u", "m")
+        assert out == "- 統合結果"
+        # 全チャンクがどこかの統合プロンプトに現れる＝取りこぼしていない
+        joined = "\n".join(calls)
+        for i in range(8):
+            assert f"要点{i}" in joined
+
+    def test_empty_partials_returns_none(self):
+        assert categorize._reduce_summaries("CH", "服装", [], "u", "m") is None
+        assert categorize._reduce_summaries("CH", "服装", [None, ""], "u", "m") is None
+
+    def test_llm_failure_falls_back_to_concatenation(self, monkeypatch):
+        monkeypatch.setattr(categorize, "REDUCE_CHARS", 100)
+        with patch.object(categorize, "_call_llm", return_value=None):
+            out = categorize._reduce_summaries("CH", "服装", ["- A", "- B"], "u", "m")
+        assert "- A" in out and "- B" in out
+
+    def test_terminates_when_input_cannot_shrink(self, monkeypatch):
+        # 1件だけで予算を超える場合でも無限ループしないこと
+        monkeypatch.setattr(categorize, "REDUCE_CHARS", 10)
+        with patch.object(categorize, "_call_llm", return_value="x" * 500):
+            out = categorize._reduce_summaries("CH", "服装", ["y" * 500, "z" * 500], "u", "m")
+        assert out
+
+
 class TestWriteOutputs:
     def test_category_file_lists_member_videos(self, tmp_path, monkeypatch):
         monkeypatch.setattr(categorize, "SUMMARIES_DIR", tmp_path / "summaries")

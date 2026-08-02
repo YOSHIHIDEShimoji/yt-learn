@@ -34,6 +34,10 @@ CACHE_DIR = BASE_DIR / "cache"
 # 接頭辞ぶんと拡張子ぶんの余白を残してタイトルを削る
 TITLE_BYTES = 120
 
+# 納品に含める動画コンテナ。transcribe._VIDEO_SUFFIXES と一致させること
+# （片方だけ .webm を欠くと、正常に取れた動画が納品から黙って落ちる）
+VIDEO_SUFFIXES = (".mp4", ".mkv", ".webm")
+
 
 def _err(msg: str) -> None:
     print(msg, file=sys.stderr)
@@ -127,7 +131,7 @@ def _copy_videos(out_dir: Path, entries: list[dict], channel_name: str) -> tuple
         return 0, 0
     out_dir.mkdir(parents=True, exist_ok=True)
     count, total = 0, 0
-    by_id = {p.stem: p for p in src_dir.iterdir() if p.suffix in (".mp4", ".mkv", ".webm")}
+    by_id = {p.stem: p for p in src_dir.iterdir() if p.suffix in VIDEO_SUFFIXES}
     for e in entries:
         src = by_id.get(e["id"])
         if not src:

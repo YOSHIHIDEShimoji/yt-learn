@@ -74,6 +74,10 @@ def _err(msg: str) -> None:
 # 1回のプロンプトに詰め込む「## ポイント」の合計文字数の上限。
 # qwen2.5:14b を num_ctx=8192 で動かす前提で、出力ぶんの余白を残して保守的に取る。
 CHUNK_CHARS = 4000
+# 統合パス・カテゴリ提案の入力上限。日本語はおおむね1文字≒1トークン強なので、
+# num_ctx=8192 に対して出力ぶんの余白を残すとこのあたりが上限になる。
+# ここを num_ctx より大きく取ると、切り捨てを防ぐために num_ctx を明示した意味が消える
+REDUCE_CHARS = 5500
 NUM_CTX = 8192
 
 # LLM が候補を出せなかった場合の保険。男磨き系チャンネルを想定した最小構成。
@@ -152,13 +156,25 @@ def _load_items(channel_name: str) -> list[dict]:
 
 # ── パス0: カテゴリ候補の抽出 ─────────────────────────────────────────────────
 
+def _sample_titles(items: list[dict], budget: int) -> str:
+    """タイトル一覧を budget 文字に収める。溢れるときは末尾を捨てず均等に間引く。
+
+    後ろを切り捨てると古い時期の話題だけがカテゴリ候補から消え、
+    その時期の動画がまとめて「その他」に落ちる。
+    """
+    lines = [f"- {it['title']}" for it in items]
+    total = sum(len(x) + 1 for x in lines)
+    if total <= budget:
+        return "\n".join(lines)
+    step = total // budget + 1
+    return "\n".join(lines[::step])
+
+
 def _propose_categories(channel_name: str, items: list[dict],
                         base_url: str, model: str) -> list[str]:
-    titles = "\n".join(f"- {it['title']}" for it in items)
-    # タイトルだけなら100本でも数千文字に収まるので、ここは分割せず一度に見せる
     prompt = f"""以下はYouTubeチャンネル「{channel_name}」の動画タイトル一覧です。
 
-{titles[:12000]}
+{_sample_titles(items, REDUCE_CHARS)}
 
 ## 指示
 このチャンネルの動画を内容で分類するためのカテゴリを5〜8個提案してください。
@@ -296,11 +312,43 @@ def _summarize_chunk(channel_name: str, category: str, chunk: list[dict],
 
 def _reduce_summaries(channel_name: str, category: str, partials: list[str],
                       base_url: str, model: str) -> str | None:
-    joined = "\n".join(partials)
+    """チャンクごとのまとめを1つに統合する。
+
+    入力が num_ctx に収まらないときは、収まる単位で統合してから再度統合する
+    （階層的 reduce）。単純に切り詰めると後ろのチャンクの内容が黙って消えるため。
+    """
+    current = [p for p in partials if p]
+    if not current:
+        return None
+    for _ in range(5):  # 縮まなくなったら抜ける。念のため上限も置く
+        if len(current) <= 1:
+            break
+        prev_len, prev_size = len(current), sum(map(len, current))
+        groups, group, size = [], [], 0
+        for p in current:
+            if group and size + len(p) > REDUCE_CHARS:
+                groups.append(group)
+                group, size = [], 0
+            group.append(p)
+            size += len(p)
+        if group:
+            groups.append(group)
+        current = [(_reduce_group(channel_name, category, g, base_url, model) or "\n".join(g))
+                   for g in groups]
+        # 件数が減らなくても中身が縮んでいれば次の周でまとまる。
+        # 両方とも縮まないときだけ打ち切る（無限ループ防止）
+        if len(current) >= prev_len and sum(map(len, current)) >= prev_size:
+            break
+    return current[0] if len(current) == 1 else "\n".join(current)
+
+
+def _reduce_group(channel_name: str, category: str, group: list[str],
+                  base_url: str, model: str) -> str | None:
+    joined = "\n".join(group)
     prompt = f"""以下はYouTubeチャンネル「{channel_name}」の「{category}」についての要点を、
 複数のまとまりに分けて整理したものです。同じ内容が重複して含まれています。
 
-{joined[:12000]}
+{joined}
 
 ## 指示
 重複を排してひとつに統合し、読みやすい順に並べ替えてください。

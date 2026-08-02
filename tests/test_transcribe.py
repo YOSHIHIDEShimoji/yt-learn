@@ -819,6 +819,76 @@ class TestResolveDateIndex:
         transcribe._resolve_date_index(_videos(10), "CH", "2024-01-01")
         assert len(calls) == first  # 2回目は1件も取りに行かない
 
+    def test_transient_failure_is_not_cached_as_unavailable(self, tmp_path, monkeypatch):
+        # レートリミット等の一時障害を「日付が取れない動画」として恒久保存すると、
+        # 以後ずっと二分探索が狂う。キャッシュに毒を入れないこと
+        monkeypatch.setattr(transcribe, "CACHE_DIR", tmp_path / "cache")
+        monkeypatch.setattr(transcribe.time, "sleep", lambda *_: None)
+        state = {"fail": True}
+
+        def flaky(video_id):
+            if state["fail"]:
+                state["fail"] = False
+                raise RuntimeError("rate-limited")
+            return "2024-06-01"
+
+        monkeypatch.setattr(transcribe, "_fetch_upload_date", flaky)
+        transcribe._resolve_date_index(_videos(4), "CH", "2024-01-01")
+        cache = transcribe._load_date_cache("CH")
+        assert None not in cache.values()
+
+
+class TestResolveDateIndexLongUnavailableRun:
+    """探索窓を超える長さの「日付が取れない帯」に当たっても対象を落とさないこと。
+
+    メンバー限定は時期的にクラスタするので、固定幅（±5 等）で近傍代用を打ち切ると
+    窓の残りを未探査のまま切り捨て、DL可能な動画が黙って対象から外れる。
+    """
+
+    def _dates(self, n):
+        from datetime import datetime, timedelta
+        base = datetime(2026, 1, 1)
+        return [(base - timedelta(days=i)).strftime("%Y-%m-%d") for i in range(n)]
+
+    def _setup(self, tmp_path, monkeypatch, n, unavailable):
+        monkeypatch.setattr(transcribe, "CACHE_DIR", tmp_path / "cache")
+        monkeypatch.setattr(transcribe.time, "sleep", lambda *_: None)
+        dates = self._dates(n)
+
+        def fake(video_id):
+            i = int(video_id.replace("vid", ""))
+            return None if i in unavailable else dates[i]
+
+        monkeypatch.setattr(transcribe, "_fetch_upload_date", fake)
+        return dates
+
+    def test_boundary_survives_11_consecutive_unavailable(self, tmp_path, monkeypatch):
+        dates = self._setup(tmp_path, monkeypatch, 40, set(range(15, 26)))
+        # index 10 より新しい（＝ index 0..9）が対象。inclusive=False で境界当日を落とす
+        k = transcribe._resolve_date_index(_videos(40), "CH", dates[10],
+                                           inclusive=False, widen="older")
+        assert k == 10
+
+    def test_all_unavailable_keeps_more_for_after(self, tmp_path, monkeypatch):
+        # --after は k=end。判定不能なら k を大きく＝対象を広く残す
+        self._setup(tmp_path, monkeypatch, 20, set(range(20)))
+        k = transcribe._resolve_date_index(_videos(20), "CH", "2025-01-01",
+                                           inclusive=True, widen="newer")
+        assert k == 20
+
+    def test_all_unavailable_keeps_more_for_before(self, tmp_path, monkeypatch):
+        # --before は k=start。判定不能なら k を小さく＝対象を広く残す
+        self._setup(tmp_path, monkeypatch, 20, set(range(20)))
+        k = transcribe._resolve_date_index(_videos(20), "CH", "2025-01-01",
+                                           inclusive=False, widen="older")
+        assert k == 0
+
+    def test_terminates_on_large_input(self, tmp_path, monkeypatch):
+        # 無限ループしないこと（半数がランダムに不能でも必ず返る）
+        self._setup(tmp_path, monkeypatch, 200, set(range(0, 200, 2)))
+        k = transcribe._resolve_date_index(_videos(200), "CH", "2025-09-01")
+        assert 0 <= k <= 200
+
 
 class TestVideoQualityDownload:
     def test_360p_uses_single_file_format(self):
@@ -835,6 +905,163 @@ class TestVideoQualityDownload:
         assert transcribe._VIDEO_FORMATS[quality].endswith(transcribe._AUDIO_FALLBACK)
 
 
+class TestDownloadReturnsOwnFile:
+    """共有ディレクトリでも「今DLした動画」を返すこと。
+
+    out_dir を走査して拡張子が合った最初のファイルを返す実装だと、
+    --download-only の queue/（永続共有）では別動画のファイルが返り、
+    「ファイル名は正しいのに中身が別動画」の納品物が無音で量産される。
+    """
+
+    def _fake_ydl(self, tmp_path, monkeypatch, produced: str):
+        class FakeYDL:
+            def __init__(self, opts):
+                pass
+
+            def __enter__(self):
+                return self
+
+            def __exit__(self, *a):
+                return False
+
+            def download(self, urls):
+                (tmp_path / produced).write_bytes(b"correct")
+
+        fake_mod = MagicMock()
+        fake_mod.YoutubeDL = FakeYDL
+        monkeypatch.setitem(sys.modules, "yt_dlp", fake_mod)
+
+    def test_returns_file_matching_video_id(self, tmp_path, monkeypatch):
+        # 先に他の動画のファイルが5本ある状態（drain 前の queue の常態）
+        for other in ("aaa111", "bbb222", "ccc333", "ddd444", "eee555"):
+            (tmp_path / f"{other}.mp4").write_bytes(b"WRONG")
+        self._fake_ydl(tmp_path, monkeypatch, "zzz999.mp4")
+        out = transcribe._download_audio("https://www.youtube.com/watch?v=zzz999",
+                                         str(tmp_path), video_quality="360p")
+        assert Path(out).name == "zzz999.mp4"
+        assert Path(out).read_bytes() == b"correct"
+
+    def test_audio_path_also_matches_video_id(self, tmp_path, monkeypatch):
+        (tmp_path / "aaa111.m4a").write_bytes(b"WRONG")
+        self._fake_ydl(tmp_path, monkeypatch, "zzz999.m4a")
+        out = transcribe._download_audio("https://youtu.be/zzz999", str(tmp_path))
+        assert Path(out).name == "zzz999.m4a"
+
+    def test_falls_back_to_newly_created_file_only(self, tmp_path, monkeypatch):
+        # ID が URL から取れない形式でも、既存ファイルを掴まないこと
+        (tmp_path / "old.m4a").write_bytes(b"WRONG")
+        self._fake_ydl(tmp_path, monkeypatch, "fresh.m4a")
+        out = transcribe._download_audio("https://example.com/stream", str(tmp_path))
+        assert Path(out).read_bytes() == b"correct"
+
+
+class TestHasVideoStream:
+    def test_trusts_info_json_over_extension(self, tmp_path):
+        # 音声のみの .webm を「動画」と誤判定しないこと
+        (tmp_path / "v1.info.json").write_text(json.dumps(
+            {"requested_downloads": [{"vcodec": "none", "acodec": "opus"}]}), encoding="utf-8")
+        (tmp_path / "v1.webm").write_bytes(b"a")
+        assert transcribe._has_video_stream(str(tmp_path / "v1.webm"), "v1") is False
+
+    def test_combined_webm_is_recognised_as_video(self, tmp_path):
+        # 逆に combined の .webm を捨てないこと
+        (tmp_path / "v1.info.json").write_text(json.dumps(
+            {"requested_downloads": [{"vcodec": "vp9", "acodec": "opus"}]}), encoding="utf-8")
+        (tmp_path / "v1.webm").write_bytes(b"a")
+        assert transcribe._has_video_stream(str(tmp_path / "v1.webm"), "v1") is True
+
+    def test_falls_back_to_extension_without_info_json(self, tmp_path):
+        (tmp_path / "v1.mp4").write_bytes(b"a")
+        assert transcribe._has_video_stream(str(tmp_path / "v1.mp4"), "v1") is True
+        (tmp_path / "v2.m4a").write_bytes(b"a")
+        assert transcribe._has_video_stream(str(tmp_path / "v2.m4a"), "v2") is False
+
+    def test_suffix_lists_agree_with_package_delivery(self):
+        # 片方だけ .webm を含むと、正常に取れた動画が納品から落ちる
+        sys.path.insert(0, str(Path(__file__).parent.parent / "src"))
+        import package_delivery
+        assert set(transcribe._VIDEO_SUFFIXES) == set(package_delivery.VIDEO_SUFFIXES)
+
+
+class TestInjectCoreSummary:
+    def _md(self, tmp_path):
+        p = tmp_path / "t.md"
+        p.write_text("# タイトル\n\nチャンネル: CH\nURL: u\nモデル: m\n"
+                     "処理日時: 2026-08-03 01:00:00\n\n---\n\n本文\n", encoding="utf-8")
+        return p
+
+    def test_backslashes_in_summary_do_not_crash(self, tmp_path):
+        # LLM 出力を置換文字列に直接埋めると "\U" 等がエスケープ解釈されて re.error。
+        # 失敗すると index 更新前に落ちるので、その動画は毎回再DL・再文字起こしされる
+        p = self._md(tmp_path)
+        summary = "## ポイント\n- 設定は C:\\Users\\name\\AppData に置く\n- \\1 も安全"
+        with patch.object(transcribe, "_generate_core_summary", return_value=(summary, "ollama")):
+            transcribe._inject_core_summary(p)
+        text = p.read_text(encoding="utf-8")
+        assert "C:\\Users\\name\\AppData" in text
+        assert "\\1 も安全" in text
+
+    def test_adds_heading_when_llm_omits_it(self, tmp_path):
+        # 見出しが無いと再実行のたびに二重挿入され、かつ全成果物から抜け落ちる
+        p = self._md(tmp_path)
+        with patch.object(transcribe, "_generate_core_summary",
+                          return_value=("- 見出しなしの箇条書き", "ollama")):
+            transcribe._inject_core_summary(p)
+        assert p.read_text(encoding="utf-8").count("## ポイント") == 1
+
+    def test_is_idempotent(self, tmp_path):
+        p = self._md(tmp_path)
+        with patch.object(transcribe, "_generate_core_summary",
+                          return_value=("- 箇条書き", "ollama")) as gen:
+            transcribe._inject_core_summary(p)
+            transcribe._inject_core_summary(p)
+        assert gen.call_count == 1
+        assert p.read_text(encoding="utf-8").count("## ポイント") == 1
+
+
+class TestDrainQueueFailureIsolation:
+    def test_failed_file_is_quarantined(self, tmp_path, monkeypatch):
+        # 失敗ファイルを退けないと同じファイルが毎周回選ばれ、キューが永久に詰まる
+        monkeypatch.setattr(transcribe, "QUEUE_DIR", tmp_path / "queue")
+        monkeypatch.setattr(transcribe, "TRANSCRIPTS_DIR", tmp_path / "transcripts")
+        q = tmp_path / "queue" / "CH"
+        q.mkdir(parents=True)
+        (q / "bad.m4a").write_bytes(b"x")
+        (q / "bad.meta.json").write_text(json.dumps({
+            "title": "壊れた", "url": "https://youtu.be/bad", "channel": "CH", "lang": "ja"}),
+            encoding="utf-8")
+        with patch.object(transcribe, "_transcribe", side_effect=RuntimeError("boom")) as tr:
+            transcribe._drain_queue_all(idle_polls=1, idle_sleep=0)
+        assert tr.call_count == 1  # 無限リトライしない
+        assert (q / "bad.m4a.failed").exists()
+        assert not (q / "bad.m4a").exists()
+
+    def test_good_file_after_bad_one_still_processes(self, tmp_path, monkeypatch):
+        monkeypatch.setattr(transcribe, "QUEUE_DIR", tmp_path / "queue")
+        monkeypatch.setattr(transcribe, "TRANSCRIPTS_DIR", tmp_path / "transcripts")
+        q = tmp_path / "queue" / "CH"
+        q.mkdir(parents=True)
+        for name in ("bad", "good"):
+            (q / f"{name}.m4a").write_bytes(b"x")
+            (q / f"{name}.meta.json").write_text(json.dumps({
+                "title": name, "url": f"https://youtu.be/{name}",
+                "channel": "CH", "lang": "ja"}), encoding="utf-8")
+        os.utime(q / "bad.m4a", (1, 1))  # bad を最古にして先に選ばせる
+
+        def _tr(path, *a, **kw):
+            # tmp_path 自体にテスト名が入るのでベース名だけで判定する
+            if Path(path).name.startswith("bad"):
+                raise RuntimeError("boom")
+            return "text"
+
+        with patch.object(transcribe, "_transcribe", side_effect=_tr), \
+             patch.object(transcribe, "_inject_core_summary"), \
+             patch.object(transcribe, "_copy_file_to_drive"):
+            processed = transcribe._drain_queue_all(idle_polls=1, idle_sleep=0)
+        assert processed == 1
+        assert "good" in transcribe._load_index("CH")
+
+
 class TestSaveDeliverVideo:
     def _setup(self, tmp_path, monkeypatch):
         monkeypatch.setattr(transcribe, "DELIVER_DIR", tmp_path / "deliver")
@@ -846,13 +1073,23 @@ class TestSaveDeliverVideo:
         assert transcribe._save_deliver_video("CH", "vid1", str(src)) is True
         assert (tmp_path / "deliver" / "CH" / "videos" / "vid1.mp4").read_bytes() == b"video"
 
-    @pytest.mark.parametrize("ext", [".m4a", ".webm", ".opus"])
+    @pytest.mark.parametrize("ext", [".m4a", ".opus"])
     def test_rejects_audio_only_results(self, tmp_path, monkeypatch, ext):
         # 音声フォールバックが効いた動画を「動画」フォルダに混ぜないこと
         self._setup(tmp_path, monkeypatch)
         src = tmp_path / f"a{ext}"
         src.write_bytes(b"audio")
         assert transcribe._save_deliver_video("CH", "vid1", str(src)) is False
+        assert not (tmp_path / "deliver").exists()
+
+    def test_rejects_audio_only_webm_using_info_json(self, tmp_path, monkeypatch):
+        # .webm は combined でも音声のみでもありうる。拡張子では決められないので
+        # info.json の vcodec を見る（実運用では writeinfojson で必ず並んでいる）
+        self._setup(tmp_path, monkeypatch)
+        (tmp_path / "vid1.webm").write_bytes(b"audio")
+        (tmp_path / "vid1.info.json").write_text(json.dumps(
+            {"requested_downloads": [{"vcodec": "none"}]}), encoding="utf-8")
+        assert transcribe._save_deliver_video("CH", "vid1", str(tmp_path / "vid1.webm")) is False
         assert not (tmp_path / "deliver").exists()
 
     def test_transcription_still_proceeds_when_video_unavailable(self, tmp_path, monkeypatch):

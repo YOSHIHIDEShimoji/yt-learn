@@ -587,27 +587,49 @@ def _fetch_upload_date(video_id: str) -> str | None:
                 **_cookie_opts()}
     try:
         info = _yt_extract_with_retry(ydl_opts, url, download=False)
-    except Exception:
-        return None
+    except Exception as e:
+        msg = str(e)
+        # 恒久的に取れないものだけ None を返す（呼び出し側がキャッシュする）。
+        # レートリミット・bot検知・ネットワーク断まで None にすると、一時障害が
+        # 「日付が取れない動画」として恒久保存され、以後ずっと二分探索を狂わせる
+        if (_is_members_only_error(msg) or "Private video" in msg
+                or "unavailable" in msg or "removed" in msg):
+            return None
+        raise
     raw = info.get("upload_date") or ""
     if len(raw) != 8:
         return None
     return f"{raw[:4]}-{raw[4:6]}-{raw[6:]}"
 
 
+def _outward_offsets(span: int):
+    """0, +1, -1, +2, -2, ... と中心から外へ広がるオフセット列。"""
+    yield 0
+    for k in range(1, span):
+        yield k
+        yield -k
+
+
 def _upload_date_at(videos: list, i: int, channel_name: str, cache: dict,
-                    lo: int = 0, hi: int = None) -> tuple[str | None, int]:
+                    lo: int = 0, hi: int = None,
+                    max_fetches: int = 12) -> tuple[str | None, int]:
     """videos[i] 付近で投稿日が取れる動画を探し (投稿日, その動画の index) を返す。
 
-    メンバー限定動画は日付が取れない（このチャンネルでは新しい側の43%が該当）。
-    二分探索の途中でそれに当たると境界が求まらなくなるため近傍で代用するが、
-    **代用したときは「どの index の日付か」も返す**。代用元の index を判定点に
-    使わないと、たとえば「境界より古い側の動画の日付」を mid の日付とみなして
-    しまい、境界が実際より新しい側にずれる。
-    探索は [lo, hi) の内側に限る。外に出ると二分探索が収束しなくなるため。
+    メンバー限定動画は日付が取れない（このチャンネルでは新しい側の43%が該当し、
+    しかも時期的にクラスタする）。二分探索の途中でそれに当たると境界が求まらなく
+    なるため近傍で代用するが、**代用したときは「どの index の日付か」も返す**。
+    代用元の index を判定点に使わないと、たとえば「境界より古い側の動画の日付」を
+    mid の日付とみなしてしまい、境界が実際より新しい側にずれる。
+
+    探索は窓 [lo, hi) の内側に限る（外に出ると二分探索が収束しない）。窓の内側は
+    **全部**見に行く。固定幅（±5 等）で打ち切ると、それを超える連続不能帯があった
+    ときに窓の残りを未探査のまま切り捨てることになり、対象動画が黙って落ちる。
+    キャッシュ済みの不能動画は再取得しないので、実際の通信は max_fetches で頭打ち。
     """
     hi = len(videos) if hi is None else hi
-    for offset in (0, 1, -1, 2, -2, 3, -3, 4, -4, 5, -5):
+    span = max(i - lo, hi - 1 - i) + 1
+    fetches = 0
+    for offset in _outward_offsets(span):
         j = i + offset
         if not lo <= j < hi:
             continue
@@ -616,7 +638,15 @@ def _upload_date_at(videos: list, i: int, channel_name: str, cache: dict,
             if cache[vid]:
                 return cache[vid], j
             continue
-        d = _fetch_upload_date(vid)
+        if fetches >= max_fetches:
+            break
+        fetches += 1
+        try:
+            d = _fetch_upload_date(vid)
+        except Exception as e:
+            # 一時障害はキャッシュしない（次回に再試行させる）
+            _err(f"[warn] {vid}: 投稿日の取得に失敗 → キャッシュせず継続: {e}")
+            continue
         cache[vid] = d
         _save_date_cache(channel_name, cache)
         time.sleep(1.5)
@@ -626,11 +656,16 @@ def _upload_date_at(videos: list, i: int, channel_name: str, cache: dict,
 
 
 def _resolve_date_index(videos: list, channel_name: str, target: str,
-                        inclusive: bool = True) -> int:
+                        inclusive: bool = True, widen: str = "newer") -> int:
     """降順リストで「target より新しい側」が終わる位置 k を二分探索で返す。
 
     inclusive=True なら target 当日も新しい側に含める（videos[0:k] が date >= target）。
     inclusive=False なら date > target が videos[0:k]。
+
+    widen は「窓の日付が1つも取れなかったとき、どちらへ倒すと対象が広くなるか」。
+    --after は k=end なので k が大きいほど広い（widen="newer"）。
+    --before は k=start なので k が小さいほど広い（widen="older"）。
+    ここを取り違えると、判定不能帯に当たったときに対象動画が黙って削られる。
     """
     cache = _load_date_cache(channel_name)
     lo, hi, probes = 0, len(videos), 0
@@ -639,9 +674,11 @@ def _resolve_date_index(videos: list, channel_name: str, target: str,
         d, j = _upload_date_at(videos, mid, channel_name, cache, lo, hi)
         probes += 1
         if d is None:
-            # 窓内のどこからも日付が取れない。判定不能なので窓を1つ詰めて前進させる
-            # （安全側＝対象を広めに残す方向へ倒す）
-            lo = mid + 1
+            # 窓内のどこからも日付が取れない。対象を広めに残す方向へ倒す
+            if widen == "newer":
+                lo = mid + 1
+            else:
+                hi = mid
             continue
         # 判定は mid ではなく「実際に日付が取れた index j」で行う。
         # j は必ず [lo, hi) の内側なので lo/hi は毎回真に狭まり、必ず収束する。
@@ -689,9 +726,11 @@ def _filter_by_range(videos: list, channel_name: str, since_video: str = None,
         _err(f"[range] until-video {until_video} → index {i}")
 
     if after:
-        end = min(end, _resolve_date_index(videos, channel_name, after, inclusive=True))
+        end = min(end, _resolve_date_index(videos, channel_name, after,
+                                           inclusive=True, widen="newer"))
     if before:
-        start = max(start, _resolve_date_index(videos, channel_name, before, inclusive=False))
+        start = max(start, _resolve_date_index(videos, channel_name, before,
+                                               inclusive=False, widen="older"))
 
     if start >= end:
         _err(f"[range] 範囲が空です (start={start}, end={end})")
@@ -720,9 +759,10 @@ _VIDEO_FORMATS = {
     "best": f"bestvideo+bestaudio/best[acodec!=none]/{_AUDIO_FALLBACK}",
 }
 
-# 納品フォルダに置いてよいコンテナ。音声フォールバックが効いた動画を
-# 動画フォルダに混ぜないための判定に使う
-_VIDEO_SUFFIXES = (".mp4", ".mkv")
+# 納品フォルダに置いてよいコンテナ。info.json が読めないときのフォールバック判定にだけ使う
+# （.webm は combined でも音声のみでもありうるので拡張子だけでは決められない）。
+# package_delivery.py 側の走査対象と一致させること。
+_VIDEO_SUFFIXES = (".mp4", ".mkv", ".webm")
 
 
 def _download_audio(url: str, out_dir: str, video_quality: str = None) -> str:
@@ -744,6 +784,8 @@ def _download_audio(url: str, out_dir: str, video_quality: str = None) -> str:
     # 文字起こし精度への影響は無い。
     fmt = (_VIDEO_FORMATS[video_quality] if video_quality
            else "bestaudio[ext=m4a]/bestaudio[ext=webm]/bestaudio/best")
+    # DL前の中身を控えておく（out_dir が共有ディレクトリのときに自分の成果物を見分ける）
+    existing = {p.name for p in Path(out_dir).iterdir()} if Path(out_dir).is_dir() else set()
     for attempt in range(3):
         ydl_opts = {
             # 音声を優先（m4a→webm→任意のbestaudio）。最後の保険で best も許容
@@ -778,9 +820,21 @@ def _download_audio(url: str, out_dir: str, video_quality: str = None) -> str:
     # 動画指定時は動画コンテナを先に拾う（音声を内包しているので Whisper 入力を兼ねる）
     exts = ((".mp4", ".mkv", ".webm", ".m4a", ".opus") if video_quality
             else (".m4a", ".webm", ".opus", ".mp4"))
+
+    # outtmpl が %(id)s.%(ext)s なので、**今DLした動画のIDと一致するファイル**を返す。
+    # out_dir を走査して「拡張子が合った最初のファイル」を返すと、out_dir が使い捨ての
+    # tmpdir でない場合（--download-only の queue/ は永続共有）に別の動画のファイルを
+    # 返してしまう。ファイル名は正しいのに中身が別動画、という壊れ方をして気づけない。
+    vid_id = _extract_video_id(url)
     for ext in exts:
-        for f in Path(out_dir).iterdir():
-            if f.suffix == ext:
+        p = Path(out_dir) / f"{vid_id}{ext}"
+        if p.exists():
+            return str(p)
+
+    # ID を URL から取れない形式のための保険。今回のDLで新しくできたファイルに限る
+    for ext in exts:
+        for f in sorted(Path(out_dir).iterdir()):
+            if f.suffix == ext and f.name not in existing:
                 return str(f)
     raise RuntimeError(f"音声ファイルが見つかりません: {out_dir}")
 
@@ -1027,10 +1081,18 @@ def _inject_core_summary(md_path: Path) -> None:
         title=re.search(r"^# (.+)", content, re.MULTILINE).group(1) if re.search(r"^# (.+)", content, re.MULTILINE) else "",
         text=raw_transcript,
     )
-    # 「処理日時: ...」行の直後、「---」の直前に挿入
+    # 見出しが無いまま挿入すると、この関数の冒頭の "## ポイント" ガードが効かず
+    # 再実行のたびに二重挿入される。さらに _extract_points 側が拾えないので、
+    # その動画が要約・カテゴリ分類・納品物のすべてから黙って抜け落ちる。
+    summary = summary.strip()
+    if not summary.startswith("## ポイント"):
+        summary = "## ポイント\n" + summary
+    # 「処理日時: ...」行の直後、「---」の直前に挿入。
+    # 置換文字列に LLM 出力を直接埋め込むと、バックスラッシュ（"C:\Users\..." 等）が
+    # エスケープとして解釈され re.error で落ちる。関数 repl なら素通しになる
     updated = re.sub(
         r"(処理日時: .+\n)(\n---\n)",
-        rf"\1\n{summary}\n\2",
+        lambda m: f"{m.group(1)}\n{summary}\n{m.group(2)}",
         content,
         count=1,
     )
@@ -1045,14 +1107,36 @@ def _deliver_video_dir(channel_name: str) -> Path:
     return DELIVER_DIR / _sanitize(channel_name) / "videos"
 
 
+def _has_video_stream(media_path: str, vid_id: str) -> bool:
+    """DLされたファイルが映像を含むかを判定する。
+
+    拡張子では判定できない。combined でも音声のみでも .webm はありうるため。
+    yt-dlp が書いた info.json の requested_downloads[].vcodec が唯一の確かな根拠で、
+    それが読めないときだけ拡張子にフォールバックする。
+    """
+    src = Path(media_path)
+    p = src.parent / f"{vid_id}.info.json"
+    if p.exists():
+        try:
+            info = json.loads(p.read_text(encoding="utf-8"))
+        except (json.JSONDecodeError, OSError):
+            info = {}
+        for d in info.get("requested_downloads") or []:
+            if d.get("vcodec") and d["vcodec"] != "none":
+                return True
+        if info.get("requested_downloads"):
+            return False
+    return src.suffix in _VIDEO_SUFFIXES
+
+
 def _save_deliver_video(channel_name: str, vid_id: str, media_path: str) -> bool:
     """DLしたファイルが動画なら納品用ディレクトリへ退避する。
 
     音声フォールバックが効いた動画（combined フォーマットが無い）では音声しか
-    落ちてこない。それを動画フォルダに混ぜないよう拡張子で弾く。
+    落ちてこない。それを動画フォルダに混ぜない。
     """
     src = Path(media_path)
-    if src.suffix not in _VIDEO_SUFFIXES:
+    if not _has_video_stream(media_path, vid_id):
         _err(f"[warn] {vid_id}: 動画フォーマットが無く音声のみ取得 → 動画は納品対象外")
         return False
     vdir = _deliver_video_dir(channel_name)
@@ -1211,8 +1295,8 @@ def _process_channel(channel_name: str, channel_url: str, lang: str = "ja", limi
                 continue
             _err(f"[error] {v['title']}: {e}")
 
-    if sort == "popular" and processed > 0:
-        _update_ranking(channel_name, videos)
+    # ソート直後（全件）で _update_ranking 済み。ここで再度呼ぶと、範囲フィルタ・
+    # 処理済み除外・limit を通した後の残骸で全件ランキングを上書きしてしまう
     _err(f"[done] {channel_name}: {processed} 件処理\n")
     return processed
 
@@ -1299,9 +1383,19 @@ def _download_channel_to_queue(
             _err(f"[queued] {v['title']}")
         except Exception as e:
             msg = str(e)
+            # yt-dlp は info.json をメディアより先に書くので、失敗すると孤児が残る。
+            # 走査は壊さないが無限に溜まるので都度片づける
+            (q_dir / f"{vid_id}.info.json").unlink(missing_ok=True)
             if "rate-limited" in msg:
                 _err(f"[rate-limit] {channel_name}: レートリミット → DL中断")
                 return added, True
+            if _is_members_only_error(msg):
+                # sentinel を刻まないと毎周回このチャンネルのメンバー限定動画に
+                # DL を試み続け、レートリミット枠を浪費する（この経路が常用のため影響が大きい）
+                cache[_extract_video_id(v["url"])] = -1
+                _save_view_cache(channel_name, cache)
+                _err(f"[warn] {v['title']}: メンバー限定 → スキップ（次回以降は判定不要）")
+                continue
             if "confirm your age" in msg or "age-restricted" in msg:
                 _err(f"[warn] {v['title']}: 年齢制限 → スキップ")
                 continue
@@ -1392,6 +1486,15 @@ def _drain_queue_all(model_size: str = WHISPER_MODEL,
             processed += 1
         except Exception as e:
             _err(f"[error] drain-queue: {e}")
+            # 失敗ファイルを退けないと、mtime 最古の同じファイルが次のループでも
+            # candidates[0] に選ばれ続け、キュー全体が永久に詰まる。
+            # 「寝ている間に回す」運用ではここが単一障害点になる。
+            try:
+                failed = audio_path.with_name(audio_path.name + ".failed")
+                audio_path.rename(failed)
+                _err(f"[warn] 退避: {failed.name}（再試行するには .failed を外す）")
+            except OSError as rename_err:
+                _err(f"[error] 退避に失敗（キューが詰まる可能性）: {rename_err}")
 
     return processed
 
