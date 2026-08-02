@@ -489,6 +489,11 @@ class TestProcessCLI:
     def _setup(self, tmp_path, monkeypatch):
         monkeypatch.setattr(transcribe, "TRANSCRIPTS_DIR", tmp_path / "transcripts")
         monkeypatch.setattr(transcribe, "CHANNELS_FILE", tmp_path / "channels.txt")
+        # main() は _load_env() で実 .env を os.environ に流し込む。BASE_DIR を差し替えて
+        # おかないと LOCAL_LLM_URL がプロセス全体に残り、後続テストが実 Ollama に
+        # 到達して「たまたま緑」になる（実行順序に依存する偽の緑）
+        monkeypatch.setattr(transcribe, "BASE_DIR", tmp_path)
+        monkeypatch.delenv("LOCAL_LLM_URL", raising=False)
         return tmp_path
 
     def _mock_process(self):
@@ -557,6 +562,8 @@ class TestProcessChannel:
         with patch.object(transcribe, "_get_channel_videos", return_value=videos), \
              patch.object(transcribe, "_download_audio", return_value="/tmp/audio.wav"), \
              patch.object(transcribe, "_transcribe", return_value="文字起こし"), \
+             patch.object(transcribe, "_inject_core_summary"), \
+             patch.object(transcribe, "_copy_file_to_drive"), \
              patch("tempfile.mkdtemp", return_value="/tmp/fake"), \
              patch("shutil.rmtree"):
             count = transcribe._process_channel("CH", "https://youtube.com/@ch", popular_sample=0)
@@ -812,6 +819,20 @@ class TestResolveDateIndex:
         k = transcribe._resolve_date_index(_videos(10), "CH", "2024-01-01")
         assert k == 5
 
+    def test_judges_by_the_index_the_date_came_from(self, tmp_path, monkeypatch):
+        """代用した日付は「その日付が取れた index」で判定すること。
+
+        近傍代用の結果を mid の日付とみなすと、代用元が境界の反対側だった場合に
+        境界が新しい側へずれ、DL可能な動画が黙って対象から落ちる。
+        不能帯が境界（index 5）をまたぐこの配置でしか差が出ない。
+        """
+        self._setup(tmp_path, monkeypatch, unavailable={4, 5, 6})
+        k = transcribe._resolve_date_index(_videos(10), "CH", "2024-01-01",
+                                           inclusive=True, widen="newer")
+        # 正しい実装は不能動画を安全側（新しい側）に残して 7。
+        # mid で判定する実装は 5 を返し、index 5・6 を取りこぼす
+        assert k == 7
+
     def test_caches_fetched_dates_across_calls(self, tmp_path, monkeypatch):
         calls = self._setup(tmp_path, monkeypatch)
         transcribe._resolve_date_index(_videos(10), "CH", "2024-01-01")
@@ -888,6 +909,139 @@ class TestResolveDateIndexLongUnavailableRun:
         self._setup(tmp_path, monkeypatch, 200, set(range(0, 200, 2)))
         k = transcribe._resolve_date_index(_videos(200), "CH", "2025-09-01")
         assert 0 <= k <= 200
+
+
+class TestFilterByRangeDates:
+    """--after / --before の意味論（境界日の帰属）と widen の向きを固定する。
+
+    _resolve_date_index 単体が正しくても、呼び出し側の inclusive の渡し方を取り違えると
+    境界日の動画が黙って落ちる。ここを押さえないと配線の変異が素通りする。
+    """
+    DATES = ["2024-06-01", "2024-05-01", "2024-04-01", "2024-03-01", "2024-02-01",
+             "2023-12-01", "2023-11-01", "2023-10-01", "2023-09-01", "2023-08-01"]
+
+    def _setup(self, tmp_path, monkeypatch):
+        monkeypatch.setattr(transcribe, "CACHE_DIR", tmp_path / "cache")
+        monkeypatch.setattr(transcribe.time, "sleep", lambda *_: None)
+        monkeypatch.setattr(transcribe, "_fetch_upload_date",
+                            lambda vid: self.DATES[int(vid.replace("vid", ""))])
+
+    def _ids(self, videos):
+        return [transcribe._extract_video_id(v["url"]) for v in videos]
+
+    def test_after_includes_videos_posted_on_the_boundary_day(self, tmp_path, monkeypatch):
+        self._setup(tmp_path, monkeypatch)
+        out = transcribe._filter_by_range(_videos(10), "CH", after="2024-02-01")
+        assert self._ids(out) == [f"vid{i:03d}" for i in range(5)]  # 当日(index 4)を含む
+
+    def test_before_includes_videos_posted_on_the_boundary_day(self, tmp_path, monkeypatch):
+        self._setup(tmp_path, monkeypatch)
+        out = transcribe._filter_by_range(_videos(10), "CH", before="2024-02-01")
+        assert self._ids(out) == [f"vid{i:03d}" for i in range(4, 10)]  # 当日(index 4)を含む
+
+    def test_after_and_before_intersect(self, tmp_path, monkeypatch):
+        self._setup(tmp_path, monkeypatch)
+        out = transcribe._filter_by_range(_videos(10), "CH",
+                                          after="2024-03-01", before="2024-05-01")
+        assert self._ids(out) == ["vid001", "vid002", "vid003"]
+
+    def test_date_and_video_bounds_combine(self, tmp_path, monkeypatch):
+        self._setup(tmp_path, monkeypatch)
+        out = transcribe._filter_by_range(_videos(10), "CH",
+                                          since_video="vid005", after="2024-03-01")
+        assert self._ids(out) == ["vid000", "vid001", "vid002", "vid003"]
+
+
+class TestProcessChannelRange:
+    """channel 経路にも範囲指定と --dry-run が効いていること。
+
+    --download-only 側は別途テスト済みだが、通常経路の配線が外れると
+    `--since-video` が黙って全件処理に化ける（レートリミットとGPU時間の実害）。
+    """
+
+    def _setup(self, tmp_path, monkeypatch):
+        monkeypatch.setattr(transcribe, "TRANSCRIPTS_DIR", tmp_path / "transcripts")
+        monkeypatch.setattr(transcribe, "CACHE_DIR", tmp_path / "cache")
+
+    def test_since_video_limits_what_is_processed(self, tmp_path, monkeypatch):
+        self._setup(tmp_path, monkeypatch)
+        with patch.object(transcribe, "_get_channel_videos", return_value=_videos(10)), \
+             patch.object(transcribe, "_process_url", return_value=True) as proc:
+            transcribe._process_channel("CH", "u", popular_sample=0, since_video="vid002")
+        called = [c[0][0] for c in proc.call_args_list]
+        assert called == [f"https://www.youtube.com/watch?v=vid{i:03d}" for i in range(3)]
+
+    def test_dry_run_downloads_nothing(self, tmp_path, monkeypatch):
+        self._setup(tmp_path, monkeypatch)
+        with patch.object(transcribe, "_get_channel_videos", return_value=_videos(10)), \
+             patch.object(transcribe, "_process_url", return_value=True) as proc:
+            n = transcribe._process_channel("CH", "u", popular_sample=0, dry_run=True)
+        assert proc.call_count == 0
+        assert n == 0
+
+    def test_video_quality_is_forwarded(self, tmp_path, monkeypatch):
+        self._setup(tmp_path, monkeypatch)
+        with patch.object(transcribe, "_get_channel_videos", return_value=_videos(1)), \
+             patch.object(transcribe, "_process_url", return_value=True) as proc:
+            transcribe._process_channel("CH", "u", popular_sample=0, video_quality="360p")
+        assert proc.call_args.kwargs["video_quality"] == "360p"
+
+
+class TestMembersOnlySentinel:
+    """メンバー限定を view キャッシュに刻んで次回以降スキップすること。
+
+    刻まないと毎周回 DL を試みてレートリミット枠を浪費する。このチャンネルは
+    対象の43%がメンバー限定なので影響が大きい。
+    """
+    ERR = "ERROR: [youtube] x: Join this channel to get access to members-only content"
+
+    def _setup(self, tmp_path, monkeypatch):
+        monkeypatch.setattr(transcribe, "TRANSCRIPTS_DIR", tmp_path / "transcripts")
+        monkeypatch.setattr(transcribe, "CACHE_DIR", tmp_path / "cache")
+        monkeypatch.setattr(transcribe, "QUEUE_DIR", tmp_path / "queue")
+
+    def test_process_channel_records_sentinel_and_continues(self, tmp_path, monkeypatch):
+        self._setup(tmp_path, monkeypatch)
+        calls = []
+
+        def _proc(url, *a, **kw):
+            calls.append(url)
+            if url.endswith("vid000"):
+                raise RuntimeError(self.ERR)
+            return True
+
+        with patch.object(transcribe, "_get_channel_videos", return_value=_videos(3)), \
+             patch.object(transcribe, "_process_url", side_effect=_proc):
+            transcribe._process_channel("CH", "u", popular_sample=0)
+        assert len(calls) == 3  # break せず後続へ進む
+        assert transcribe._load_view_cache("CH")["vid000"] == -1
+
+    def test_sentinel_excludes_video_on_the_next_run(self, tmp_path, monkeypatch):
+        self._setup(tmp_path, monkeypatch)
+        transcribe._save_view_cache("CH", {"vid000": -1})
+        with patch.object(transcribe, "_get_channel_videos", return_value=_videos(3)), \
+             patch.object(transcribe, "_process_url", return_value=True) as proc:
+            transcribe._process_channel("CH", "u", popular_sample=0)
+        called = [c[0][0] for c in proc.call_args_list]
+        assert all("vid000" not in u for u in called)
+
+    def test_rate_limit_takes_precedence_over_members_check(self, tmp_path, monkeypatch):
+        # レートリミットは中断、メンバー限定は継続。判定順を入れ替えると全件走り続ける
+        self._setup(tmp_path, monkeypatch)
+        with patch.object(transcribe, "_get_channel_videos", return_value=_videos(3)), \
+             patch.object(transcribe, "_process_url",
+                          side_effect=RuntimeError("rate-limited")) as proc:
+            transcribe._process_channel("CH", "u", popular_sample=0)
+        assert proc.call_count == 1  # 1本目で中断
+
+    def test_queue_path_records_sentinel(self, tmp_path, monkeypatch):
+        self._setup(tmp_path, monkeypatch)
+        monkeypatch.setattr(transcribe, "DELIVER_DIR", tmp_path / "deliver")
+        with patch.object(transcribe, "_get_channel_videos", return_value=_videos(2)), \
+             patch.object(transcribe, "_download_audio", side_effect=RuntimeError(self.ERR)):
+            added, limited = transcribe._download_channel_to_queue("CH", "u", sort="date")
+        assert (added, limited) == (0, False)
+        assert transcribe._load_view_cache("CH") == {"vid000": -1, "vid001": -1}
 
 
 class TestVideoQualityDownload:
@@ -1115,7 +1269,7 @@ class TestSaveDeliverVideo:
 
         class FakeYDL:
             def __init__(self, opts):
-                captured["format"] = opts["format"]
+                captured.update(opts)
 
             def __enter__(self):
                 return self
@@ -1132,13 +1286,16 @@ class TestSaveDeliverVideo:
         out = transcribe._download_audio("https://youtu.be/abc", str(tmp_path))
         assert captured["format"].startswith("bestaudio")
         assert out.endswith(".m4a")
+        # info.json は納品ファイル名の日付・連番順・動画判定(vcodec)の一次根拠。
+        # 落とすと全部が無音で劣化するので契約として固定しておく
+        assert captured["writeinfojson"] is True
 
     def test_video_quality_switches_format_and_prefers_video_container(self, tmp_path, monkeypatch):
         captured = {}
 
         class FakeYDL:
             def __init__(self, opts):
-                captured["format"] = opts["format"]
+                captured.update(opts)
 
             def __enter__(self):
                 return self
@@ -1156,6 +1313,8 @@ class TestSaveDeliverVideo:
         monkeypatch.setitem(sys.modules, "yt_dlp", fake_mod)
         out = transcribe._download_audio("https://youtu.be/abc", str(tmp_path), video_quality="360p")
         assert captured["format"] == transcribe._VIDEO_FORMATS["360p"]
+        assert captured["writeinfojson"] is True
+        assert captured["outtmpl"].endswith("%(id)s.%(ext)s")  # ID一致で拾える前提
         assert out.endswith(".mp4")
 
 

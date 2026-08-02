@@ -246,6 +246,92 @@ class TestReduceSummaries:
         assert out
 
 
+class TestSummarizeCategories:
+    """カテゴリ集約の統括処理。下位部品は個別にテスト済みなので、ここでは
+    グルーピング・順序・失敗の閉じ込めという「統括だけが持つ責務」を固定する。
+    """
+
+    ITEMS = [
+        {"file": "a.md", "title": "動画A", "points": "- あ"},
+        {"file": "b.md", "title": "動画B", "points": "- い"},
+        {"file": "c.md", "title": "動画C", "points": "- う"},
+    ]
+    ASSIGN = {"a.md": "服装", "b.md": "恋愛", "c.md": "服装"}
+    CATS = ["服装", "恋愛", "その他"]
+
+    def _setup(self, tmp_path, monkeypatch):
+        monkeypatch.setattr(categorize, "SUMMARIES_DIR", tmp_path / "summaries")
+        monkeypatch.setattr(categorize, "_copy_file_to_drive", lambda p: None)
+        return tmp_path / "summaries" / "CH"
+
+    def test_writes_one_file_per_populated_category(self, tmp_path, monkeypatch):
+        out = self._setup(tmp_path, monkeypatch)
+        with patch.object(categorize, "_summarize_chunk", return_value="- まとめ"):
+            categorize._summarize_categories("CH", self.ITEMS, self.ASSIGN, self.CATS, "u", "m")
+        assert (out / "服装.md").exists()
+        assert (out / "恋愛.md").exists()
+        assert not (out / "その他.md").exists()  # 所属0のカテゴリはファイルを作らない
+
+    def test_groups_members_correctly(self, tmp_path, monkeypatch):
+        out = self._setup(tmp_path, monkeypatch)
+        with patch.object(categorize, "_summarize_chunk", return_value="- まとめ"):
+            categorize._summarize_categories("CH", self.ITEMS, self.ASSIGN, self.CATS, "u", "m")
+        text = (out / "服装.md").read_text(encoding="utf-8")
+        assert "対象動画: 2本" in text
+        assert "- 動画A" in text and "- 動画C" in text and "- 動画B" not in text
+
+    def test_index_follows_proposal_order(self, tmp_path, monkeypatch):
+        out = self._setup(tmp_path, monkeypatch)
+        with patch.object(categorize, "_summarize_chunk", return_value="- まとめ"):
+            categorize._summarize_categories("CH", self.ITEMS, self.ASSIGN, self.CATS, "u", "m")
+        idx = (out / "index.md").read_text(encoding="utf-8")
+        assert idx.index("服装") < idx.index("恋愛")
+
+    def test_unknown_category_goes_last(self, tmp_path, monkeypatch):
+        out = self._setup(tmp_path, monkeypatch)
+        assign = {**self.ASSIGN, "b.md": "未知カテゴリ"}
+        with patch.object(categorize, "_summarize_chunk", return_value="- まとめ"):
+            categorize._summarize_categories("CH", self.ITEMS, assign, self.CATS, "u", "m")
+        idx = (out / "index.md").read_text(encoding="utf-8")
+        assert idx.index("服装") < idx.index("未知カテゴリ")
+
+    def test_timeout_in_one_category_does_not_block_others(self, tmp_path, monkeypatch):
+        # Ollama が GPU 占有でタイムアウトするのは日常。1カテゴリの失敗で
+        # 他のカテゴリのまとめまで失わないこと
+        out = self._setup(tmp_path, monkeypatch)
+
+        def _chunk(channel, category, chunk, *a):
+            if category == "服装":
+                raise TimeoutError("timed out")
+            return "- まとめ"
+
+        with patch.object(categorize, "_summarize_chunk", side_effect=_chunk):
+            categorize._summarize_categories("CH", self.ITEMS, self.ASSIGN, self.CATS, "u", "m")
+        assert not (out / "服装.md").exists()
+        assert (out / "恋愛.md").exists()
+        assert (out / "index.md").exists()
+
+    def test_falls_back_to_partials_when_reduce_fails(self, tmp_path, monkeypatch):
+        # 統合に失敗しても、チャンクごとのまとめは捨てないこと
+        out = self._setup(tmp_path, monkeypatch)
+        monkeypatch.setattr(categorize, "CHUNK_CHARS", 1)  # 1本1チャンクに割る
+        items = [{"file": f"{i}.md", "title": f"動画{i}", "points": "- x" * 5} for i in range(3)]
+        assign = {f"{i}.md": "服装" for i in range(3)}
+        with patch.object(categorize, "_summarize_chunk", side_effect=["- A", "- B", "- C"]), \
+             patch.object(categorize, "_reduce_summaries", side_effect=RuntimeError("boom")):
+            categorize._summarize_categories("CH", items, assign, ["服装"], "u", "m")
+        text = (out / "服装.md").read_text(encoding="utf-8")
+        assert "- A" in text and "- B" in text and "- C" in text
+
+    def test_unassigned_videos_are_omitted(self, tmp_path, monkeypatch):
+        # 分類がタイムアウトした動画を勝手にどこかへ入れないこと
+        out = self._setup(tmp_path, monkeypatch)
+        with patch.object(categorize, "_summarize_chunk", return_value="- まとめ"):
+            categorize._summarize_categories("CH", self.ITEMS, {"a.md": "服装"},
+                                             self.CATS, "u", "m")
+        assert "全1本" in (out / "index.md").read_text(encoding="utf-8")
+
+
 class TestWriteOutputs:
     def test_category_file_lists_member_videos(self, tmp_path, monkeypatch):
         monkeypatch.setattr(categorize, "SUMMARIES_DIR", tmp_path / "summaries")
