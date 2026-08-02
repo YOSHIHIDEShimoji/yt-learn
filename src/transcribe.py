@@ -704,15 +704,25 @@ def _filter_by_range(videos: list, channel_name: str, since_video: str = None,
 # ── ダウンロード ──────────────────────────────────────────────────────────────
 
 # 360p は format 18（映像+音声が単一ファイル）。マージ不要でDLが速く、実測で最も安定する。
-# それ以上の画質は映像と音声が別ストリームなので yt-dlp にマージさせる（ffmpeg 必須）。
-# いずれも音声を含むため、**同じファイルを Whisper の入力にそのまま使える**＝
+# それ以上の画質は映像と音声が別ストリームなので yt-dlp にマージさせる（ffmpeg 必須。
+# WSL には ffmpeg が入っていないので実質 360p 専用と思ってよい）。
+# combined を含むため **同じファイルを Whisper の入力にそのまま使える** ＝
 # 納品用の動画を落としても YouTube への問い合わせ回数は 1 本あたり 1 回のまま増えない。
+#
+# 末尾は必ず音声のみにフォールバックさせる。combined が無い動画で「フォーマットが無い」と
+# 失敗させると、動画が取れないだけでなく**文字起こしまで落とす**ことになるため。
+# その場合は動画ファイルが手に入らないだけで、テキストの納品物は揃う。
+_AUDIO_FALLBACK = "bestaudio[ext=m4a]/bestaudio[ext=webm]/bestaudio"
 _VIDEO_FORMATS = {
-    "360p": "18/best[height<=?360]/best",
-    "720p": "bestvideo[height<=?720]+bestaudio/best[height<=?720]/best",
-    "1080p": "bestvideo[height<=?1080]+bestaudio/best[height<=?1080]/best",
-    "best": "bestvideo+bestaudio/best",
+    "360p": f"18/best[height<=?360][acodec!=none]/best[acodec!=none]/{_AUDIO_FALLBACK}",
+    "720p": f"bestvideo[height<=?720]+bestaudio/best[height<=?720][acodec!=none]/{_AUDIO_FALLBACK}",
+    "1080p": f"bestvideo[height<=?1080]+bestaudio/best[height<=?1080][acodec!=none]/{_AUDIO_FALLBACK}",
+    "best": f"bestvideo+bestaudio/best[acodec!=none]/{_AUDIO_FALLBACK}",
 }
+
+# 納品フォルダに置いてよいコンテナ。音声フォールバックが効いた動画を
+# 動画フォルダに混ぜないための判定に使う
+_VIDEO_SUFFIXES = (".mp4", ".mkv")
 
 
 def _download_audio(url: str, out_dir: str, video_quality: str = None) -> str:
@@ -1035,6 +1045,24 @@ def _deliver_video_dir(channel_name: str) -> Path:
     return DELIVER_DIR / _sanitize(channel_name) / "videos"
 
 
+def _save_deliver_video(channel_name: str, vid_id: str, media_path: str) -> bool:
+    """DLしたファイルが動画なら納品用ディレクトリへ退避する。
+
+    音声フォールバックが効いた動画（combined フォーマットが無い）では音声しか
+    落ちてこない。それを動画フォルダに混ぜないよう拡張子で弾く。
+    """
+    src = Path(media_path)
+    if src.suffix not in _VIDEO_SUFFIXES:
+        _err(f"[warn] {vid_id}: 動画フォーマットが無く音声のみ取得 → 動画は納品対象外")
+        return False
+    vdir = _deliver_video_dir(channel_name)
+    vdir.mkdir(parents=True, exist_ok=True)
+    dest = vdir / f"{vid_id}{src.suffix}"
+    shutil.copy2(src, dest)
+    _err(f"[video] {dest.name} ({dest.stat().st_size / 1024 / 1024:.0f}MB)")
+    return True
+
+
 def _read_info_json(tmpdir: str, vid_id: str) -> dict:
     """yt-dlp が書いた <id>.info.json から投稿日・尺・再生数を拾う。
 
@@ -1085,11 +1113,7 @@ def _process_url(url: str, channel_name: str, lang: str = "ja", title: str = Non
         audio_path = _download_audio(url, tmpdir, video_quality=video_quality)
         if video_quality:
             # tmpdir は finally で消えるので、文字起こしの前に納品用へ退避しておく
-            vdir = _deliver_video_dir(channel_name)
-            vdir.mkdir(parents=True, exist_ok=True)
-            dest = vdir / f"{vid_id}{Path(audio_path).suffix}"
-            shutil.copy2(audio_path, dest)
-            _err(f"[video] {dest.name} ({dest.stat().st_size / 1024 / 1024:.0f}MB)")
+            _save_deliver_video(channel_name, vid_id, audio_path)
         text = _transcribe(audio_path, lang, model_size=model_size)
         saved = _save_transcript(channel_name, title, url, text, output_dir=output_dir, model_size=model_size)
 
@@ -1256,9 +1280,7 @@ def _download_channel_to_queue(
             if video_quality:
                 # drain-queue は文字起こし後に queue のファイルを消す。360p では
                 # 音声と動画が同一ファイルなので、消される前に納品用へ退避する
-                vdir = _deliver_video_dir(channel_name)
-                vdir.mkdir(parents=True, exist_ok=True)
-                shutil.copy2(audio_path, vdir / f"{vid_id}{Path(audio_path).suffix}")
+                _save_deliver_video(channel_name, vid_id, audio_path)
             meta = {
                 "title": v["title"],
                 "url": v["url"],

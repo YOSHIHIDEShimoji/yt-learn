@@ -828,6 +828,51 @@ class TestVideoQualityDownload:
     def test_higher_qualities_merge_video_and_audio(self):
         assert "+bestaudio" in transcribe._VIDEO_FORMATS["720p"]
 
+    @pytest.mark.parametrize("quality", ["360p", "720p", "1080p", "best"])
+    def test_every_quality_falls_back_to_audio_only(self, quality):
+        # combined フォーマットが無い動画で「フォーマットが無い」と失敗させると、
+        # 動画だけでなく文字起こしまで落ちる。必ず音声で拾えること
+        assert transcribe._VIDEO_FORMATS[quality].endswith(transcribe._AUDIO_FALLBACK)
+
+
+class TestSaveDeliverVideo:
+    def _setup(self, tmp_path, monkeypatch):
+        monkeypatch.setattr(transcribe, "DELIVER_DIR", tmp_path / "deliver")
+
+    def test_saves_mp4(self, tmp_path, monkeypatch):
+        self._setup(tmp_path, monkeypatch)
+        src = tmp_path / "a.mp4"
+        src.write_bytes(b"video")
+        assert transcribe._save_deliver_video("CH", "vid1", str(src)) is True
+        assert (tmp_path / "deliver" / "CH" / "videos" / "vid1.mp4").read_bytes() == b"video"
+
+    @pytest.mark.parametrize("ext", [".m4a", ".webm", ".opus"])
+    def test_rejects_audio_only_results(self, tmp_path, monkeypatch, ext):
+        # 音声フォールバックが効いた動画を「動画」フォルダに混ぜないこと
+        self._setup(tmp_path, monkeypatch)
+        src = tmp_path / f"a{ext}"
+        src.write_bytes(b"audio")
+        assert transcribe._save_deliver_video("CH", "vid1", str(src)) is False
+        assert not (tmp_path / "deliver").exists()
+
+    def test_transcription_still_proceeds_when_video_unavailable(self, tmp_path, monkeypatch):
+        # 動画が取れなくてもテキストの納品物は揃うこと
+        monkeypatch.setattr(transcribe, "TRANSCRIPTS_DIR", tmp_path / "transcripts")
+        monkeypatch.setattr(transcribe, "DELIVER_DIR", tmp_path / "deliver")
+        audio = tmp_path / "only.m4a"
+        audio.write_bytes(b"audio")
+        with patch.object(transcribe, "_download_audio", return_value=str(audio)), \
+             patch.object(transcribe, "_transcribe", return_value="文字起こし"), \
+             patch.object(transcribe, "_inject_core_summary"), \
+             patch.object(transcribe, "_copy_file_to_drive"), \
+             patch("tempfile.mkdtemp", return_value=str(tmp_path / "tmp")), \
+             patch("shutil.rmtree"):
+            ok = transcribe._process_url("https://youtu.be/newvid", "CH", title="動画",
+                                         video_quality="360p")
+        assert ok is True
+        assert (tmp_path / "transcripts" / "CH" / "動画.md").exists()
+        assert not (tmp_path / "deliver").exists()
+
     def test_audio_only_format_used_when_quality_is_none(self, tmp_path, monkeypatch):
         captured = {}
 
