@@ -17,6 +17,7 @@ BASE_DIR = Path(__file__).parent.parent.resolve()
 TRANSCRIPTS_DIR = BASE_DIR / "transcripts"
 CACHE_DIR = BASE_DIR / "cache"
 QUEUE_DIR = BASE_DIR / "queue"
+DELIVER_DIR = BASE_DIR / "deliver"
 CHANNELS_FILE = BASE_DIR / "channels.txt"
 COOKIES_FILE = BASE_DIR / "cookies.txt"
 
@@ -547,7 +548,174 @@ def _sort_by_popularity(videos: list, channel_name: str, sample_size: int) -> li
     return sorted(videos, key=_key, reverse=True)
 
 
-def _download_audio(url: str, out_dir: str) -> str:
+# ── 範囲指定（動画基準・日付基準） ────────────────────────────────────────────
+#
+# チャンネルの /videos タブは常に新着順（降順）で返る。2026-08 実測:
+#   index 183 = 2024-07-20 / index 300 = 2020-11-08 / index 420 = 2019-05-15
+# この性質があるので、
+#   ・動画指定（--since-video / --until-video）は「リスト内の位置」でスライスするだけで
+#     済み、追加のネットワーク呼び出しが一切要らない
+#   ・日付指定（--after / --before）は二分探索で境界インデックスだけ求めればよく、
+#     全件の日付取得（= 確実にレートリミットで破綻する）を回避できる
+# flat 抽出は upload_date / timestamp を返さない（実測: 421件すべて None）ため日付は
+# 個別に取りに行くしかない。だからこそ取得回数を log2(N) ≒ 9 回に抑える。
+
+def _date_cache_path(channel_name: str) -> Path:
+    return CACHE_DIR / f"{_sanitize(channel_name)}_date_cache.json"
+
+
+def _load_date_cache(channel_name: str) -> dict:
+    p = _date_cache_path(channel_name)
+    if p.exists():
+        return json.loads(p.read_text(encoding="utf-8"))
+    return {}
+
+
+def _save_date_cache(channel_name: str, cache: dict) -> None:
+    p = _date_cache_path(channel_name)
+    p.parent.mkdir(parents=True, exist_ok=True)
+    p.write_text(json.dumps(cache, ensure_ascii=False, indent=2), encoding="utf-8")
+
+
+def _fetch_upload_date(video_id: str) -> str | None:
+    """単一動画の投稿日を YYYY-MM-DD で返す。取得できなければ None。"""
+    url = f"https://www.youtube.com/watch?v={video_id}"
+    ydl_opts = {"quiet": True, "no_warnings": True, "skip_download": True,
+                "logger": _TqdmLogger(), "sleep_interval_requests": 1.0,
+                "ignore_no_formats_error": True,
+                "extractor_args": {"youtube": {**_web_client_args()}},
+                **_cookie_opts()}
+    try:
+        info = _yt_extract_with_retry(ydl_opts, url, download=False)
+    except Exception:
+        return None
+    raw = info.get("upload_date") or ""
+    if len(raw) != 8:
+        return None
+    return f"{raw[:4]}-{raw[4:6]}-{raw[6:]}"
+
+
+def _upload_date_at(videos: list, i: int, channel_name: str, cache: dict,
+                    lo: int = 0, hi: int = None) -> tuple[str | None, int]:
+    """videos[i] 付近で投稿日が取れる動画を探し (投稿日, その動画の index) を返す。
+
+    メンバー限定動画は日付が取れない（このチャンネルでは新しい側の43%が該当）。
+    二分探索の途中でそれに当たると境界が求まらなくなるため近傍で代用するが、
+    **代用したときは「どの index の日付か」も返す**。代用元の index を判定点に
+    使わないと、たとえば「境界より古い側の動画の日付」を mid の日付とみなして
+    しまい、境界が実際より新しい側にずれる。
+    探索は [lo, hi) の内側に限る。外に出ると二分探索が収束しなくなるため。
+    """
+    hi = len(videos) if hi is None else hi
+    for offset in (0, 1, -1, 2, -2, 3, -3, 4, -4, 5, -5):
+        j = i + offset
+        if not lo <= j < hi:
+            continue
+        vid = _extract_video_id(videos[j]["url"])
+        if vid in cache:
+            if cache[vid]:
+                return cache[vid], j
+            continue
+        d = _fetch_upload_date(vid)
+        cache[vid] = d
+        _save_date_cache(channel_name, cache)
+        time.sleep(1.5)
+        if d:
+            return d, j
+    return None, -1
+
+
+def _resolve_date_index(videos: list, channel_name: str, target: str,
+                        inclusive: bool = True) -> int:
+    """降順リストで「target より新しい側」が終わる位置 k を二分探索で返す。
+
+    inclusive=True なら target 当日も新しい側に含める（videos[0:k] が date >= target）。
+    inclusive=False なら date > target が videos[0:k]。
+    """
+    cache = _load_date_cache(channel_name)
+    lo, hi, probes = 0, len(videos), 0
+    while lo < hi:
+        mid = (lo + hi) // 2
+        d, j = _upload_date_at(videos, mid, channel_name, cache, lo, hi)
+        probes += 1
+        if d is None:
+            # 窓内のどこからも日付が取れない。判定不能なので窓を1つ詰めて前進させる
+            # （安全側＝対象を広めに残す方向へ倒す）
+            lo = mid + 1
+            continue
+        # 判定は mid ではなく「実際に日付が取れた index j」で行う。
+        # j は必ず [lo, hi) の内側なので lo/hi は毎回真に狭まり、必ず収束する。
+        if (d >= target) if inclusive else (d > target):
+            lo = j + 1
+        else:
+            hi = j
+    _save_date_cache(channel_name, cache)
+    _err(f"[range] 日付境界 {target} を {probes} 回の取得で解決 → index {lo}")
+    return lo
+
+
+def _resolve_video_index(videos: list, ref: str) -> int:
+    """URL または動画IDが videos の何番目かを返す。見つからなければ -1。"""
+    ref_id = _extract_video_id(ref)
+    for i, v in enumerate(videos):
+        if _extract_video_id(v["url"]) == ref_id:
+            return i
+    return -1
+
+
+def _filter_by_range(videos: list, channel_name: str, since_video: str = None,
+                     until_video: str = None, after: str = None, before: str = None,
+                     exclusive: bool = False) -> list:
+    """新着順リストを範囲で絞り込む。
+
+    since_video / after … その動画・日付「以降」（＝より新しい側）を残す
+    until_video / before … その動画・日付「以前」（＝より古い側）を残す
+    exclusive … 境界に指定した動画それ自身を含めない（日付指定には影響しない）
+    """
+    start, end = 0, len(videos)  # videos[start:end] が対象
+
+    if since_video:
+        i = _resolve_video_index(videos, since_video)
+        if i < 0:
+            raise ValueError(f"--since-video の動画がチャンネル一覧にありません: {since_video}")
+        end = min(end, i if exclusive else i + 1)
+        _err(f"[range] since-video {since_video} → index {i}")
+
+    if until_video:
+        i = _resolve_video_index(videos, until_video)
+        if i < 0:
+            raise ValueError(f"--until-video の動画がチャンネル一覧にありません: {until_video}")
+        start = max(start, i + 1 if exclusive else i)
+        _err(f"[range] until-video {until_video} → index {i}")
+
+    if after:
+        end = min(end, _resolve_date_index(videos, channel_name, after, inclusive=True))
+    if before:
+        start = max(start, _resolve_date_index(videos, channel_name, before, inclusive=False))
+
+    if start >= end:
+        _err(f"[range] 範囲が空です (start={start}, end={end})")
+        return []
+    selected = videos[start:end]
+    _err(f"[range] {len(videos)} 件中 {len(selected)} 件を選択 (index {start}..{end - 1})")
+    return selected
+
+
+# ── ダウンロード ──────────────────────────────────────────────────────────────
+
+# 360p は format 18（映像+音声が単一ファイル）。マージ不要でDLが速く、実測で最も安定する。
+# それ以上の画質は映像と音声が別ストリームなので yt-dlp にマージさせる（ffmpeg 必須）。
+# いずれも音声を含むため、**同じファイルを Whisper の入力にそのまま使える**＝
+# 納品用の動画を落としても YouTube への問い合わせ回数は 1 本あたり 1 回のまま増えない。
+_VIDEO_FORMATS = {
+    "360p": "18/best[height<=?360]/best",
+    "720p": "bestvideo[height<=?720]+bestaudio/best[height<=?720]/best",
+    "1080p": "bestvideo[height<=?1080]+bestaudio/best[height<=?1080]/best",
+    "best": "bestvideo+bestaudio/best",
+}
+
+
+def _download_audio(url: str, out_dir: str, video_quality: str = None) -> str:
     import yt_dlp, time
     # クライアントの指定順。ios/web/mweb は bot 検知が緩く長く使えていたが、
     # YouTube 側の変更で「Requested format is not available」を返すようになることがある
@@ -561,11 +729,19 @@ def _download_audio(url: str, out_dir: str) -> str:
         ["android_vr", "web"],    # attempt 1: android_vr（実測で現行有効）
         None,                     # attempt 2: yt-dlp の既定選択に委ねる
     ]
+    # video_quality 指定時は音声つきの動画を落とし、それをそのまま Whisper に食わせる。
+    # format 18 の音声は AAC 96kbps だが Whisper は 16kHz mono に落として使うため
+    # 文字起こし精度への影響は無い。
+    fmt = (_VIDEO_FORMATS[video_quality] if video_quality
+           else "bestaudio[ext=m4a]/bestaudio[ext=webm]/bestaudio/best")
     for attempt in range(3):
         ydl_opts = {
             # 音声を優先（m4a→webm→任意のbestaudio）。最後の保険で best も許容
-            "format": "bestaudio[ext=m4a]/bestaudio[ext=webm]/bestaudio/best",
+            "format": fmt,
             "outtmpl": os.path.join(out_dir, "%(id)s.%(ext)s"),
+            # 投稿日・再生数・尺をタダで手に入れる。DL時には情報を既に持っているので
+            # 書き出しに追加の問い合わせは発生しない（納品ファイル名の日付に使う）
+            "writeinfojson": True,
             "quiet": True,
             "no_warnings": True,
             "logger": _TqdmLogger(),
@@ -589,7 +765,10 @@ def _download_audio(url: str, out_dir: str) -> str:
                 time.sleep(10)
                 continue
             raise
-    for ext in (".m4a", ".webm", ".opus", ".mp4"):
+    # 動画指定時は動画コンテナを先に拾う（音声を内包しているので Whisper 入力を兼ねる）
+    exts = ((".mp4", ".mkv", ".webm", ".m4a", ".opus") if video_quality
+            else (".m4a", ".webm", ".opus", ".mp4"))
+    for ext in exts:
         for f in Path(out_dir).iterdir():
             if f.suffix == ext:
                 return str(f)
@@ -852,9 +1031,37 @@ def _inject_core_summary(md_path: Path) -> None:
 
 # ── 処理エントリポイント ───────────────────────────────────────────────────────
 
+def _deliver_video_dir(channel_name: str) -> Path:
+    return DELIVER_DIR / _sanitize(channel_name) / "videos"
+
+
+def _read_info_json(tmpdir: str, vid_id: str) -> dict:
+    """yt-dlp が書いた <id>.info.json から投稿日・尺・再生数を拾う。
+
+    納品ファイル名の日付や並び順に使う。取れなくても処理は止めない
+    （info.json が無い＝古いバージョンで処理した動画、というだけなので）。
+    """
+    p = Path(tmpdir) / f"{vid_id}.info.json"
+    if not p.exists():
+        return {}
+    try:
+        info = json.loads(p.read_text(encoding="utf-8"))
+    except (json.JSONDecodeError, OSError):
+        return {}
+    raw = info.get("upload_date") or ""
+    out = {}
+    if len(raw) == 8:
+        out["upload_date"] = f"{raw[:4]}-{raw[4:6]}-{raw[6:]}"
+    if info.get("duration"):
+        out["duration"] = int(info["duration"])
+    if info.get("view_count"):
+        out["view_count"] = int(info["view_count"])
+    return out
+
+
 def _process_url(url: str, channel_name: str, lang: str = "ja", title: str = None,
                  output_dir: Path = None, model_size: str = WHISPER_MODEL,
-                 force: bool = False) -> bool:
+                 force: bool = False, video_quality: str = None) -> bool:
     vid_id = _extract_video_id(url)
     index = _load_index(channel_name)
 
@@ -875,7 +1082,14 @@ def _process_url(url: str, channel_name: str, lang: str = "ja", title: str = Non
     tmpdir = tempfile.mkdtemp(prefix="transcribe_")
     try:
         _err(f"[download] {url}")
-        audio_path = _download_audio(url, tmpdir)
+        audio_path = _download_audio(url, tmpdir, video_quality=video_quality)
+        if video_quality:
+            # tmpdir は finally で消えるので、文字起こしの前に納品用へ退避しておく
+            vdir = _deliver_video_dir(channel_name)
+            vdir.mkdir(parents=True, exist_ok=True)
+            dest = vdir / f"{vid_id}{Path(audio_path).suffix}"
+            shutil.copy2(audio_path, dest)
+            _err(f"[video] {dest.name} ({dest.stat().st_size / 1024 / 1024:.0f}MB)")
         text = _transcribe(audio_path, lang, model_size=model_size)
         saved = _save_transcript(channel_name, title, url, text, output_dir=output_dir, model_size=model_size)
 
@@ -887,6 +1101,7 @@ def _process_url(url: str, channel_name: str, lang: str = "ja", title: str = Non
             "url": url,
             "file": str(saved),
             "transcribed_at": date.today().isoformat(),
+            **_read_info_json(tmpdir, vid_id),
         }
         _save_index(channel_name, index)
         return True
@@ -897,10 +1112,20 @@ def _process_url(url: str, channel_name: str, lang: str = "ja", title: str = Non
 def _process_channel(channel_name: str, channel_url: str, lang: str = "ja", limit: int = 0,
                      sort: str = "date", popular_sample: int = 0,
                      model_size: str = WHISPER_MODEL, cache_only: bool = False,
-                     force: bool = False) -> int:
+                     force: bool = False, since_video: str = None, until_video: str = None,
+                     after: str = None, before: str = None, exclusive: bool = False,
+                     video_quality: str = None, dry_run: bool = False) -> int:
     _err(f"[channel] {channel_name}: 動画リスト取得中... (sort={sort})")
     videos = _get_channel_videos(channel_url)
     _err(f"[channel] {len(videos)} 件の動画を発見")
+
+    # 範囲の絞り込みは人気順ソートより先に行う。
+    # 位置スライスは「新着順に並んでいる」ことが前提なので、並べ替え後では成立しない。
+    if any([since_video, until_video, after, before]):
+        videos = _filter_by_range(videos, channel_name, since_video, until_video,
+                                  after, before, exclusive)
+        if not videos:
+            return 0
 
     if sort == "popular":
         videos = _sort_by_popularity(videos, channel_name, popular_sample)
@@ -920,11 +1145,19 @@ def _process_channel(channel_name: str, channel_url: str, lang: str = "ja", limi
     if limit > 0:
         videos = videos[:limit]
 
+    if dry_run:
+        _err(f"[dry-run] {channel_name}: 対象 {len(videos)} 件")
+        for i, v in enumerate(videos, 1):
+            print(f"{i:4d}  {_extract_video_id(v['url'])}  {v['title']}")
+        _err("[dry-run] メンバー限定はDL時にしか判定できないため、実際の取得数はこれ以下になる")
+        return 0
+
     processed = 0
     for i, v in enumerate(videos, 1):
         _err(f"\n[{i}/{len(videos)}] {v['title']}")
         try:
-            if _process_url(v["url"], channel_name, lang, title=v["title"], model_size=model_size, force=force):
+            if _process_url(v["url"], channel_name, lang, title=v["title"],
+                            model_size=model_size, force=force, video_quality=video_quality):
                 processed += 1
                 index = _load_index(channel_name)
         except Exception as e:
@@ -932,6 +1165,14 @@ def _process_channel(channel_name: str, channel_url: str, lang: str = "ja", limi
             if "rate-limited" in msg:
                 _err(f"[warn] {channel_name}: レートリミット → このチャンネルの処理を中断")
                 break
+            if _is_members_only_error(msg):
+                # 次回以降スキップできるよう view キャッシュに sentinel を刻む。
+                # このチャンネルは新しい側の約半分がメンバー限定なので、毎回DLを
+                # 試みると無駄な問い合わせでレートリミットを浪費する。
+                cache[_extract_video_id(v["url"])] = -1
+                _save_view_cache(channel_name, cache)
+                _err(f"[warn] {v['title']}: メンバー限定 → スキップ（次回以降は判定不要）")
+                continue
             if "confirm your age" in msg or "age-restricted" in msg:
                 _err(f"[warn] {v['title']}: 年齢制限 → スキップ")
                 continue
@@ -1004,7 +1245,11 @@ def _download_channel_to_queue(
                 "channel": channel_name,
                 "lang": lang,
                 "queued_at": datetime.now().isoformat(timespec="seconds"),
+                **_read_info_json(str(q_dir), vid_id),
             }
+            # info.json は meta.json に畳んでから消す。queue/ に余計なファイルを
+            # 残すと drain-queue の走査対象が無駄に増える
+            (q_dir / f"{vid_id}.info.json").unlink(missing_ok=True)
             (q_dir / f"{vid_id}.meta.json").write_text(
                 json.dumps(meta, ensure_ascii=False, indent=2), encoding="utf-8"
             )
@@ -1097,6 +1342,7 @@ def _drain_queue_all(model_size: str = WHISPER_MODEL,
                 "url": meta["url"],
                 "file": str(saved),
                 "transcribed_at": date.today().isoformat(),
+                **{k: meta[k] for k in ("upload_date", "duration", "view_count") if k in meta},
             }
             _save_index(meta["channel"], index)
             audio_path.unlink(missing_ok=True)
@@ -1224,6 +1470,14 @@ examples:
   python transcribe.py channel "メンタリストDAIGO" --sort popular --cache-only  # 再生数キャッシュのみ構築
   python transcribe.py channel "メンタリストDAIGO" --sort popular --popular-sample 50 --limit 10
 
+  # 範囲を絞る（/videos タブが新着順である性質を使う。動画指定は追加の通信ゼロ）
+  python transcribe.py channel "八田エミリの日常" --url https://www.youtube.com/@hatta_emily \
+      --since-video pLXK5N3Sy4A --dry-run          # まず対象を数える
+  python transcribe.py channel "八田エミリの日常" --url https://www.youtube.com/@hatta_emily \
+      --since-video pLXK5N3Sy4A --keep-video       # 動画も保存しつつ文字起こし
+  python transcribe.py channel "メンタリスト DaiGo" --after 2025-01-01
+  python transcribe.py channel "メンタリスト DaiGo" --before 2020-12-31 --limit 10
+
   # 全チャンネル一括
   python transcribe.py all --sort popular --limit 20
   python transcribe.py all --sort popular --cache-only
@@ -1262,7 +1516,9 @@ AI要約は別スクリプト:
     p_proc.add_argument("--force", action="store_true", help="処理済みでも再度文字起こしする")
 
     p_ch = sub.add_parser("channel", help="チャンネルの全動画を処理")
-    p_ch.add_argument("name", help="channels.txt のチャンネル名")
+    p_ch.add_argument("name", help="channels.txt のチャンネル名（--url 指定時は任意の名前でよい）")
+    p_ch.add_argument("--url", help="channels.txt に未登録のチャンネルを名前+URLで直接処理する"
+                                    "（単発の作業でチャンネルを常設登録したくない場合に使う）")
     p_ch.add_argument("--model", default=WHISPER_MODEL,
                       choices=["tiny", "base", "small", "medium", "large", "large-v2", "large-v3", "large-v3-turbo"])
     p_ch.add_argument("--limit", type=int, default=0, help="最大処理動画数（0=全件）")
@@ -1276,6 +1532,20 @@ AI要約は別スクリプト:
     p_ch.add_argument("--download-only", action="store_true",
                       help="音声を queue/ にDLのみ行い文字起こしはしない（autonomous.sh 用）")
     p_ch.add_argument("--force", action="store_true", help="処理済みでも再度文字起こしする")
+    p_ch.add_argument("--since-video", metavar="URL|ID",
+                      help="この動画以降（＝これより新しい動画）だけを対象にする。既定で指定動画自身を含む")
+    p_ch.add_argument("--until-video", metavar="URL|ID",
+                      help="この動画以前（＝これより古い動画）だけを対象にする。既定で指定動画自身を含む")
+    p_ch.add_argument("--after", metavar="YYYY-MM-DD", help="この日以降に投稿された動画だけを対象にする")
+    p_ch.add_argument("--before", metavar="YYYY-MM-DD", help="この日以前に投稿された動画だけを対象にする")
+    p_ch.add_argument("--exclusive", action="store_true",
+                      help="--since-video / --until-video に指定した動画自身を含めない")
+    p_ch.add_argument("--keep-video", action="store_true",
+                      help="動画ファイルも deliver/{channel}/videos/ に保存する（文字起こしと同じDLを使うため追加の問い合わせは発生しない）")
+    p_ch.add_argument("--video-quality", choices=list(_VIDEO_FORMATS), default="360p",
+                      help="--keep-video 時の画質 (default: 360p。360p はマージ不要で最も速い)")
+    p_ch.add_argument("--dry-run", action="store_true",
+                      help="対象になる動画の一覧を表示するだけで何もダウンロードしない")
 
     p_all = sub.add_parser("all", help="全チャンネルを処理")
     p_all.add_argument("--model", default=WHISPER_MODEL,
@@ -1285,6 +1555,13 @@ AI要約は別スクリプト:
     p_all.add_argument("--popular-sample", type=int, default=200)
     p_all.add_argument("--cache-only", action="store_true")
     p_all.add_argument("--force", action="store_true", help="処理済みでも再度文字起こしする")
+    p_all.add_argument("--after", metavar="YYYY-MM-DD", help="この日以降に投稿された動画だけを対象にする")
+    p_all.add_argument("--before", metavar="YYYY-MM-DD", help="この日以前に投稿された動画だけを対象にする")
+    p_all.add_argument("--keep-video", action="store_true",
+                       help="動画ファイルも deliver/{channel}/videos/ に保存する")
+    p_all.add_argument("--video-quality", choices=list(_VIDEO_FORMATS), default="360p")
+    p_all.add_argument("--dry-run", action="store_true",
+                       help="対象になる動画の一覧を表示するだけで何もダウンロードしない")
 
     p_drain = sub.add_parser("drain-queue", help="queue/ の音声を文字起こし（autonomous.sh 用）")
     p_drain.add_argument("--model", default=WHISPER_MODEL,
@@ -1338,19 +1615,28 @@ AI要約は別スクリプト:
             _process_url(url, args.channel, lang, output_dir=output_dir, model_size=args.model, force=args.force)
 
     elif args.cmd == "channel":
-        channels = _load_channels()
-        if args.name not in channels:
-            _err(f"[error] '{args.name}' が channels.txt に見つかりません")
-            sys.exit(1)
-        info = channels[args.name]
+        if args.url:
+            info = {"url": args.url, "lang": "ja"}
+        else:
+            channels = _load_channels()
+            if args.name not in channels:
+                _err(f"[error] '{args.name}' が channels.txt に見つかりません")
+                _err("  常設登録せずに処理するなら --url でチャンネルURLを直接指定する")
+                sys.exit(1)
+            info = channels[args.name]
         if args.download_only:
             _download_channel_to_queue(
                 args.name, info["url"], info["lang"], args.limit, args.sort, args.popular_sample
             )
         else:
             _process_channel(args.name, info["url"], info["lang"], args.limit, args.sort,
-                             args.popular_sample, args.model, args.cache_only, args.force)
-            _git_push_cache()
+                             args.popular_sample, args.model, args.cache_only, args.force,
+                             since_video=args.since_video, until_video=args.until_video,
+                             after=args.after, before=args.before, exclusive=args.exclusive,
+                             video_quality=args.video_quality if args.keep_video else None,
+                             dry_run=args.dry_run)
+            if not args.dry_run:
+                _git_push_cache()
 
     elif args.cmd == "drain-queue":
         count = _drain_queue_all(args.model)
@@ -1374,8 +1660,13 @@ AI要約は別スクリプト:
             _err("[warn] channels.txt にチャンネルが登録されていません")
             sys.exit(0)
         for name, info in channels.items():
-            _process_channel(name, info["url"], info["lang"], args.limit, args.sort, args.popular_sample, args.model, args.cache_only, args.force)
-        _git_push_cache()
+            _process_channel(name, info["url"], info["lang"], args.limit, args.sort,
+                             args.popular_sample, args.model, args.cache_only, args.force,
+                             after=args.after, before=args.before,
+                             video_quality=args.video_quality if args.keep_video else None,
+                             dry_run=args.dry_run)
+        if not args.dry_run:
+            _git_push_cache()
 
 
 if __name__ == "__main__":

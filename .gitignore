@@ -7,7 +7,9 @@ logs/loop/
 logs/benchmark/
 logs/autonomous/
 logs/transcribe/
+logs/categorize/
 queue/
+deliver/
 __pycache__/
 *.wav
 *.tmp

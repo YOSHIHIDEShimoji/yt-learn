@@ -698,3 +698,214 @@ class TestGenerateCoreSummaryOllama:
         with patch.object(transcribe, "_call_ollama", return_value="## ポイント\n- テスト") as mock_ollama:
             transcribe._generate_core_summary("タイトル", "本文")
         assert mock_ollama.call_args[0][2] == "custom-model:latest"
+
+
+def _videos(n):
+    """新着順（降順）に並んだ動画リストを作る。index が小さいほど新しい。"""
+    return [{"title": f"動画{i}", "url": f"https://www.youtube.com/watch?v=vid{i:03d}"}
+            for i in range(n)]
+
+
+class TestResolveVideoIndex:
+    def test_finds_by_id(self):
+        assert transcribe._resolve_video_index(_videos(5), "vid003") == 3
+
+    def test_finds_by_watch_url(self):
+        vs = _videos(5)
+        assert transcribe._resolve_video_index(vs, "https://www.youtube.com/watch?v=vid002") == 2
+
+    def test_finds_by_short_url(self):
+        # youtu.be 形式でも同じ動画として解決できること
+        assert transcribe._resolve_video_index(_videos(5), "https://youtu.be/vid004") == 4
+
+    def test_returns_minus_one_when_absent(self):
+        assert transcribe._resolve_video_index(_videos(5), "nosuchvid") == -1
+
+
+class TestFilterByRange:
+    def _ids(self, videos):
+        return [transcribe._extract_video_id(v["url"]) for v in videos]
+
+    def test_since_video_keeps_that_video_and_newer(self):
+        # 新着順リストなので「以降(=より新しい)」は先頭側。既定は境界を含む
+        out = transcribe._filter_by_range(_videos(10), "CH", since_video="vid003")
+        assert self._ids(out) == ["vid000", "vid001", "vid002", "vid003"]
+
+    def test_since_video_exclusive_drops_the_boundary_video(self):
+        out = transcribe._filter_by_range(_videos(10), "CH", since_video="vid003", exclusive=True)
+        assert self._ids(out) == ["vid000", "vid001", "vid002"]
+
+    def test_until_video_keeps_that_video_and_older(self):
+        out = transcribe._filter_by_range(_videos(6), "CH", until_video="vid003")
+        assert self._ids(out) == ["vid003", "vid004", "vid005"]
+
+    def test_until_video_exclusive_drops_the_boundary_video(self):
+        out = transcribe._filter_by_range(_videos(6), "CH", until_video="vid003", exclusive=True)
+        assert self._ids(out) == ["vid004", "vid005"]
+
+    def test_since_and_until_intersect(self):
+        out = transcribe._filter_by_range(_videos(10), "CH",
+                                          since_video="vid006", until_video="vid003")
+        assert self._ids(out) == ["vid003", "vid004", "vid005", "vid006"]
+
+    def test_no_filter_returns_everything(self):
+        out = transcribe._filter_by_range(_videos(4), "CH")
+        assert len(out) == 4
+
+    def test_empty_range_returns_empty_list(self):
+        # until が since より新しい側にある＝交差なし
+        out = transcribe._filter_by_range(_videos(10), "CH",
+                                          since_video="vid002", until_video="vid007")
+        assert out == []
+
+    def test_unknown_since_video_raises(self):
+        with pytest.raises(ValueError, match="since-video"):
+            transcribe._filter_by_range(_videos(5), "CH", since_video="nosuchvid")
+
+    def test_unknown_until_video_raises(self):
+        with pytest.raises(ValueError, match="until-video"):
+            transcribe._filter_by_range(_videos(5), "CH", until_video="nosuchvid")
+
+
+class TestResolveDateIndex:
+    # 新着順に並んだ10本。index 0..4 が 2024年、5..9 が 2023年
+    DATES = ["2024-06-01", "2024-05-01", "2024-04-01", "2024-03-01", "2024-02-01",
+             "2023-12-01", "2023-11-01", "2023-10-01", "2023-09-01", "2023-08-01"]
+
+    def _setup(self, tmp_path, monkeypatch, unavailable=()):
+        monkeypatch.setattr(transcribe, "CACHE_DIR", tmp_path / "cache")
+        monkeypatch.setattr(transcribe.time, "sleep", lambda *_: None)
+        calls = []
+
+        def fake_fetch(video_id):
+            calls.append(video_id)
+            i = int(video_id.replace("vid", ""))
+            return None if i in unavailable else self.DATES[i]
+
+        monkeypatch.setattr(transcribe, "_fetch_upload_date", fake_fetch)
+        return calls
+
+    def test_finds_boundary(self, tmp_path, monkeypatch):
+        self._setup(tmp_path, monkeypatch)
+        k = transcribe._resolve_date_index(_videos(10), "CH", "2024-01-01")
+        assert k == 5  # videos[0:5] が 2024-01-01 以降
+
+    def test_boundary_date_is_included_when_inclusive(self, tmp_path, monkeypatch):
+        self._setup(tmp_path, monkeypatch)
+        k = transcribe._resolve_date_index(_videos(10), "CH", "2024-02-01", inclusive=True)
+        assert k == 5  # 当日(index 4)を新しい側に含める
+
+    def test_boundary_date_is_excluded_when_not_inclusive(self, tmp_path, monkeypatch):
+        self._setup(tmp_path, monkeypatch)
+        k = transcribe._resolve_date_index(_videos(10), "CH", "2024-02-01", inclusive=False)
+        assert k == 4  # 当日(index 4)を古い側に落とす
+
+    def test_uses_far_fewer_fetches_than_full_scan(self, tmp_path, monkeypatch):
+        # 二分探索である＝全件取得しない。これがレートリミット回避の肝
+        calls = self._setup(tmp_path, monkeypatch)
+        transcribe._resolve_date_index(_videos(10), "CH", "2024-01-01")
+        assert len(calls) <= 4
+
+    def test_falls_back_to_neighbour_when_video_is_unavailable(self, tmp_path, monkeypatch):
+        # メンバー限定などで日付が取れない動画に当たっても境界が求まること
+        self._setup(tmp_path, monkeypatch, unavailable={2, 3, 4})
+        k = transcribe._resolve_date_index(_videos(10), "CH", "2024-01-01")
+        assert k == 5
+
+    def test_caches_fetched_dates_across_calls(self, tmp_path, monkeypatch):
+        calls = self._setup(tmp_path, monkeypatch)
+        transcribe._resolve_date_index(_videos(10), "CH", "2024-01-01")
+        first = len(calls)
+        transcribe._resolve_date_index(_videos(10), "CH", "2024-01-01")
+        assert len(calls) == first  # 2回目は1件も取りに行かない
+
+
+class TestVideoQualityDownload:
+    def test_360p_uses_single_file_format(self):
+        # format 18 は映像+音声が1ファイル。マージ不要＝ffmpeg 不要で最速
+        assert transcribe._VIDEO_FORMATS["360p"].startswith("18/")
+
+    def test_higher_qualities_merge_video_and_audio(self):
+        assert "+bestaudio" in transcribe._VIDEO_FORMATS["720p"]
+
+    def test_audio_only_format_used_when_quality_is_none(self, tmp_path, monkeypatch):
+        captured = {}
+
+        class FakeYDL:
+            def __init__(self, opts):
+                captured["format"] = opts["format"]
+
+            def __enter__(self):
+                return self
+
+            def __exit__(self, *a):
+                return False
+
+            def download(self, urls):
+                (tmp_path / "abc.m4a").write_bytes(b"x")
+
+        fake_mod = MagicMock()
+        fake_mod.YoutubeDL = FakeYDL
+        monkeypatch.setitem(sys.modules, "yt_dlp", fake_mod)
+        out = transcribe._download_audio("https://youtu.be/abc", str(tmp_path))
+        assert captured["format"].startswith("bestaudio")
+        assert out.endswith(".m4a")
+
+    def test_video_quality_switches_format_and_prefers_video_container(self, tmp_path, monkeypatch):
+        captured = {}
+
+        class FakeYDL:
+            def __init__(self, opts):
+                captured["format"] = opts["format"]
+
+            def __enter__(self):
+                return self
+
+            def __exit__(self, *a):
+                return False
+
+            def download(self, urls):
+                # 動画と音声の両方が残っていても動画コンテナを返すこと
+                (tmp_path / "abc.m4a").write_bytes(b"x")
+                (tmp_path / "abc.mp4").write_bytes(b"x")
+
+        fake_mod = MagicMock()
+        fake_mod.YoutubeDL = FakeYDL
+        monkeypatch.setitem(sys.modules, "yt_dlp", fake_mod)
+        out = transcribe._download_audio("https://youtu.be/abc", str(tmp_path), video_quality="360p")
+        assert captured["format"] == transcribe._VIDEO_FORMATS["360p"]
+        assert out.endswith(".mp4")
+
+
+class TestProcessUrlKeepsVideo:
+    def _setup(self, tmp_path, monkeypatch):
+        monkeypatch.setattr(transcribe, "TRANSCRIPTS_DIR", tmp_path / "transcripts")
+        monkeypatch.setattr(transcribe, "DELIVER_DIR", tmp_path / "deliver")
+
+    def test_video_is_saved_before_tmpdir_is_cleaned(self, tmp_path, monkeypatch):
+        self._setup(tmp_path, monkeypatch)
+        media = tmp_path / "src.mp4"
+        media.write_bytes(b"video-bytes")
+        with patch.object(transcribe, "_download_audio", return_value=str(media)), \
+             patch.object(transcribe, "_transcribe", return_value="text"), \
+             patch.object(transcribe, "_inject_core_summary"), \
+             patch.object(transcribe, "_copy_file_to_drive"), \
+             patch("tempfile.mkdtemp", return_value=str(tmp_path / "tmp")), \
+             patch("shutil.rmtree"):
+            ok = transcribe._process_url("https://youtu.be/newvid", "CH", title="動画",
+                                         video_quality="360p")
+        assert ok is True
+        saved = tmp_path / "deliver" / "CH" / "videos" / "newvid.mp4"
+        assert saved.exists()
+        assert saved.read_bytes() == b"video-bytes"
+
+    def test_no_video_saved_when_quality_not_requested(self, tmp_path, monkeypatch):
+        self._setup(tmp_path, monkeypatch)
+        with patch.object(transcribe, "_download_audio", return_value=str(tmp_path / "a.m4a")), \
+             patch.object(transcribe, "_transcribe", return_value="text"), \
+             patch.object(transcribe, "_inject_core_summary"), \
+             patch.object(transcribe, "_copy_file_to_drive"), \
+             patch("tempfile.mkdtemp", return_value=str(tmp_path / "tmp")), \
+             patch("shutil.rmtree"):
+            transcribe._process_url("https://youtu.be/newvid", "CH", title="動画")
+        assert not (tmp_path / "deliver").exists()

@@ -1,0 +1,232 @@
+import json
+import sys
+from pathlib import Path
+
+import pytest
+
+sys.path.insert(0, str(Path(__file__).parent.parent / "src"))
+import package_delivery as pkg
+
+
+TRANSCRIPT = """# {title}
+
+チャンネル: CH
+URL: https://youtu.be/{vid}
+モデル: large-v3
+処理日時: 2026-08-03 01:00:00
+
+## ポイント
+- 要点その1
+- 要点その2
+
+---
+
+ここが全文。あーとかえーとかが入っている本文。
+"""
+
+
+def _build(tmp_path, monkeypatch, videos, with_video_files=()):
+    """transcripts/ と _index.json を組み立て、モジュールのパスを差し替える。
+
+    videos: [(vid_id, title, upload_date)] / upload_date が None なら日付なし動画
+    """
+    tdir = tmp_path / "transcripts" / "CH"
+    tdir.mkdir(parents=True)
+    index = {}
+    for vid, title, up in videos:
+        md = tdir / f"{title}.md"
+        md.write_text(TRANSCRIPT.format(title=title, vid=vid), encoding="utf-8")
+        entry = {"title": title, "url": f"https://youtu.be/{vid}", "file": str(md),
+                 "transcribed_at": "2026-08-03"}
+        if up:
+            entry["upload_date"] = up
+        index[vid] = entry
+    (tdir / "_index.json").write_text(json.dumps(index, ensure_ascii=False), encoding="utf-8")
+
+    vdir = tmp_path / "deliver" / "CH" / "videos"
+    if with_video_files:
+        vdir.mkdir(parents=True)
+        for vid in with_video_files:
+            (vdir / f"{vid}.mp4").write_bytes(b"v" * 2048)
+
+    monkeypatch.setattr(pkg, "TRANSCRIPTS_DIR", tmp_path / "transcripts")
+    monkeypatch.setattr(pkg, "SUMMARIES_DIR", tmp_path / "summaries")
+    monkeypatch.setattr(pkg, "DELIVER_DIR", tmp_path / "deliver")
+    monkeypatch.setattr(pkg, "CACHE_DIR", tmp_path / "cache")
+    monkeypatch.setattr(pkg, "BASE_DIR", tmp_path)
+
+
+class TestStem:
+    def test_includes_number_date_and_title(self):
+        assert pkg._stem(7, "2026-07-18", "タイトル") == "007_2026-07-18_タイトル"
+
+    def test_omits_date_when_unknown(self):
+        assert pkg._stem(1, "", "タイトル") == "001_タイトル"
+
+    def test_zero_pads_to_three_digits(self):
+        assert pkg._stem(184, "2024-07-20", "T").startswith("184_")
+
+    def test_truncates_long_title(self):
+        stem = pkg._stem(1, "2026-01-01", "あ" * 200)
+        assert len(stem.encode("utf-8")) < 200
+
+    def test_strips_path_separators_from_title(self):
+        assert "/" not in pkg._stem(1, "", "服装/コーデ")
+
+
+class TestLoadEntries:
+    def test_orders_newest_first(self, tmp_path, monkeypatch):
+        _build(tmp_path, monkeypatch, [
+            ("v1", "古い", "2024-01-01"),
+            ("v2", "新しい", "2026-08-01"),
+            ("v3", "中間", "2025-05-05"),
+        ])
+        entries = pkg._load_entries("CH")
+        assert [e["title"] for e in entries] == ["新しい", "中間", "古い"]
+        assert [e["num"] for e in entries] == [1, 2, 3]
+
+    def test_undated_videos_go_last(self, tmp_path, monkeypatch):
+        _build(tmp_path, monkeypatch, [
+            ("v1", "日付なし", None),
+            ("v2", "日付あり", "2025-01-01"),
+        ])
+        entries = pkg._load_entries("CH")
+        assert [e["title"] for e in entries] == ["日付あり", "日付なし"]
+
+    def test_excludes_entries_whose_file_is_missing(self, tmp_path, monkeypatch):
+        _build(tmp_path, monkeypatch, [("v1", "有り", "2025-01-01")])
+        idx_path = tmp_path / "transcripts" / "CH" / "_index.json"
+        index = json.loads(idx_path.read_text(encoding="utf-8"))
+        index["v9"] = {"title": "消えた", "url": "u",
+                       "file": str(tmp_path / "transcripts" / "CH" / "消えた.md"),
+                       "upload_date": "2026-01-01"}
+        idx_path.write_text(json.dumps(index, ensure_ascii=False), encoding="utf-8")
+        entries = pkg._load_entries("CH")
+        assert [e["title"] for e in entries] == ["有り"]
+
+    def test_missing_index_returns_empty(self, tmp_path, monkeypatch):
+        monkeypatch.setattr(pkg, "TRANSCRIPTS_DIR", tmp_path / "transcripts")
+        assert pkg._load_entries("CH") == []
+
+
+class TestSplitTranscript:
+    def test_extracts_points_section(self):
+        points, full = pkg._split_transcript(TRANSCRIPT.format(title="T", vid="v"))
+        assert points.startswith("## ポイント")
+        assert "要点その2" in points
+        assert "ここが全文" not in points
+
+    def test_no_points_returns_empty_head(self):
+        points, full = pkg._split_transcript("# T\n\n---\n\n本文だけ")
+        assert points == ""
+        assert "本文だけ" in full
+
+
+class TestWriteOutputs:
+    def test_points_files_contain_only_points(self, tmp_path, monkeypatch):
+        _build(tmp_path, monkeypatch, [("v1", "動画A", "2026-01-02")])
+        entries = pkg._load_entries("CH")
+        n = pkg._write_points(tmp_path / "out", entries)
+        assert n == 1
+        f = tmp_path / "out" / "001_2026-01-02_動画A.md"
+        text = f.read_text(encoding="utf-8")
+        assert "要点その1" in text
+        assert "ここが全文" not in text
+        assert "投稿日: 2026-01-02" in text
+
+    def test_full_files_are_verbatim_copies(self, tmp_path, monkeypatch):
+        _build(tmp_path, monkeypatch, [("v1", "動画A", "2026-01-02")])
+        entries = pkg._load_entries("CH")
+        pkg._write_full(tmp_path / "full", entries)
+        copied = (tmp_path / "full" / "001_2026-01-02_動画A.md").read_text(encoding="utf-8")
+        assert copied == entries[0]["md"].read_text(encoding="utf-8")
+
+    def test_points_skips_videos_without_points(self, tmp_path, monkeypatch):
+        _build(tmp_path, monkeypatch, [("v1", "動画A", "2026-01-02")])
+        entries = pkg._load_entries("CH")
+        entries[0]["md"].write_text("# 動画A\n\n---\n\n本文だけ", encoding="utf-8")
+        assert pkg._write_points(tmp_path / "out", entries) == 0
+
+    def test_videos_are_renamed_to_match_numbering(self, tmp_path, monkeypatch):
+        _build(tmp_path, monkeypatch,
+               [("v1", "古い", "2024-01-01"), ("v2", "新しい", "2026-08-01")],
+               with_video_files=("v1", "v2"))
+        entries = pkg._load_entries("CH")
+        count, mb = pkg._copy_videos(tmp_path / "vids", entries, "CH")
+        assert count == 2
+        assert (tmp_path / "vids" / "001_2026-08-01_新しい.mp4").exists()
+        assert (tmp_path / "vids" / "002_2024-01-01_古い.mp4").exists()
+
+    def test_missing_video_files_are_skipped_not_fatal(self, tmp_path, monkeypatch):
+        # メンバー限定などで一部だけ動画が無いのが常態。落ちずに残りを並べること
+        _build(tmp_path, monkeypatch,
+               [("v1", "有り", "2026-01-01"), ("v2", "無し", "2025-01-01")],
+               with_video_files=("v1",))
+        entries = pkg._load_entries("CH")
+        count, _ = pkg._copy_videos(tmp_path / "vids", entries, "CH")
+        assert count == 1
+
+    def test_no_video_dir_returns_zero(self, tmp_path, monkeypatch):
+        _build(tmp_path, monkeypatch, [("v1", "動画A", "2026-01-01")])
+        entries = pkg._load_entries("CH")
+        assert pkg._copy_videos(tmp_path / "vids", entries, "CH") == (0, 0)
+
+
+class TestRenumberCategories:
+    def _setup_summaries(self, tmp_path, entries_titles):
+        sdir = tmp_path / "summaries" / "CH"
+        sdir.mkdir(parents=True)
+        body = ("# 服装\n\nチャンネル: CH\n\n- まとめ\n\n---\n\n"
+                "## このカテゴリの動画\n\n" +
+                "\n".join(f"- {t}" for t in entries_titles) + "\n")
+        (sdir / "服装.md").write_text(body, encoding="utf-8")
+        (sdir / "index.md").write_text("# CH — カテゴリ別まとめ\n\n- [服装](服装.md) — 2本\n",
+                                       encoding="utf-8")
+
+    def test_adds_numbers_to_member_list(self, tmp_path, monkeypatch):
+        _build(tmp_path, monkeypatch,
+               [("v1", "古い", "2024-01-01"), ("v2", "新しい", "2026-08-01")])
+        self._setup_summaries(tmp_path, ["古い", "新しい"])
+        (tmp_path / "cache").mkdir()
+        (tmp_path / "cache" / "CH_categories.json").write_text(
+            json.dumps({"古い.md": "服装", "新しい.md": "服装"}, ensure_ascii=False),
+            encoding="utf-8")
+        entries = pkg._load_entries("CH")
+        n = pkg._renumber_categories(tmp_path / "out", "CH", entries)
+        assert n == 2
+        text = (tmp_path / "out" / "服装.md").read_text(encoding="utf-8")
+        assert "- 001  新しい" in text
+        assert "- 002  古い" in text
+        assert text.index("001") < text.index("002")  # 番号順に並ぶ
+
+    def test_index_is_copied_untouched(self, tmp_path, monkeypatch):
+        _build(tmp_path, monkeypatch, [("v1", "動画A", "2026-01-01")])
+        self._setup_summaries(tmp_path, ["動画A"])
+        entries = pkg._load_entries("CH")
+        pkg._renumber_categories(tmp_path / "out", "CH", entries)
+        src = (tmp_path / "summaries" / "CH" / "index.md").read_text(encoding="utf-8")
+        assert (tmp_path / "out" / "index.md").read_text(encoding="utf-8") == src
+
+    def test_missing_summaries_dir_is_not_fatal(self, tmp_path, monkeypatch):
+        _build(tmp_path, monkeypatch, [("v1", "動画A", "2026-01-01")])
+        entries = pkg._load_entries("CH")
+        assert pkg._renumber_categories(tmp_path / "out", "CH", entries) == 0
+
+
+class TestReadme:
+    def test_mentions_counts_and_where_to_start(self, tmp_path, monkeypatch):
+        _build(tmp_path, monkeypatch, [("v1", "動画A", "2026-01-01")])
+        entries = pkg._load_entries("CH")
+        out = tmp_path / "00.md"
+        pkg._write_readme(out, "CH", entries, n_points=1, n_videos=1, mb=23, n_categories=5)
+        text = out.read_text(encoding="utf-8")
+        assert "1_カテゴリ別まとめ/ だけ読めば足ります" in text
+        assert "メンバーシップ限定" in text
+        assert "23MB" in text
+
+    def test_video_line_omitted_when_no_videos(self, tmp_path, monkeypatch):
+        _build(tmp_path, monkeypatch, [("v1", "動画A", "2026-01-01")])
+        entries = pkg._load_entries("CH")
+        out = tmp_path / "00.md"
+        pkg._write_readme(out, "CH", entries, n_points=1, n_videos=0, mb=0, n_categories=5)
+        assert "4_動画/" not in out.read_text(encoding="utf-8")
