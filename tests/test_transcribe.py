@@ -909,3 +909,118 @@ class TestProcessUrlKeepsVideo:
              patch("shutil.rmtree"):
             transcribe._process_url("https://youtu.be/newvid", "CH", title="動画")
         assert not (tmp_path / "deliver").exists()
+
+
+class TestReadInfoJson:
+    def test_parses_upload_date_duration_views(self, tmp_path):
+        (tmp_path / "abc.info.json").write_text(json.dumps(
+            {"upload_date": "20240720", "duration": 700.4, "view_count": 978051}),
+            encoding="utf-8")
+        assert transcribe._read_info_json(str(tmp_path), "abc") == {
+            "upload_date": "2024-07-20", "duration": 700, "view_count": 978051}
+
+    def test_missing_file_returns_empty(self, tmp_path):
+        assert transcribe._read_info_json(str(tmp_path), "abc") == {}
+
+    def test_broken_json_returns_empty(self, tmp_path):
+        # 壊れた info.json で処理全体を止めない
+        (tmp_path / "abc.info.json").write_text("{not json", encoding="utf-8")
+        assert transcribe._read_info_json(str(tmp_path), "abc") == {}
+
+    def test_malformed_upload_date_is_dropped(self, tmp_path):
+        (tmp_path / "abc.info.json").write_text(json.dumps({"upload_date": "2024"}),
+                                                encoding="utf-8")
+        assert "upload_date" not in transcribe._read_info_json(str(tmp_path), "abc")
+
+
+class TestDownloadChannelToQueue:
+    def _setup(self, tmp_path, monkeypatch):
+        monkeypatch.setattr(transcribe, "QUEUE_DIR", tmp_path / "queue")
+        monkeypatch.setattr(transcribe, "TRANSCRIPTS_DIR", tmp_path / "transcripts")
+        monkeypatch.setattr(transcribe, "CACHE_DIR", tmp_path / "cache")
+        monkeypatch.setattr(transcribe, "DELIVER_DIR", tmp_path / "deliver")
+
+    def _fake_download(self, tmp_path):
+        """queue に音声（と info.json）を置く _download_audio の代役"""
+        def _dl(url, out_dir, video_quality=None):
+            vid = transcribe._extract_video_id(url)
+            ext = ".mp4" if video_quality else ".m4a"
+            p = Path(out_dir) / f"{vid}{ext}"
+            p.write_bytes(b"media")
+            (Path(out_dir) / f"{vid}.info.json").write_text(
+                json.dumps({"upload_date": "20250101", "duration": 60}), encoding="utf-8")
+            return str(p)
+        return _dl
+
+    def test_range_filter_is_applied(self, tmp_path, monkeypatch):
+        # --since-video を渡したのに全件落としにいく、という事故を防ぐ
+        self._setup(tmp_path, monkeypatch)
+        vids = _videos(10)
+        with patch.object(transcribe, "_get_channel_videos", return_value=vids), \
+             patch.object(transcribe, "_download_audio", side_effect=self._fake_download(tmp_path)):
+            added, limited = transcribe._download_channel_to_queue(
+                "CH", "https://youtube.com/@x", sort="date", since_video="vid002")
+        assert added == 3
+        assert limited is False
+        queued = sorted(p.stem for p in (tmp_path / "queue" / "CH").glob("*.m4a"))
+        assert queued == ["vid000", "vid001", "vid002"]
+
+    def test_info_json_is_folded_into_meta_and_removed(self, tmp_path, monkeypatch):
+        self._setup(tmp_path, monkeypatch)
+        with patch.object(transcribe, "_get_channel_videos", return_value=_videos(1)), \
+             patch.object(transcribe, "_download_audio", side_effect=self._fake_download(tmp_path)):
+            transcribe._download_channel_to_queue("CH", "https://youtube.com/@x", sort="date")
+        q = tmp_path / "queue" / "CH"
+        assert not (q / "vid000.info.json").exists()  # queue に残さない
+        meta = json.loads((q / "vid000.meta.json").read_text(encoding="utf-8"))
+        assert meta["upload_date"] == "2025-01-01"
+        assert meta["duration"] == 60
+
+    def test_video_is_copied_out_before_queue_consumes_it(self, tmp_path, monkeypatch):
+        # drain-queue は文字起こし後に queue のファイルを消す。360p は音声と動画が
+        # 同一ファイルなので、退避していないと納品物ごと消える
+        self._setup(tmp_path, monkeypatch)
+        with patch.object(transcribe, "_get_channel_videos", return_value=_videos(1)), \
+             patch.object(transcribe, "_download_audio", side_effect=self._fake_download(tmp_path)):
+            transcribe._download_channel_to_queue("CH", "https://youtube.com/@x",
+                                                  sort="date", video_quality="360p")
+        assert (tmp_path / "deliver" / "CH" / "videos" / "vid000.mp4").exists()
+
+    def test_no_video_copied_when_quality_not_requested(self, tmp_path, monkeypatch):
+        self._setup(tmp_path, monkeypatch)
+        with patch.object(transcribe, "_get_channel_videos", return_value=_videos(1)), \
+             patch.object(transcribe, "_download_audio", side_effect=self._fake_download(tmp_path)):
+            transcribe._download_channel_to_queue("CH", "https://youtube.com/@x", sort="date")
+        assert not (tmp_path / "deliver").exists()
+
+    def test_empty_range_downloads_nothing(self, tmp_path, monkeypatch):
+        self._setup(tmp_path, monkeypatch)
+        with patch.object(transcribe, "_get_channel_videos", return_value=_videos(10)), \
+             patch.object(transcribe, "_download_audio") as dl:
+            added, limited = transcribe._download_channel_to_queue(
+                "CH", "https://youtube.com/@x", sort="date",
+                since_video="vid002", until_video="vid007")
+        assert (added, limited) == (0, False)
+        assert dl.call_count == 0
+
+
+class TestDrainQueuePropagatesMetadata:
+    def test_upload_date_reaches_the_index(self, tmp_path, monkeypatch):
+        # 納品時の並び順と日付つきファイル名は _index.json の upload_date が正
+        monkeypatch.setattr(transcribe, "QUEUE_DIR", tmp_path / "queue")
+        monkeypatch.setattr(transcribe, "TRANSCRIPTS_DIR", tmp_path / "transcripts")
+        q = tmp_path / "queue" / "CH"
+        q.mkdir(parents=True)
+        (q / "abc123.m4a").write_bytes(b"audio")
+        (q / "abc123.meta.json").write_text(json.dumps({
+            "title": "動画", "url": "https://youtu.be/abc123", "channel": "CH",
+            "lang": "ja", "upload_date": "2025-03-04", "duration": 120,
+            "view_count": 999}), encoding="utf-8")
+        with patch.object(transcribe, "_transcribe", return_value="text"), \
+             patch.object(transcribe, "_inject_core_summary"), \
+             patch.object(transcribe, "_copy_file_to_drive"):
+            transcribe._drain_queue_all(idle_polls=1, idle_sleep=0)
+        entry = transcribe._load_index("CH")["abc123"]
+        assert entry["upload_date"] == "2025-03-04"
+        assert entry["duration"] == 120
+        assert entry["view_count"] == 999

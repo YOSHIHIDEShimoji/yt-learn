@@ -1196,8 +1196,15 @@ def _process_channel(channel_name: str, channel_url: str, lang: str = "ja", limi
 def _download_channel_to_queue(
     channel_name: str, channel_url: str, lang: str = "ja",
     limit: int = 0, sort: str = "popular", popular_sample: int = 200,
+    since_video: str = None, until_video: str = None, after: str = None,
+    before: str = None, exclusive: bool = False, video_quality: str = None,
 ) -> tuple[int, bool]:
-    """音声を queue/ にダウンロードのみ行い文字起こしはしない。戻り値: (added, rate_limited)"""
+    """音声を queue/ にダウンロードのみ行い文字起こしはしない。戻り値: (added, rate_limited)
+
+    GPU が塞がっている間にDLだけ進めたいときに使う（DLはGPUを使わない）。
+    範囲指定は _process_channel と同じ引数を受ける。ここに通しておかないと
+    --since-video 等が黙って無視され、チャンネル全件を落としにいく。
+    """
     _err(f"[dl-queue] {channel_name}: 動画リスト取得中... (sort={sort})")
     try:
         videos = _get_channel_videos(channel_url)
@@ -1207,6 +1214,13 @@ def _download_channel_to_queue(
             return 0, True
         raise
     _err(f"[dl-queue] {len(videos)} 件の動画を発見")
+
+    # 範囲の絞り込みは人気順ソートより先。位置スライスは新着順の並びが前提
+    if any([since_video, until_video, after, before]):
+        videos = _filter_by_range(videos, channel_name, since_video, until_video,
+                                  after, before, exclusive)
+        if not videos:
+            return 0, False
 
     if sort == "popular":
         try:
@@ -1238,7 +1252,13 @@ def _download_channel_to_queue(
         vid_id = _extract_video_id(v["url"])
         _err(f"\n[dl-queue] {v['title']}")
         try:
-            audio_path = _download_audio(v["url"], str(q_dir))
+            audio_path = _download_audio(v["url"], str(q_dir), video_quality=video_quality)
+            if video_quality:
+                # drain-queue は文字起こし後に queue のファイルを消す。360p では
+                # 音声と動画が同一ファイルなので、消される前に納品用へ退避する
+                vdir = _deliver_video_dir(channel_name)
+                vdir.mkdir(parents=True, exist_ok=True)
+                shutil.copy2(audio_path, vdir / f"{vid_id}{Path(audio_path).suffix}")
             meta = {
                 "title": v["title"],
                 "url": v["url"],
@@ -1626,7 +1646,10 @@ AI要約は別スクリプト:
             info = channels[args.name]
         if args.download_only:
             _download_channel_to_queue(
-                args.name, info["url"], info["lang"], args.limit, args.sort, args.popular_sample
+                args.name, info["url"], info["lang"], args.limit, args.sort, args.popular_sample,
+                since_video=args.since_video, until_video=args.until_video,
+                after=args.after, before=args.before, exclusive=args.exclusive,
+                video_quality=args.video_quality if args.keep_video else None,
             )
         else:
             _process_channel(args.name, info["url"], info["lang"], args.limit, args.sort,
