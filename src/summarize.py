@@ -76,7 +76,9 @@ def normalize_bullets(raw: str) -> str:
         if not s or s.startswith("#"):
             continue
         if s.startswith(("- ", "－ ", "* ", "・")):
-            s = s.lstrip("-－*・ ").strip()
+            # 記号は先頭の1つだけ外す。lstrip で文字集合ごと剥ぐと
+            # 「- -3kg 落ちた」が「3kg 落ちた」になり、符号が静かに消える
+            s = (s[1:] if s.startswith("・") else s[2:]).strip()
         elif re.match(r"^\d+[.)]\s", s):
             s = re.sub(r"^\d+[.)]\s*", "", s).strip()
         else:

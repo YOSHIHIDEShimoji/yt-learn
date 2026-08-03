@@ -1101,7 +1101,9 @@ def _normalize_points(raw: str) -> str:
         if not s or s.startswith("#"):      # 見出しは綴りに関係なく捨てる
             continue
         if s.startswith(("- ", "－ ", "* ", "・")):
-            s = s.lstrip("-－*・ ").strip()
+            # 記号は先頭の1つだけ外す。lstrip で文字集合ごと剥ぐと
+            # 「- -3kg 落ちた」が「3kg 落ちた」になり、符号が静かに消える
+            s = (s[1:] if s.startswith("・") else s[2:]).strip()
         elif re.match(r"^\d+[.)]\s", s):
             s = re.sub(r"^\d+[.)]\s*", "", s).strip()
         else:
@@ -1188,8 +1190,12 @@ def _has_video_stream(media_path: str, vid_id: str) -> bool:
     """DLされたファイルが映像を含むかを判定する。
 
     拡張子では判定できない。combined でも音声のみでも .webm はありうるため。
-    yt-dlp が書いた info.json の requested_downloads[].vcodec が唯一の確かな根拠で、
-    それが読めないときだけ拡張子にフォールバックする。
+    根拠は info.json に残る vcodec。読めないときだけ拡張子にフォールバックする。
+
+    requested_downloads[] は見ない。yt-dlp は info.json を書く前に sanitize_info を
+    通し、そのキーを必ず捨てるため（`clean_infojson` 既定 True）、ディスク上の
+    info.json には存在しない。選択したフォーマットの vcodec はトップレベルに
+    マージされて残るので、そちらを正とする。
     """
     src = Path(media_path)
     p = src.parent / f"{vid_id}.info.json"
@@ -1198,9 +1204,13 @@ def _has_video_stream(media_path: str, vid_id: str) -> bool:
             info = json.loads(p.read_text(encoding="utf-8"))
         except (json.JSONDecodeError, OSError):
             info = {}
+        # 念のため requested_downloads も見る（clean_infojson を切った場合に効く）
         for d in info.get("requested_downloads") or []:
             if d.get("vcodec") and d["vcodec"] != "none":
                 return True
+        vcodec = info.get("vcodec")
+        if vcodec:
+            return vcodec != "none"
         if info.get("requested_downloads"):
             return False
     return src.suffix in _VIDEO_SUFFIXES
@@ -1383,6 +1393,7 @@ def _download_channel_to_queue(
     limit: int = 0, sort: str = "popular", popular_sample: int = 200,
     since_video: str = None, until_video: str = None, after: str = None,
     before: str = None, exclusive: bool = False, video_quality: str = None,
+    dry_run: bool = False,
 ) -> tuple[int, bool]:
     """音声を queue/ にダウンロードのみ行い文字起こしはしない。戻り値: (added, rate_limited)
 
@@ -1406,6 +1417,13 @@ def _download_channel_to_queue(
                                   after, before, exclusive)
         if not videos:
             return 0, False
+
+    # 数えるだけの指定は、人気順ソート（＝再生数の取得通信）より前に返す。
+    # ここを通すと「対象を数えるだけ」のつもりの実行がレートリミット枠を使う
+    if dry_run:
+        target = videos[:limit] if limit > 0 else videos
+        _err(f"[dry-run] {channel_name}: {len(target)} 件が対象（DLしない）")
+        return 0, False
 
     if sort == "popular":
         try:
@@ -1854,6 +1872,7 @@ AI要約は別スクリプト:
                 since_video=args.since_video, until_video=args.until_video,
                 after=args.after, before=args.before, exclusive=args.exclusive,
                 video_quality=args.video_quality if args.keep_video else None,
+                dry_run=args.dry_run,
             )
         else:
             _process_channel(args.name, info["url"], info["lang"], args.limit, args.sort,

@@ -2,6 +2,7 @@ import json
 import subprocess
 import sys
 import types
+import urllib.parse
 from pathlib import Path
 
 import pytest
@@ -27,10 +28,13 @@ URL: https://youtu.be/{vid}
 """
 
 
-def _build(tmp_path, monkeypatch, videos, with_video_files=()):
+def _build(tmp_path, monkeypatch, videos, with_video_files=(), views=None,
+           video_ext=".mp4"):
     """transcripts/ と _index.json を組み立て、モジュールのパスを差し替える。
 
     videos: [(vid_id, title, upload_date)] / upload_date が None なら日付なし動画
+    views: {vid_id: 再生数} / _index.json に view_count を載せる
+    video_ext: 置く動画の拡張子（.webm 混在の検証用）
     """
     tdir = tmp_path / "transcripts" / "CH"
     tdir.mkdir(parents=True)
@@ -42,6 +46,8 @@ def _build(tmp_path, monkeypatch, videos, with_video_files=()):
                  "transcribed_at": "2026-08-03"}
         if up:
             entry["upload_date"] = up
+        if views and vid in views:
+            entry["view_count"] = views[vid]
         index[vid] = entry
     (tdir / "_index.json").write_text(json.dumps(index, ensure_ascii=False), encoding="utf-8")
 
@@ -49,7 +55,7 @@ def _build(tmp_path, monkeypatch, videos, with_video_files=()):
     if with_video_files:
         vdir.mkdir(parents=True)
         for vid in with_video_files:
-            (vdir / f"{vid}.mp4").write_bytes(b"v" * 2048)
+            (vdir / f"{vid}{video_ext}").write_bytes(b"v" * 2048)
 
     monkeypatch.setattr(pkg, "TRANSCRIPTS_DIR", tmp_path / "transcripts")
     monkeypatch.setattr(pkg, "SUMMARIES_DIR", tmp_path / "summaries")
@@ -171,7 +177,38 @@ class TestWriteOutputs:
     def test_no_video_dir_returns_zero(self, tmp_path, monkeypatch):
         _build(tmp_path, monkeypatch, [("v1", "動画A", "2026-01-01")])
         entries = pkg._load_entries("CH")
-        assert pkg._copy_videos(tmp_path / "vids", entries, "CH") == (0, 0, set())
+        assert pkg._copy_videos(tmp_path / "vids", entries, "CH") == (0, 0, {})
+
+    def test_returns_actual_filenames_so_links_are_not_guessed(self, tmp_path, monkeypatch):
+        # .webm で取れた動画に .mp4 のリンクを張ると、押しても何も起きない
+        _build(tmp_path, monkeypatch, [("v1", "動画A", "2026-01-01")],
+               with_video_files=("v1",), video_ext=".webm")
+        entries = pkg._load_entries("CH")
+        _, _, files = pkg._copy_videos(tmp_path / "vids", entries, "CH")
+        assert files == {1: "001_2026-01-01_動画A.webm"}
+        assert (tmp_path / "vids" / "001_2026-01-01_動画A.webm").exists()
+
+    def test_html_link_matches_the_file_that_was_copied(self, tmp_path, monkeypatch):
+        _build(tmp_path, monkeypatch, [("v1", "動画A", "2026-01-01")],
+               with_video_files=("v1",), video_ext=".webm")
+        entries = pkg._load_entries("CH")
+        _, _, files = pkg._copy_videos(tmp_path / "vids", entries, "CH")
+        out = tmp_path / "o.html"
+        pkg._write_html(out, "CH", entries, [], files)
+        text = out.read_text(encoding="utf-8")
+        assert urllib.parse.quote("4_動画/001_2026-01-01_動画A.webm") in text
+        assert ".mp4" not in text
+
+    def test_view_count_reaches_entries_so_popular_order_works(self, tmp_path, monkeypatch):
+        # _load_entries が view_count を載せ忘れると全件 0 になり、
+        # 「人気順」が黙って「新着順」に化ける
+        _build(tmp_path, monkeypatch,
+               [("v1", "古いが人気", "2024-01-01"), ("v2", "新しいが不人気", "2026-08-01")],
+               with_video_files=("v1", "v2"), views={"v1": 999999, "v2": 100})
+        entries = pkg._load_entries("CH")
+        _, _, files = pkg._copy_videos(tmp_path / "vids", entries, "CH",
+                                       limit=1, order="popular")
+        assert list(files.values()) == ["002_2024-01-01_古いが人気.mp4"]
 
 
 class TestRenumberCategories:
@@ -317,6 +354,34 @@ class TestConclusionSection:
         assert c["lede"] == ""
         assert "本文だけ" in c["detail"]
 
+    def test_detail_without_lede_keeps_the_text_above_it(self, tmp_path, monkeypatch):
+        # 「くわしく」はあるが「まず結論」が無い md。手で書いたときに起きる。
+        # その手前の本文を捨てると、納品物から無音で消える
+        _build(tmp_path, monkeypatch, [("v1", "動画A", "2026-01-01")])
+        self._write(tmp_path, "# 服装\n\nこの話題の前置き。\n\n"
+                              "## くわしく\n\n- 詳細だ\n\n---\n\n"
+                              "## このカテゴリの動画\n\n- 動画A\n")
+        c = pkg._collect_categories("CH", pkg._load_entries("CH"))[0]
+        assert c["lede"] == ""
+        assert "この話題の前置き。" in c["detail"]
+        assert "詳細だ" in c["detail"]
+
+    def test_members_match_when_category_name_has_slash(self, tmp_path, monkeypatch):
+        # カテゴリ名にファイル名禁止文字が入るのは実際に起きる（LLM が提案する）。
+        # 突合が壊れると「この話題の動画」一覧と番号↔色の対応が消える
+        _build(tmp_path, monkeypatch, [("v1", "動画A", "2026-01-01")])
+        sdir = tmp_path / "summaries" / "CH"
+        sdir.mkdir(parents=True)
+        (sdir / "服装_コーデ.md").write_text(
+            "# 服装/コーデ\n\n## まず結論\n\n- 結論だ\n\n## くわしく\n\n- 詳細だ\n\n"
+            "---\n\n## このカテゴリの動画\n\n- 動画A\n", encoding="utf-8")
+        cdir = tmp_path / "cache"
+        cdir.mkdir(parents=True, exist_ok=True)
+        (cdir / "CH_categories.json").write_text(
+            json.dumps({"動画A.md": "服装/コーデ"}, ensure_ascii=False), encoding="utf-8")
+        c = pkg._collect_categories("CH", pkg._load_entries("CH"))[0]
+        assert [m["title"] for m in c["members"]] == ["動画A"]
+
     def test_html_renders_lede_box(self, tmp_path, monkeypatch):
         _build(tmp_path, monkeypatch, [("v1", "動画A", "2026-01-01")])
         self._write(tmp_path, "# 服装\n\nチャンネル: CH\n\n## まず結論\n\n- 結論だ\n\n"
@@ -394,6 +459,16 @@ class TestHtmlToPdf:
         html_file.write_text("<p>x</p>", encoding="utf-8")
         assert pkg._html_to_pdf(html_file, tmp_path / "a.pdf") is False
 
+    def test_stale_pdf_is_removed_before_generating(self, tmp_path, monkeypatch):
+        # 残したまま失敗すると、前回の古い PDF が今回の成果物として残る
+        monkeypatch.setattr(pkg, "_find_chrome", lambda: None)
+        html_file = tmp_path / "a.html"
+        html_file.write_text("<p>x</p>", encoding="utf-8")
+        pdf = tmp_path / "a.pdf"
+        pdf.write_bytes(b"%PDF-old")
+        assert pkg._html_to_pdf(html_file, pdf) is False
+        assert not pdf.exists()
+
     def test_win_path_returns_none_when_wslpath_missing(self, tmp_path, monkeypatch):
         def boom(*a, **kw):
             raise OSError("no wslpath")
@@ -433,6 +508,16 @@ class TestBulletsToHtml:
         out = pkg._bullets_to_html("- **<script>**")
         assert "<script>" not in out
         assert "<strong>&lt;script&gt;</strong>" in out
+
+    def test_leading_minus_in_content_is_kept(self):
+        # 記号を文字集合で剥ぐと「- -3kg」が「3kg」になり、符号が静かに消える
+        assert pkg._bullets_to_html("- -3kg 落ちた") == "<ul><li>-3kg 落ちた</li></ul>"
+
+    def test_two_bold_pairs_on_one_line_stay_separate(self):
+        # 貪欲マッチだと間の地の文まで飲み込み、リテラルの ** が紙面に出る
+        out = pkg._bullets_to_html("- **色は3色**に絞り、**柄物は1点**まで")
+        assert out == ("<ul><li><strong>色は3色</strong>に絞り、"
+                       "<strong>柄物は1点</strong>まで</li></ul>")
 
     def test_unpaired_asterisks_are_left_alone(self):
         out = pkg._bullets_to_html("- 2**3 の話")
@@ -497,7 +582,8 @@ class TestWriteHtml:
         _build(tmp_path, monkeypatch, [("v1", "動画A", "2026-01-02")])
         entries = pkg._load_entries("CH")
         a, b = tmp_path / "a.html", tmp_path / "b.html"
-        pkg._write_html(a, "CH", entries, self._cats(entries), video_nums={1})
+        pkg._write_html(a, "CH", entries, self._cats(entries),
+                        video_files={1: "001_2026-01-02_動画A.mp4"})
         pkg._write_html(b, "CH", entries, self._cats(entries))
         assert "4_%E5%8B%95%E7%94%BB/" in a.read_text(encoding="utf-8")  # URLエンコード済み
         assert "動画を見る" not in b.read_text(encoding="utf-8")
@@ -530,9 +616,48 @@ class TestReadme:
         assert "メンバーシップ限定" in text
         assert "23MB" in text
 
+    def test_points_to_html_when_pdf_failed(self, tmp_path, monkeypatch):
+        # PDF が作れなかったのに PDF を案内すると、案内そのものが嘘になる
+        _build(tmp_path, monkeypatch, [("v1", "動画A", "2026-01-01")])
+        entries = pkg._load_entries("CH")
+        out = tmp_path / "00.md"
+        pkg._write_readme(out, "CH", entries, n_points=1, n_videos=0, mb=0,
+                          n_categories=5, pdf_ok=False)
+        text = out.read_text(encoding="utf-8")
+        assert "`まとめ.html` をブラウザで開いてください" in text
+        assert "`まとめ.pdf` を開いてください" not in text
+
     def test_video_line_omitted_when_no_videos(self, tmp_path, monkeypatch):
         _build(tmp_path, monkeypatch, [("v1", "動画A", "2026-01-01")])
         entries = pkg._load_entries("CH")
         out = tmp_path / "00.md"
         pkg._write_readme(out, "CH", entries, n_points=1, n_videos=0, mb=0, n_categories=5)
         assert "4_動画/" not in out.read_text(encoding="utf-8")
+
+
+class TestMainRebuild:
+    def _run(self, tmp_path, monkeypatch, out):
+        monkeypatch.setattr(sys, "argv",
+                            ["package_delivery.py", "CH", "--output", str(out),
+                             "--no-videos", "--no-pdf"])
+        pkg.main()
+
+    def test_rebuild_does_not_leave_old_numbered_files(self, tmp_path, monkeypatch):
+        # 連番は件数で変わる。掃除しないと旧番号のファイルが残り、
+        # 「まとめの番号 → フォルダのファイル」の導線が半分食い違う
+        _build(tmp_path, monkeypatch, [("v1", "古い", "2024-01-01"),
+                                       ("v2", "新しい", "2026-08-01")])
+        out = tmp_path / "out"
+        self._run(tmp_path, monkeypatch, out)
+        assert len(list((out / "2_動画ごとの要点").iterdir())) == 2
+
+        # 1本消して組み直す（番号が繰り上がる）
+        idx = tmp_path / "transcripts" / "CH" / "_index.json"
+        index = json.loads(idx.read_text(encoding="utf-8"))
+        del index["v2"]
+        idx.write_text(json.dumps(index, ensure_ascii=False), encoding="utf-8")
+        self._run(tmp_path, monkeypatch, out)
+
+        names = sorted(p.name for p in (out / "2_動画ごとの要点").iterdir())
+        assert names == ["001_2024-01-01_古い.md"], names
+        assert sorted(p.name for p in (out / "3_全文").iterdir()) == names

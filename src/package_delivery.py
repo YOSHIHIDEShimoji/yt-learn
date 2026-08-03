@@ -86,6 +86,9 @@ def _load_entries(channel_name: str) -> list[dict]:
             "title": meta.get("title") or vid_id,
             "url": meta.get("url", ""),
             "upload_date": meta.get("upload_date", ""),
+            # --video-order popular が参照する。載せ忘れると全件 0 になり、
+            # 「人気順」が黙って「新着順」に化ける
+            "view_count": meta.get("view_count"),
             "md": md,
         })
 
@@ -154,27 +157,32 @@ def _pick_videos(entries: list[dict], available: set, limit: int, order: str) ->
 
 
 def _copy_videos(out_dir: Path, entries: list[dict], channel_name: str,
-                 limit: int = 0, order: str = "popular") -> tuple[int, int, set]:
+                 limit: int = 0, order: str = "popular") -> tuple[int, int, dict]:
     """deliver/<channel>/videos/<id>.* を連番つきで並べ直す。
 
-    戻り値: (件数, 合計MB, 同梱した動画の連番の集合)
+    戻り値: (件数, 合計MB, {連番: 置いた実ファイル名})
+
+    連番だけでなくファイル名まで返すのは、まとめから動画へのリンクが拡張子を
+    決め打ちできないため。VIDEO_SUFFIXES は .mp4/.mkv/.webm を許しているので、
+    .mp4 前提でリンクを組むと .webm で取れた動画のリンクだけが静かに切れる。
     """
     src_dir = DELIVER_DIR / _sanitize(channel_name) / "videos"
     if not src_dir.exists():
-        return 0, 0, set()
+        return 0, 0, {}
     by_id = {p.stem: p for p in src_dir.iterdir() if p.suffix in VIDEO_SUFFIXES}
     picked = _pick_videos(entries, set(by_id), limit, order)
     if not picked:
-        return 0, 0, set()
+        return 0, 0, {}
 
     out_dir.mkdir(parents=True, exist_ok=True)
-    total, nums = 0, set()
+    total, files = 0, {}
     for e in picked:
         src = by_id[e["id"]]
-        shutil.copy2(src, out_dir / f"{e['stem']}{src.suffix}")
+        name = f"{e['stem']}{src.suffix}"
+        shutil.copy2(src, out_dir / name)
         total += src.stat().st_size
-        nums.add(e["num"])
-    return len(picked), total // (1024 * 1024), nums
+        files[e["num"]] = name
+    return len(picked), total // (1024 * 1024), files
 
 
 def _collect_categories(channel_name: str, entries: list[dict]) -> list[dict]:
@@ -206,11 +214,14 @@ def _collect_categories(channel_name: str, entries: list[dict]) -> list[dict]:
         text = src.read_text(encoding="utf-8")
         head, sep, _tail = text.partition("## このカテゴリの動画")
         # categorize.py が「まず結論」を付けていれば分けて持つ（HTML で強調するため）
-        lede, has_lede, detail = head.partition("## くわしく")
-        if has_lede:
-            lede = lede.partition("## まず結論")[2]
-        else:
-            lede, detail = "", head
+        before, has_lede, detail = head.partition("## くわしく")
+        lede = before.partition("## まず結論")[2] if has_lede else ""
+        if not has_lede:
+            detail = head
+        elif not lede.strip():
+            # 「くわしく」はあるが「まず結論」が無い（綴り違いを含む）場合。
+            # before を捨てると、その手前に書いた本文が納品物から無音で消える
+            detail = before + detail
         members = [by_filename[f] for f, c in assign.items()
                    if _sanitize(c) == src.stem and f in by_filename]
         members.sort(key=lambda e: e["num"])
@@ -489,7 +500,9 @@ def _bullets_to_html(text: str) -> str:
     for raw in text.splitlines():
         line = raw.strip()
         if line.startswith(("- ", "・")):
-            buf.append(f"<li>{_inline(line.lstrip('-・ ').strip())}</li>")
+            # 先頭の記号1つだけ外す（「- -3kg」の符号を消さないため）
+            body = (line[1:] if line.startswith("・") else line[2:]).strip()
+            buf.append(f"<li>{_inline(body)}</li>")
             continue
         if buf:
             out.append("<ul>" + "".join(buf) + "</ul>")
@@ -505,7 +518,7 @@ def _bullets_to_html(text: str) -> str:
 
 
 def _write_html(out_path: Path, channel_name: str, entries: list[dict],
-                cats: list[dict], video_nums=()) -> None:
+                cats: list[dict], video_files=None) -> None:
     """まとめ全体を1枚の自己完結 HTML にする。
 
     飛行機で読む前提なので、外部リソースを一切参照しない（オフラインで開ける）。
@@ -576,10 +589,12 @@ def _write_html(out_path: Path, channel_name: str, entries: list[dict],
         p.append(f"<h3><span class='num'>{e['num']:03d}</span>"
                  f"<span>{esc(e['title'])}</span></h3>")
         meta = [esc(e["upload_date"] or "投稿日不明")]
-        # 動画を同梱した回だけリンクを出す。入っていない動画にリンクを張ると
-        # 押しても何も起きない（PDF でも同じ）
-        if e["num"] in video_nums:
-            href = urllib.parse.quote(f"4_動画/{e['stem']}.mp4")
+        # 同梱した動画だけリンクを出す。入っていない動画にリンクを張ると
+        # 押しても何も起きない（PDF でも同じ）。拡張子は決め打ちにせず、
+        # 実際に置いたファイル名を使う（.webm で取れた回のリンクが切れるため）
+        name = (video_files or {}).get(e["num"])
+        if name:
+            href = urllib.parse.quote(f"4_動画/{name}")
             meta.append(f"<a href='{href}'>動画を見る</a>")
         p.append(f"<p class='meta'>{'<span class=dot>·</span>'.join(meta)}</p>")
         p.append(_bullets_to_html(points))
@@ -637,6 +652,8 @@ def _win_path(p: Path) -> str | None:
 def _html_to_pdf(html_path: Path, pdf_path: Path) -> bool:
     """HTML を PDF に変換する。Chrome が無ければ HTML だけ残して諦める。"""
     import subprocess
+    # 先に消す。残したまま失敗すると、前回の古い PDF が今回の成果物として残る
+    pdf_path.unlink(missing_ok=True)
     chrome = _find_chrome()
     if not chrome:
         _err("[warn] Chrome が見つからないので PDF は作らない（HTML はできている）")
@@ -667,7 +684,8 @@ def _html_to_pdf(html_path: Path, pdf_path: Path) -> bool:
 
 
 def _write_readme(out_path: Path, channel_name: str, entries: list[dict],
-                  n_points: int, n_videos: int, mb: int, n_categories: int) -> None:
+                  n_points: int, n_videos: int, mb: int, n_categories: int,
+                  pdf_ok: bool = True) -> None:
     lines = [
         f"# {channel_name} まとめ",
         "",
@@ -675,7 +693,9 @@ def _write_readme(out_path: Path, channel_name: str, entries: list[dict],
         "",
         "## どこから読むか",
         "",
-        "**`まとめ.pdf` を開いてください。それだけで足ります。**",
+        # PDF が作れなかったときに PDF を案内すると、案内そのものが嘘になる
+        ("**`まとめ.pdf` を開いてください。それだけで足ります。**"
+         if pdf_ok else "**`まとめ.html` をブラウザで開いてください。それだけで足ります。**"),
         "スマホにそのまま入れて読めます。通信は要りません。",
         "",
         "話題ごとのまとめと、動画1本ごとの要点が全部入っています。",
@@ -739,19 +759,32 @@ examples:
         DELIVER_DIR / _sanitize(args.channel) / "納品"
     out_root.mkdir(parents=True, exist_ok=True)
 
+    # 連番は件数で変わるので、前回の連番ファイルが残ると「まとめの番号 →
+    # フォルダのファイル」の導線が半分食い違う。作り直す前に空にする
+    for name in ("1_カテゴリ別まとめ", "2_動画ごとの要点", "3_全文", "4_動画"):
+        shutil.rmtree(out_root / name, ignore_errors=True)
+
     n_cat = _renumber_categories(out_root / "1_カテゴリ別まとめ", args.channel, entries)
     n_points = _write_points(out_root / "2_動画ごとの要点", entries)
     _write_full(out_root / "3_全文", entries)
-    n_videos, mb, video_nums = (0, 0, set()) if args.no_videos else \
+    n_videos, mb, video_files = (0, 0, {}) if args.no_videos else \
         _copy_videos(out_root / "4_動画", entries, args.channel,
                      args.video_limit, args.video_order)
 
     cats = _collect_categories(args.channel, entries)
+    if cats:
+        placed = {e["num"] for c in cats for e in c["members"]}
+        missing = [e for e in entries if e["num"] not in placed]
+        if missing:
+            _err(f"[warn] どの話題にも入っていない動画が {len(missing)} 本あります"
+                 f"（要点には載りますが、目次から辿れません）")
+            for e in missing[:5]:
+                _err(f"        {e['num']:03d} {e['title']}")
     html_path = out_root / "まとめ.html"
-    _write_html(html_path, args.channel, entries, cats, video_nums)
+    _write_html(html_path, args.channel, entries, cats, video_files)
     pdf_ok = False if args.no_pdf else _html_to_pdf(html_path, out_root / "まとめ.pdf")
     _write_readme(out_root / "00_はじめに.md", args.channel, entries,
-                  n_points, n_videos, mb, len(cats))
+                  n_points, n_videos, mb, len(cats), pdf_ok)
 
     _err(f"[done] {out_root}")
     _err(f"  {'まとめ.pdf + ' if pdf_ok else ''}まとめ.html / カテゴリ {len(cats)} / "

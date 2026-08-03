@@ -185,6 +185,9 @@ class TestViewCache:
 class TestSortByPopularity:
     def _setup(self, tmp_path, monkeypatch):
         monkeypatch.setattr(transcribe, "CACHE_DIR", tmp_path / "cache")
+        # 実 sleep(2) を踏むとこのクラスだけでスイートの大半を占める（実測18秒）。
+        # 待ち時間そのものはここの検証対象ではない
+        monkeypatch.setattr(transcribe.time, "sleep", lambda *_a, **_k: None)
 
     def test_sorts_by_view_count_descending(self, tmp_path, monkeypatch):
         self._setup(tmp_path, monkeypatch)
@@ -1463,6 +1466,46 @@ class TestDownloadChannelToQueue:
             transcribe._download_channel_to_queue("CH", "https://youtube.com/@x", sort="date")
         assert not (tmp_path / "deliver").exists()
 
+    def test_dry_run_downloads_nothing(self, tmp_path, monkeypatch):
+        # 「まず対象を数えるだけ」の指定が無視されると、レートリミット枠と
+        # 帯域を実消費して queue に落とし始める
+        self._setup(tmp_path, monkeypatch)
+        dl = MagicMock()
+        with patch.object(transcribe, "_get_channel_videos", return_value=_videos(3)), \
+             patch.object(transcribe, "_download_audio", dl):
+            added, limited = transcribe._download_channel_to_queue(
+                "CH", "https://youtube.com/@x", sort="date", dry_run=True)
+        assert (added, limited) == (0, False)
+        dl.assert_not_called()
+        assert not (tmp_path / "queue").exists()
+
+    def test_dry_run_does_not_fetch_view_counts(self, tmp_path, monkeypatch):
+        # 人気順ソートは再生数を取りに行く通信。数えるだけの実行で走らせない
+        self._setup(tmp_path, monkeypatch)
+        sorter = MagicMock(side_effect=AssertionError("dry-run で人気順ソートが走った"))
+        with patch.object(transcribe, "_get_channel_videos", return_value=_videos(3)), \
+             patch.object(transcribe, "_sort_by_popularity", sorter), \
+             patch.object(transcribe, "_download_audio", MagicMock()):
+            transcribe._download_channel_to_queue(
+                "CH", "https://youtube.com/@x", sort="popular", dry_run=True)
+        sorter.assert_not_called()
+
+    def test_has_video_stream_reads_top_level_vcodec(self, tmp_path):
+        # yt-dlp は info.json を書くとき requested_downloads を必ず捨てるので、
+        # そこだけを見る実装は本番で一度も発火しない
+        media = tmp_path / "vid.webm"
+        media.write_bytes(b"x")
+        (tmp_path / "vid.info.json").write_text(
+            json.dumps({"vcodec": "none", "acodec": "opus"}), encoding="utf-8")
+        assert transcribe._has_video_stream(str(media), "vid") is False
+
+    def test_has_video_stream_accepts_top_level_vcodec(self, tmp_path):
+        media = tmp_path / "vid.webm"
+        media.write_bytes(b"x")
+        (tmp_path / "vid.info.json").write_text(
+            json.dumps({"vcodec": "vp9", "acodec": "opus"}), encoding="utf-8")
+        assert transcribe._has_video_stream(str(media), "vid") is True
+
     def test_empty_range_downloads_nothing(self, tmp_path, monkeypatch):
         self._setup(tmp_path, monkeypatch)
         with patch.object(transcribe, "_get_channel_videos", return_value=_videos(10)), \
@@ -1525,6 +1568,11 @@ class TestNormalizePoints:
         out = transcribe._normalize_points("・あ\n* い\n－ う")
         assert out == "## ポイント\n- あ\n- い\n- う"
 
+
+    def test_leading_minus_in_content_is_kept(self):
+        # 記号を文字集合で剥ぐと「- -3kg」が「3kg」になり、符号が静かに消える
+        out = transcribe._normalize_points("- -3kg 落ちた\n- ・印がつく")
+        assert out == "## ポイント\n- -3kg 落ちた\n- ・印がつく"
     def test_strips_bold_markers(self):
         assert "**" not in transcribe._normalize_points("- **重要**な点")
 
