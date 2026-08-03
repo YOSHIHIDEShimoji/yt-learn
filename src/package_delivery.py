@@ -19,10 +19,12 @@
 """
 
 import argparse
+import html
 import json
 import re
 import shutil
 import sys
+import urllib.parse
 from pathlib import Path
 
 from summarize import BASE_DIR, SUMMARIES_DIR, TRANSCRIPTS_DIR, _sanitize
@@ -142,37 +144,179 @@ def _copy_videos(out_dir: Path, entries: list[dict], channel_name: str) -> tuple
     return count, total // (1024 * 1024)
 
 
-def _renumber_categories(out_dir: Path, channel_name: str, entries: list[dict]) -> int:
-    """カテゴリ別まとめをコピーし、末尾の動画一覧に連番を振り直す。
+def _collect_categories(channel_name: str, entries: list[dict]) -> list[dict]:
+    """カテゴリごとに {name, body, members} を集める。md 出力と HTML 出力の共通の元。
 
-    categorize.py はタイトルしか知らないので番号を書けない。番号の正は
-    ここ（納品時の並び）なので、コピーのタイミングで差し替える。
+    categorize.py はタイトルしか知らないので連番を書けない。番号の正は
+    ここ（納品時の並び）なので、所属動画の一覧はこちらで組み直す。
     """
+    src_dir = SUMMARIES_DIR / _sanitize(channel_name)
+    if not src_dir.exists():
+        return []
+    assign_path = CACHE_DIR / f"{_sanitize(channel_name)}_categories.json"
+    assign = json.loads(assign_path.read_text(encoding="utf-8")) if assign_path.exists() else {}
+    by_filename = {e["md"].name: e for e in entries}
+
+    # 並びは index.md（categorize.py が提案順で書く）に従う。ファイル名順にすると
+    # 「読む順」として意味を持つ並びが失われる。index が無ければ名前順で妥協する
+    order = []
+    idx_path = src_dir / "index.md"
+    if idx_path.exists():
+        order = re.findall(r"^- \[.*?\]\((.+?)\.md\)", idx_path.read_text(encoding="utf-8"),
+                           re.MULTILINE)
+    files = [p for p in src_dir.glob("*.md") if p.stem != "index"]
+    rank = {name: i for i, name in enumerate(order)}
+    files.sort(key=lambda p: (rank.get(p.stem, len(rank)), p.stem))
+
+    cats = []
+    for src in files:
+        text = src.read_text(encoding="utf-8")
+        head, sep, _tail = text.partition("## このカテゴリの動画")
+        members = [by_filename[f] for f, c in assign.items()
+                   if _sanitize(c) == src.stem and f in by_filename]
+        members.sort(key=lambda e: e["num"])
+        cats.append({"name": src.stem, "file": src, "head": head,
+                     "has_member_section": bool(sep), "members": members})
+    return cats
+
+
+def _renumber_categories(out_dir: Path, channel_name: str, entries: list[dict]) -> int:
+    """カテゴリ別まとめを .md でコピーし、末尾の動画一覧に連番を振り直す。"""
     src_dir = SUMMARIES_DIR / _sanitize(channel_name)
     if not src_dir.exists():
         _err(f"[warn] カテゴリ別まとめがありません: {src_dir}（categorize.py 未実行）")
         return 0
 
-    assign_path = CACHE_DIR / f"{_sanitize(channel_name)}_categories.json"
-    assign = json.loads(assign_path.read_text(encoding="utf-8")) if assign_path.exists() else {}
-    # 分類キャッシュのキーは transcripts のファイル名。そこから連番へ橋渡しする
-    by_filename = {e["md"].name: e for e in entries}
-
     out_dir.mkdir(parents=True, exist_ok=True)
     copied = 0
-    for src in sorted(src_dir.glob("*.md")):
-        text = src.read_text(encoding="utf-8")
-        head, sep, _tail = text.partition("## このカテゴリの動画")
-        # index.md にはこの節が無いのでそのままコピーされる
-        if sep:
-            members = [by_filename[f] for f, c in assign.items()
-                       if _sanitize(c) == src.stem and f in by_filename]
-            members.sort(key=lambda e: e["num"])
-            lines = [f"- {e['num']:03d}  {e['title']}" for e in members]
-            text = head + "## このカテゴリの動画\n\n" + "\n".join(lines) + "\n"
-        (out_dir / src.name).write_text(text, encoding="utf-8")
+    for cat in _collect_categories(channel_name, entries):
+        text = cat["head"]
+        if cat["has_member_section"]:
+            lines = [f"- {e['num']:03d}  {e['title']}" for e in cat["members"]]
+            text = cat["head"] + "## このカテゴリの動画\n\n" + "\n".join(lines) + "\n"
+        (out_dir / cat["file"].name).write_text(text, encoding="utf-8")
+        copied += 1
+    idx = src_dir / "index.md"
+    if idx.exists():
+        shutil.copy2(idx, out_dir / "index.md")
         copied += 1
     return copied
+
+
+_CSS = """
+:root { color-scheme: light dark; --fg:#1c1c1e; --bg:#fff; --muted:#6b6b70;
+        --line:#e3e3e6; --accent:#0b5fff; --card:#f7f7f8; }
+@media (prefers-color-scheme: dark) {
+  :root { --fg:#e8e8ea; --bg:#141416; --muted:#9a9aa0;
+          --line:#2c2c30; --accent:#7aa2ff; --card:#1c1c1f; }
+}
+* { box-sizing: border-box; }
+body { margin:0; padding:0 1rem 4rem; background:var(--bg); color:var(--fg);
+       font-family:-apple-system,BlinkMacSystemFont,"Hiragino Sans","Noto Sans JP",sans-serif;
+       line-height:1.75; -webkit-text-size-adjust:100%; }
+.wrap { max-width:44rem; margin:0 auto; }
+header { padding:2rem 0 1rem; border-bottom:1px solid var(--line); }
+h1 { font-size:1.5rem; margin:0 0 .3rem; }
+h2 { font-size:1.25rem; margin:2.5rem 0 .75rem; padding-top:.5rem; }
+h3 { font-size:1rem; margin:2rem 0 .4rem; }
+.sub { color:var(--muted); font-size:.875rem; margin:0; }
+nav { background:var(--card); border-radius:.75rem; padding:1rem 1.25rem; margin:1.5rem 0; }
+nav ol { margin:.25rem 0 0; padding-left:1.25rem; }
+nav a, .vid-list a { color:var(--accent); text-decoration:none; }
+nav a:hover, .vid-list a:hover { text-decoration:underline; }
+ul { padding-left:1.25rem; }
+li { margin:.4rem 0; }
+.vid-list { list-style:none; padding:0; margin:.5rem 0 0; }
+.vid-list li { margin:.3rem 0; font-size:.9375rem; }
+.num { display:inline-block; min-width:2.6rem; color:var(--muted);
+       font-variant-numeric:tabular-nums; }
+.card { border:1px solid var(--line); border-radius:.75rem; padding:1rem 1.25rem;
+        margin:1rem 0; }
+.meta { color:var(--muted); font-size:.8125rem; margin:.2rem 0 .6rem; }
+.meta a { color:var(--accent); text-decoration:none; }
+.tip { background:var(--card); border-radius:.75rem; padding:1rem 1.25rem;
+       font-size:.9375rem; }
+.top { font-size:.8125rem; color:var(--muted); text-decoration:none; }
+hr { border:0; border-top:1px solid var(--line); margin:3rem 0 0; }
+"""
+
+
+def _bullets_to_html(text: str) -> str:
+    """LLM が出す「- 」始まりの箇条書きを HTML に起こす。装飾記法は想定しない。"""
+    out, buf = [], []
+    for raw in text.splitlines():
+        line = raw.strip()
+        if line.startswith(("- ", "・")):
+            buf.append(f"<li>{html.escape(line.lstrip('-・ ').strip())}</li>")
+            continue
+        if buf:
+            out.append("<ul>" + "".join(buf) + "</ul>")
+            buf = []
+        if line and not line.startswith(("#", "---", "チャンネル:")):
+            out.append(f"<p>{html.escape(line)}</p>")
+    if buf:
+        out.append("<ul>" + "".join(buf) + "</ul>")
+    return "\n".join(out)
+
+
+def _write_html(out_path: Path, channel_name: str, entries: list[dict],
+                cats: list[dict], with_videos: bool) -> None:
+    """まとめ全体を1枚の自己完結 HTML にする。
+
+    飛行機で読む前提なので、外部リソースを一切参照しない（オフラインで開ける）。
+    .md はスマホの標準アプリで読めないため、こちらを主たる読み物にする。
+    カテゴリ別まとめと動画ごとの要点を同一ファイルに入れ、番号のリンクで
+    行き来できるようにしてある。全文だけは分量が大きいので .md のまま外に置く。
+    """
+    esc = html.escape
+    p = []
+    p.append(f"<header><h1>{esc(channel_name)} まとめ</h1>"
+             f"<p class='sub'>対象 {len(entries)} 本／{len(cats)} カテゴリ"
+             f"　このページはオフラインで読めます</p></header>")
+    p.append("<div class='tip'>まず<strong>カテゴリ別まとめ</strong>を読んでください。"
+             "気になった動画の番号を押すと、その動画の要点に飛べます。"
+             "探し物はブラウザの検索（PCなら Ctrl/⌘+F、スマホならメニューの"
+             "「ページ内を検索」）が使えます。</div>")
+
+    p.append("<nav><strong>カテゴリ</strong><ol>")
+    for i, c in enumerate(cats):
+        p.append(f"<li><a href='#c{i}'>{esc(c['name'])}</a>"
+                 f"<span class='sub'>（{len(c['members'])}本）</span></li>")
+    p.append("</ol></nav>")
+
+    for i, c in enumerate(cats):
+        p.append(f"<h2 id='c{i}'>{esc(c['name'])}</h2>")
+        p.append(_bullets_to_html(c["head"]))
+        if c["members"]:
+            p.append("<h3>このカテゴリの動画</h3><ul class='vid-list'>")
+            for e in c["members"]:
+                p.append(f"<li><a href='#v{e['num']:03d}'>"
+                         f"<span class='num'>{e['num']:03d}</span>"
+                         f"{esc(e['title'])}</a></li>")
+            p.append("</ul>")
+        p.append("<p><a class='top' href='#'>↑ 先頭へ</a></p>")
+
+    p.append("<hr><h2 id='videos'>動画ごとの要点</h2>")
+    for e in entries:
+        points = _split_transcript(e["md"].read_text(encoding="utf-8"))[0]
+        if not points:
+            continue
+        p.append(f"<div class='card' id='v{e['num']:03d}'>")
+        p.append(f"<h3>{e['num']:03d}　{esc(e['title'])}</h3>")
+        meta = [esc(e["upload_date"] or "投稿日不明")]
+        if with_videos:
+            href = urllib.parse.quote(f"4_動画/{e['stem']}.mp4")
+            meta.append(f"<a href='{href}'>動画を見る</a>")
+        p.append(f"<p class='meta'>{'　／　'.join(meta)}</p>")
+        p.append(_bullets_to_html(points))
+        p.append("<p><a class='top' href='#'>↑ 先頭へ</a></p></div>")
+
+    out_path.write_text(
+        "<!doctype html>\n<html lang='ja'><head><meta charset='utf-8'>"
+        "<meta name='viewport' content='width=device-width,initial-scale=1'>"
+        f"<title>{esc(channel_name)} まとめ</title><style>{_CSS}</style></head>"
+        f"<body><div class='wrap'>{''.join(p)}</div></body></html>\n",
+        encoding="utf-8")
 
 
 def _write_readme(out_path: Path, channel_name: str, entries: list[dict],
@@ -184,15 +328,18 @@ def _write_readme(out_path: Path, channel_name: str, entries: list[dict],
         "",
         "## どこから読むか",
         "",
-        "**1_カテゴリ別まとめ/ だけ読めば足ります。** 服装なら服装、恋愛なら恋愛と、",
-        "全動画の内容を話題ごとに1ファイルに統合してあります。",
+        "**`まとめ.html` をブラウザで開いてください。それだけで足ります。**",
+        "インターネットに繋がっていなくても開けます（飛行機の中でも読めます）。",
         "",
-        "気になった話題が出てきたら、そのカテゴリの末尾にある番号を控えてください。",
-        "同じ番号のファイルが 2_ 3_ 4_ にあります。",
+        "話題ごとのまとめと、動画1本ごとの要点が全部入っていて、",
+        "番号を押すと行き来できます。探し物はブラウザの検索機能が使えます。",
+        "",
+        "下のフォルダは、元データが欲しいとき用です。",
         "",
         "## フォルダの中身",
         "",
-        f"- `1_カテゴリ別まとめ/` — {n_categories} ファイル。**まずここ**",
+        "- `まとめ.html` — **まずここ。これだけ開けばいい**",
+        f"- `1_カテゴリ別まとめ/` — {n_categories} ファイル。html と同じ内容のテキスト版",
         f"- `2_動画ごとの要点/` — {n_points} ファイル。1本あたり10行程度の要点",
         f"- `3_全文/` — {len(entries)} ファイル。文字起こし全文。読む用ではなく検索用",
     ]
@@ -242,11 +389,13 @@ examples:
     n_videos, mb = (0, 0) if args.no_videos else \
         _copy_videos(out_root / "4_動画", entries, args.channel)
 
+    cats = _collect_categories(args.channel, entries)
+    _write_html(out_root / "まとめ.html", args.channel, entries, cats, n_videos > 0)
     _write_readme(out_root / "00_はじめに.md", args.channel, entries,
-                  n_points, n_videos, mb, n_cat)
+                  n_points, n_videos, mb, len(cats))
 
     _err(f"[done] {out_root}")
-    _err(f"  カテゴリ別まとめ {n_cat} / 要点 {n_points} / 全文 {len(entries)} / 動画 {n_videos}（{mb}MB）")
+    _err(f"  まとめ.html / カテゴリ {len(cats)} / 要点 {n_points} / 全文 {len(entries)} / 動画 {n_videos}（{mb}MB）")
 
 
 if __name__ == "__main__":

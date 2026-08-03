@@ -213,6 +213,128 @@ class TestRenumberCategories:
         assert pkg._renumber_categories(tmp_path / "out", "CH", entries) == 0
 
 
+class TestCollectCategories:
+    def _summaries(self, tmp_path, index_body):
+        sdir = tmp_path / "summaries" / "CH"
+        sdir.mkdir(parents=True)
+        for name in ("服装", "恋愛", "マインド"):
+            (sdir / f"{name}.md").write_text(
+                f"# {name}\n\n- 本文\n\n---\n\n## このカテゴリの動画\n\n- 動画A\n",
+                encoding="utf-8")
+        (sdir / "index.md").write_text(index_body, encoding="utf-8")
+        return sdir
+
+    def test_follows_index_order_not_filename_order(self, tmp_path, monkeypatch):
+        # index.md は categorize.py が提案順で書く。読む順として意味があるので守る
+        _build(tmp_path, monkeypatch, [("v1", "動画A", "2026-01-01")])
+        self._summaries(tmp_path, "# CH\n\n- [服装](服装.md) — 1本\n"
+                                  "- [恋愛](恋愛.md) — 1本\n- [マインド](マインド.md) — 1本\n")
+        entries = pkg._load_entries("CH")
+        assert [c["name"] for c in pkg._collect_categories("CH", entries)] == \
+            ["服装", "恋愛", "マインド"]
+
+    def test_falls_back_to_name_order_without_index(self, tmp_path, monkeypatch):
+        _build(tmp_path, monkeypatch, [("v1", "動画A", "2026-01-01")])
+        sdir = self._summaries(tmp_path, "")
+        (sdir / "index.md").unlink()
+        entries = pkg._load_entries("CH")
+        names = [c["name"] for c in pkg._collect_categories("CH", entries)]
+        assert names == sorted(names)
+
+    def test_category_missing_from_index_goes_last(self, tmp_path, monkeypatch):
+        _build(tmp_path, monkeypatch, [("v1", "動画A", "2026-01-01")])
+        self._summaries(tmp_path, "# CH\n\n- [恋愛](恋愛.md) — 1本\n")
+        entries = pkg._load_entries("CH")
+        assert pkg._collect_categories("CH", entries)[0]["name"] == "恋愛"
+
+    def test_index_itself_is_not_a_category(self, tmp_path, monkeypatch):
+        _build(tmp_path, monkeypatch, [("v1", "動画A", "2026-01-01")])
+        self._summaries(tmp_path, "# CH\n\n- [服装](服装.md) — 1本\n")
+        entries = pkg._load_entries("CH")
+        assert "index" not in [c["name"] for c in pkg._collect_categories("CH", entries)]
+
+
+class TestBulletsToHtml:
+    def test_converts_bullets_to_list(self):
+        out = pkg._bullets_to_html("- 一つめ\n- 二つめ")
+        assert out == "<ul><li>一つめ</li><li>二つめ</li></ul>"
+
+    def test_escapes_html(self):
+        # LLM 出力に < や & が混ざってもページを壊さない
+        out = pkg._bullets_to_html("- a < b & c")
+        assert "&lt;" in out and "&amp;" in out
+        assert "<b>" not in out
+
+    def test_drops_headings_and_metadata_lines(self):
+        out = pkg._bullets_to_html("# 見出し\nチャンネル: CH\n\n- 本文")
+        assert "見出し" not in out and "チャンネル" not in out
+        assert "本文" in out
+
+    def test_plain_paragraph_survives(self):
+        assert "<p>ふつうの文</p>" in pkg._bullets_to_html("ふつうの文")
+
+
+class TestWriteHtml:
+    def _cats(self, entries):
+        return [{"name": "服装", "head": "# 服装\n\n- 色は3色以内",
+                 "has_member_section": True, "members": entries[:1]}]
+
+    def test_single_self_contained_file(self, tmp_path, monkeypatch):
+        # 飛行機で開く前提。外部リソースを一切参照しないこと
+        _build(tmp_path, monkeypatch, [("v1", "動画A", "2026-01-02")])
+        entries = pkg._load_entries("CH")
+        out = tmp_path / "まとめ.html"
+        pkg._write_html(out, "CH", entries, self._cats(entries), with_videos=False)
+        text = out.read_text(encoding="utf-8")
+        assert text.startswith("<!doctype html>")
+        assert "<style>" in text          # CSS はインライン
+        assert "http://" not in text and "https://cdn" not in text
+        assert "<script" not in text
+
+    def test_category_links_to_video_anchor(self, tmp_path, monkeypatch):
+        _build(tmp_path, monkeypatch, [("v1", "動画A", "2026-01-02")])
+        entries = pkg._load_entries("CH")
+        out = tmp_path / "o.html"
+        pkg._write_html(out, "CH", entries, self._cats(entries), with_videos=False)
+        text = out.read_text(encoding="utf-8")
+        assert "href='#v001'" in text
+        assert "id='v001'" in text
+
+    def test_includes_per_video_points(self, tmp_path, monkeypatch):
+        _build(tmp_path, monkeypatch, [("v1", "動画A", "2026-01-02")])
+        entries = pkg._load_entries("CH")
+        out = tmp_path / "o.html"
+        pkg._write_html(out, "CH", entries, self._cats(entries), with_videos=False)
+        text = out.read_text(encoding="utf-8")
+        assert "要点その1" in text and "要点その2" in text
+        assert "ここが全文" not in text  # 全文は入れない（分量が大きいので .md のまま）
+
+    def test_video_link_only_when_videos_included(self, tmp_path, monkeypatch):
+        _build(tmp_path, monkeypatch, [("v1", "動画A", "2026-01-02")])
+        entries = pkg._load_entries("CH")
+        a, b = tmp_path / "a.html", tmp_path / "b.html"
+        pkg._write_html(a, "CH", entries, self._cats(entries), with_videos=True)
+        pkg._write_html(b, "CH", entries, self._cats(entries), with_videos=False)
+        assert "4_%E5%8B%95%E7%94%BB/" in a.read_text(encoding="utf-8")  # URLエンコード済み
+        assert "動画を見る" not in b.read_text(encoding="utf-8")
+
+    def test_title_with_html_chars_is_escaped(self, tmp_path, monkeypatch):
+        _build(tmp_path, monkeypatch, [("v1", "a<b>c", "2026-01-02")])
+        entries = pkg._load_entries("CH")
+        out = tmp_path / "o.html"
+        pkg._write_html(out, "CH", entries, self._cats(entries), with_videos=False)
+        text = out.read_text(encoding="utf-8")
+        assert "a&lt;b&gt;c" in text
+
+    def test_videos_without_points_are_skipped(self, tmp_path, monkeypatch):
+        _build(tmp_path, monkeypatch, [("v1", "動画A", "2026-01-02")])
+        entries = pkg._load_entries("CH")
+        entries[0]["md"].write_text("# 動画A\n\n---\n\n本文だけ", encoding="utf-8")
+        out = tmp_path / "o.html"
+        pkg._write_html(out, "CH", entries, self._cats(entries), with_videos=False)
+        assert "id='v001'" not in out.read_text(encoding="utf-8")
+
+
 class TestReadme:
     def test_mentions_counts_and_where_to_start(self, tmp_path, monkeypatch):
         _build(tmp_path, monkeypatch, [("v1", "動画A", "2026-01-01")])
@@ -220,7 +342,7 @@ class TestReadme:
         out = tmp_path / "00.md"
         pkg._write_readme(out, "CH", entries, n_points=1, n_videos=1, mb=23, n_categories=5)
         text = out.read_text(encoding="utf-8")
-        assert "1_カテゴリ別まとめ/ だけ読めば足ります" in text
+        assert "`まとめ.html` をブラウザで開いてください" in text
         assert "メンバーシップ限定" in text
         assert "23MB" in text
 
