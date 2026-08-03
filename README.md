@@ -220,6 +220,68 @@ python src/transcribe.py channel "メンタリスト DaiGo" --sort popular --lim
 python src/transcribe.py all --sort popular --limit 5 --force
 ```
 
+### 範囲を絞る（この動画以降 / この日付以降）
+
+チャンネルの `/videos` タブは**常に新着順**で返る。この性質を使って範囲を指定する。
+
+```bash
+# この動画を含めて、それより新しい動画だけ
+python src/transcribe.py channel "名前" --since-video pLXK5N3Sy4A
+
+# この動画を含めて、それより古い動画だけ（--exclusive で境界の動画自身を除く）
+python src/transcribe.py channel "名前" --until-video pLXK5N3Sy4A --exclusive
+
+# 日付で絞る（両端とも境界日の投稿を含む）
+python src/transcribe.py channel "名前" --after 2025-01-01 --before 2025-12-31
+
+# 何本が対象になるかだけ見る（ダウンロードしない）
+python src/transcribe.py channel "名前" --since-video VIDEO_ID --dry-run
+
+# channels.txt に登録せず単発で処理する（autonomous.sh の巡回に混ぜたくないとき）
+python src/transcribe.py channel "任意の名前" --url https://www.youtube.com/@handle --since-video VIDEO_ID
+```
+
+動画指定は**リスト内の位置スライス**なので追加の通信が一切発生しない。
+日付指定は flat 抽出に投稿日が含まれないため二分探索で境界だけ取得する（9回程度）。
+全件の日付取得は確実にレートリミットに当たるので実装していない。
+
+### 動画ファイルのダウンロード
+
+音声だけでなく**動画ファイル本体も保存できる**。`deliver/<channel>/videos/<video_id>.mp4` に出る。
+
+```bash
+# 文字起こしと同時に 360p の動画も保存する
+python src/transcribe.py channel "名前" --since-video VIDEO_ID --keep-video
+
+# 画質を指定する（既定は 360p）
+python src/transcribe.py channel "名前" --keep-video --video-quality 720p
+```
+
+| 画質 | 実測サイズ（10分の動画） | 備考 |
+|---|---|---|
+| `360p` | 約23MB | format 18（映像+音声が単一ファイル）。**マージ不要で最速・最も安定** |
+| `720p` | 約44MB | 映像と音声が別ストリーム。**ffmpeg が必要**（WSL には入っていない） |
+| `1080p` | 約120MB | 同上 |
+
+**追加コストはほぼゼロ。** 文字起こし用にどのみち1本ダウンロードするので、360p を選べば
+その1ファイルがそのまま Whisper の入力を兼ねる（format 18 は音声を含む）。
+YouTube への問い合わせ回数は 1本あたり1回のまま増えない。
+
+combined フォーマットが存在しない動画では音声のみにフォールバックする。
+その動画は動画ファイルが手に入らないだけで、文字起こしは通常どおり完了する。
+
+### カテゴリ別要約・納品パッケージ
+
+```bash
+# 動画をカテゴリに分類し、カテゴリごとのまとめを作る
+python src/categorize.py "チャンネル名"
+
+# 人に渡せる1フォルダに組み立てる（HTML / PDF を含む）
+python src/package_delivery.py "チャンネル名"
+```
+
+詳細は `CLAUDE.md` を参照。
+
 ### AI要約
 
 autonomous.sh が全チャンネル一周ごとに自動実行する。手動で実行する場合:

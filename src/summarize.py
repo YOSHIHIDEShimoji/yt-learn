@@ -63,6 +63,32 @@ def _extract_points(md_text: str) -> str:
     return m.group(0).strip() if m else ""
 
 
+def normalize_bullets(raw: str) -> str:
+    """LLM の出力を「- 」始まりの箇条書きだけに整える。
+
+    書式を LLM に守らせない。見出しの綴りが崩れる（`## ポイnts` 等）、前置きが付く、
+    番号付きで返る、`**` が混ざる——いずれも実測で起きる。崩れた行はそのまま
+    要約・分類・納品物に伝播するので、受け取った側で必ず正規化する。
+    """
+    out = []
+    for raw_line in (raw or "").splitlines():
+        s = raw_line.strip()
+        if not s or s.startswith("#"):
+            continue
+        if s.startswith(("- ", "－ ", "* ", "・")):
+            # 記号は先頭の1つだけ外す。lstrip で文字集合ごと剥ぐと
+            # 「- -3kg 落ちた」が「3kg 落ちた」になり、符号が静かに消える
+            s = (s[1:] if s.startswith("・") else s[2:]).strip()
+        elif re.match(r"^\d+[.)]\s", s):
+            s = re.sub(r"^\d+[.)]\s*", "", s).strip()
+        else:
+            continue
+        s = s.replace("**", "").strip()
+        if s:
+            out.append(f"- {s}")
+    return "\n".join(out)
+
+
 def _sanitize(name: str) -> str:
     name = re.sub(r'[\\/:*?"<>|]', "_", name)
     name = name.strip()

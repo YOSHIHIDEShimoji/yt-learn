@@ -29,6 +29,50 @@ python src/summarize.py all --threshold 20
 
 Ollama（ローカルLLM）専用。`LOCAL_LLM_URL` 必須。未設定の場合は `[error]` + `sys.exit(1)`。
 
+### `src/categorize.py` — カテゴリ別要約（Ollama専用）
+
+```bash
+python src/categorize.py "チャンネル名"                    # 自動でカテゴリを決めてまとめる
+python src/categorize.py "チャンネル名" --dry-run          # 分類結果の件数だけ見る
+python src/categorize.py "チャンネル名" --categories "服装,恋愛,その他"
+```
+
+`summaries/<channel>/<category>.md` と `index.md` を出力する。
+
+**summarize.py と分けてある理由**: summarize.py は「1チャンネル = 1ファイル」の逐次追記型で、
+動画1本ごとに既存サマリー全文をLLMに再投入して全体を書き直させる。数十本を超えると
+呼び出し回数も1回あたりの入力長も膨らんで破綻するため、100本規模には転用できない。
+categorize.py は 分類 → 集約 の2パスで、動画数に対して線形に収まる。
+
+### `src/package_delivery.py` — 納品フォルダの組み立て
+
+```bash
+python src/package_delivery.py "チャンネル名"
+python src/package_delivery.py "チャンネル名" --output ~/Desktop/納品 --no-videos
+```
+
+`00_はじめに.md` / `1_カテゴリ別まとめ/` / `2_動画ごとの要点/` / `3_全文/` / `4_動画/` を組み立てる。
+2_ 3_ 4_ は同じゼロ埋め連番（投稿日の新しい順に001から）で対応する。
+
+### 範囲指定（transcribe.py）
+
+チャンネルの `/videos` タブは**常に新着順（降順）**で返る。この性質を使って範囲を絞る。
+
+```bash
+# この動画を含めて、それより新しい動画だけ（追加の通信ゼロ＝位置スライスのみ）
+python src/transcribe.py channel "名前" --url https://youtube.com/@x --since-video VIDEO_ID
+python src/transcribe.py channel "名前" --until-video VIDEO_ID --exclusive
+python src/transcribe.py channel "名前" --after 2025-01-01 --before 2025-12-31
+python src/transcribe.py channel "名前" --since-video VIDEO_ID --dry-run   # 対象を数えるだけ
+```
+
+- `--url`: channels.txt に登録せず単発で処理する（autonomous.sh の巡回に混ぜたくない場合）
+- `--keep-video [--video-quality 360p]`: 動画も `deliver/<channel>/videos/` に保存する。
+  **文字起こし用の音声DLと同じ1回の取得で済む**（360p の format 18 は音声込みの単一ファイルで、
+  そのまま Whisper に食わせられる）ため、YouTube への問い合わせ回数は増えない
+- `--after` / `--before` は flat 抽出に日付が無いため二分探索で境界だけ取得する（約9回）。
+  全件の日付取得は確実にレートリミットで破綻するので採っていない
+
 ### `loop_transcribe.sh` / `benchmark.sh` — **非推奨（Archive/ 配下）**
 
 直列ループとパラメータ最適化ツール。autonomous.sh に機能統合済みのため通常は使わない。
