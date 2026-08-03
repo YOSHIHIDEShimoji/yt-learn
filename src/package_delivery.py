@@ -336,6 +336,10 @@ a{color:inherit}
  margin-bottom:.6rem}
 .lede ul{padding-left:1.1rem;margin:0}
 .lede li{margin:0 0 .5rem;font-weight:500}
+/* 強調は太字ではなく色で示す。本文が明朝まじりで文字が細いため、太字にすると
+   行の中で塊になって読みにくい */
+strong{font-weight:600;color:var(--ink)}
+.lede strong{color:var(--tab)}
 .lede li:last-child{margin-bottom:0}
 .detail-label{display:block;font-size:.6875rem;letter-spacing:.18em;color:var(--ink2);
  margin:0 0 .7rem}
@@ -405,21 +409,23 @@ a{color:inherit}
 
  /* 表紙と目次は1ページに同居させる。別ページに割ると、どちらも紙の1/3しか
     埋まらずスカスカな冊子になる。 */
- .cover{padding:8mm 0 7mm;border:none;break-after:auto}
- .cover h1{font-size:22pt;line-height:1.3;margin-bottom:7mm}
- .eyebrow{font-size:7.5pt;margin-bottom:5mm}
- .standfirst{font-size:10.5pt;margin-bottom:7mm}
- .how p{font-size:8.5pt}
+ /* 表紙・目次まわりの余白は、10話題ぶんの目次が1ページに収まる量で決めてある。
+    はみ出すと2ページ目が数行だけになって、いきなりスカスカな冊子に見える。 */
+ .cover{padding:3mm 0 5mm;border:none;break-after:auto}
+ .cover h1{font-size:21pt;line-height:1.3;margin-bottom:5mm}
+ .eyebrow{font-size:7.5pt;margin-bottom:4mm}
+ .standfirst{font-size:10pt;margin-bottom:5mm}
+ .how p{font-size:8.5pt;line-height:1.6}
 
- .index{position:static;padding:7mm 0 0;margin:0;background:none;
+ .index{position:static;padding:5mm 0 0;margin:0;background:none;
   border-top:1px solid var(--rule);overflow:visible;break-after:page}
- .index-label{display:block;font-size:8pt;margin-bottom:4mm}
+ .index-label{display:block;font-size:8pt;margin-bottom:3mm}
  .index ol{display:block;width:auto}
- .index li{margin:0 0 1.5mm}
+ .index li{margin:0 0 1mm}
  .tab{display:flex;background:none;box-shadow:none;border-radius:0;
-  border-left:2.5pt solid var(--tab);padding:1.5mm 3mm;break-inside:avoid}
+  border-left:2.5pt solid var(--tab);padding:1.1mm 3mm;break-inside:avoid}
  .tab-name{font-size:9.5pt}
- .tab-all{border-left-color:var(--ink2);margin-top:4mm}
+ .tab-all{border-left-color:var(--ink2);margin-top:3mm}
 
  .cat{break-before:page;padding-top:0}
  .cat h2{font-size:15pt}
@@ -463,6 +469,16 @@ a{color:inherit}
 """
 
 
+def _inline(text: str) -> str:
+    """1行ぶんの本文を HTML にする。エスケープしてから **強調** だけ拾う。
+
+    エスケープを先にやるので、原文に < や & があっても壊れない。md 側では
+    ** のままが正しい記法なので、変換はこちら（HTML/PDF）だけで行う。
+    """
+    escaped = html.escape(text)
+    return re.sub(r"\*\*(.+?)\*\*", r"<strong>\1</strong>", escaped)
+
+
 def _bullets_to_html(text: str) -> str:
     """「- 」始まりの箇条書きと「### 」の小見出しを HTML に起こす。
 
@@ -473,16 +489,16 @@ def _bullets_to_html(text: str) -> str:
     for raw in text.splitlines():
         line = raw.strip()
         if line.startswith(("- ", "・")):
-            buf.append(f"<li>{html.escape(line.lstrip('-・ ').strip())}</li>")
+            buf.append(f"<li>{_inline(line.lstrip('-・ ').strip())}</li>")
             continue
         if buf:
             out.append("<ul>" + "".join(buf) + "</ul>")
             buf = []
         if line.startswith("### "):
-            out.append(f"<h3 class='sub'>{html.escape(line[4:].strip())}</h3>")
+            out.append(f"<h3 class='sub'>{_inline(line[4:].strip())}</h3>")
             continue
         if line and not line.startswith(("#", "---", "チャンネル:")):
-            out.append(f"<p>{html.escape(line)}</p>")
+            out.append(f"<p>{_inline(line)}</p>")
     if buf:
         out.append("<ul>" + "".join(buf) + "</ul>")
     return "\n".join(out)

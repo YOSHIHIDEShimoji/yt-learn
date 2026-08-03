@@ -425,6 +425,19 @@ class TestBulletsToHtml:
         assert "ポイnts" not in out
         assert out == "<ul><li>中身</li></ul>"
 
+    def test_bold_markup_becomes_strong(self):
+        out = pkg._bullets_to_html("- ここが**大事**です")
+        assert out == "<ul><li>ここが<strong>大事</strong>です</li></ul>"
+
+    def test_escapes_before_bold_so_markup_cannot_be_injected(self):
+        out = pkg._bullets_to_html("- **<script>**")
+        assert "<script>" not in out
+        assert "<strong>&lt;script&gt;</strong>" in out
+
+    def test_unpaired_asterisks_are_left_alone(self):
+        out = pkg._bullets_to_html("- 2**3 の話")
+        assert out == "<ul><li>2**3 の話</li></ul>"
+
     def test_subheading_closes_open_list(self):
         out = pkg._bullets_to_html("- 前\n### 次\n- 後")
         assert out == ("<ul><li>前</li></ul>\n<h3 class='sub'>次</h3>\n"
