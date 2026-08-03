@@ -1494,3 +1494,92 @@ class TestDrainQueuePropagatesMetadata:
         assert entry["upload_date"] == "2025-03-04"
         assert entry["duration"] == 120
         assert entry["view_count"] == 999
+
+
+class TestNormalizePoints:
+    """書式は LLM に守らせず、受け取った側で必ず整える。
+
+    綴りの崩れた見出しが1行挟まるだけで `## ポイント` の抽出が空になり、
+    その動画が要約・分類・納品物から丸ごと消える（実測で発生）。
+    """
+
+    def test_adds_canonical_heading(self):
+        out = transcribe._normalize_points("- あ\n- い")
+        assert out == "## ポイント\n- あ\n- い"
+
+    def test_drops_broken_heading_from_llm(self):
+        # 実際に出た壊れ方。見出しは綴りに関係なく捨てる
+        out = transcribe._normalize_points("## ポイnts\n- あ\n- い")
+        assert out == "## ポイント\n- あ\n- い"
+        assert "ポイnts" not in out
+
+    def test_drops_correct_heading_too(self):
+        out = transcribe._normalize_points("## ポイント\n- あ")
+        assert out.count("## ポイント") == 1
+
+    def test_normalizes_numbered_list(self):
+        out = transcribe._normalize_points("1. あ\n2) い")
+        assert out == "## ポイント\n- あ\n- い"
+
+    def test_normalizes_alternative_bullets(self):
+        out = transcribe._normalize_points("・あ\n* い\n－ う")
+        assert out == "## ポイント\n- あ\n- い\n- う"
+
+    def test_strips_bold_markers(self):
+        assert "**" not in transcribe._normalize_points("- **重要**な点")
+
+    def test_drops_preamble_and_postamble(self):
+        out = transcribe._normalize_points("以下がポイントです。\n- あ\n\n以上です。")
+        assert out == "## ポイント\n- あ"
+
+    def test_falls_back_to_plain_lines_when_no_bullets(self):
+        # 箇条書きが1行も無い応答でも内容を捨てない
+        out = transcribe._normalize_points("最初の主張\n次の主張")
+        assert out == "## ポイント\n- 最初の主張\n- 次の主張"
+
+    def test_empty_input_returns_empty(self):
+        assert transcribe._normalize_points("") == ""
+        assert transcribe._normalize_points(None) == ""
+
+    def test_generate_core_summary_returns_normalized(self, monkeypatch):
+        monkeypatch.setenv("LOCAL_LLM_URL", "http://x")
+        with patch.object(transcribe, "_call_ollama", return_value="## ポイnts\n1. あ"):
+            summary, _ = transcribe._generate_core_summary("t", "x")
+        assert summary == "## ポイント\n- あ"
+
+    def test_generate_core_summary_raises_when_nothing_usable(self, monkeypatch):
+        monkeypatch.setenv("LOCAL_LLM_URL", "http://x")
+        with patch.object(transcribe, "_call_ollama", return_value="   \n\n"):
+            with pytest.raises(RuntimeError, match="空"):
+                transcribe._generate_core_summary("t", "x")
+
+
+class TestRepairPoints:
+    def _md(self, tmp_path, body):
+        d = tmp_path / "transcripts" / "CH"
+        d.mkdir(parents=True, exist_ok=True)
+        p = d / "動画.md"
+        p.write_text(body, encoding="utf-8")
+        return p
+
+    def test_repairs_broken_heading_in_existing_file(self, tmp_path, monkeypatch):
+        monkeypatch.setattr(transcribe, "TRANSCRIPTS_DIR", tmp_path / "transcripts")
+        p = self._md(tmp_path, "# 動画\n\n処理日時: x\n\n## ポイント\n## ポイnts\n- あ\n\n---\n\n本文\n")
+        assert transcribe._repair_points() == 1
+        text = p.read_text(encoding="utf-8")
+        assert "ポイnts" not in text
+        assert "## ポイント\n- あ" in text
+        assert "本文" in text  # 全文は保持する
+
+    def test_leaves_clean_files_untouched(self, tmp_path, monkeypatch):
+        monkeypatch.setattr(transcribe, "TRANSCRIPTS_DIR", tmp_path / "transcripts")
+        good = "# 動画\n\n処理日時: x\n\n## ポイント\n- あ\n- い\n\n---\n\n本文\n"
+        p = self._md(tmp_path, good)
+        assert transcribe._repair_points() == 0
+        assert p.read_text(encoding="utf-8") == good
+
+    def test_skips_files_without_points_section(self, tmp_path, monkeypatch):
+        monkeypatch.setattr(transcribe, "TRANSCRIPTS_DIR", tmp_path / "transcripts")
+        p = self._md(tmp_path, "# 動画\n\n---\n\n本文だけ\n")
+        assert transcribe._repair_points() == 0
+        assert "本文だけ" in p.read_text(encoding="utf-8")

@@ -35,6 +35,7 @@ from summarize import (
     _is_timeout_error,
     _load_env,
     _sanitize,
+    normalize_bullets,
 )
 
 CACHE_DIR = BASE_DIR / "cache"
@@ -107,6 +108,11 @@ def _call_llm(prompt: str, base_url: str, model: str) -> str | None:
     with urllib.request.urlopen(req, timeout=300) as resp:
         data = json.loads(resp.read().decode("utf-8"))
     return (data.get("response") or "").strip() or None
+
+
+def _call_llm_bullets(prompt: str, base_url: str, model: str) -> str | None:
+    """箇条書きを期待する呼び出し。書式は LLM に任せず必ずこちらで整える。"""
+    return normalize_bullets(_call_llm(prompt, base_url, model)) or None
 
 
 # ── キャッシュ ────────────────────────────────────────────────────────────────
@@ -307,7 +313,7 @@ def _summarize_chunk(channel_name: str, category: str, chunk: list[dict],
 - マークダウンの装飾（**など）は使わない
 
 出力形式: 「- 」始まりの箇条書きのみ。見出しや前置きは不要。"""
-    return _call_llm(prompt, base_url, model)
+    return _call_llm_bullets(prompt, base_url, model)
 
 
 def _reduce_summaries(channel_name: str, category: str, partials: list[str],
@@ -360,7 +366,7 @@ def _reduce_group(channel_name: str, category: str, group: list[str],
 - マークダウンの装飾（**など）は使わない
 
 出力形式: 「- 」始まりの箇条書きのみ。見出しや前置きは不要。"""
-    return _call_llm(prompt, base_url, model)
+    return _call_llm_bullets(prompt, base_url, model)
 
 
 def _conclude(channel_name: str, category: str, body: str,
@@ -384,7 +390,7 @@ def _conclude(channel_name: str, category: str, body: str,
 - マークダウンの装飾（**など）は使わない
 
 出力形式: 「- 」始まりの箇条書きのみ。前置きは不要。"""
-    return _call_llm(prompt, base_url, model)
+    return _call_llm_bullets(prompt, base_url, model)
 
 
 def _write_category_file(channel_name: str, category: str, body: str,

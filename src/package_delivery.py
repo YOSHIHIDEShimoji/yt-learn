@@ -27,7 +27,8 @@ import sys
 import urllib.parse
 from pathlib import Path
 
-from summarize import BASE_DIR, SUMMARIES_DIR, TRANSCRIPTS_DIR, _sanitize
+from summarize import (BASE_DIR, SUMMARIES_DIR, TRANSCRIPTS_DIR, _sanitize,
+                       normalize_bullets)
 
 DELIVER_DIR = BASE_DIR / "deliver"
 CACHE_DIR = BASE_DIR / "cache"
@@ -100,9 +101,19 @@ def _load_entries(channel_name: str) -> list[dict]:
 
 
 def _split_transcript(text: str) -> tuple[str, str]:
-    """本文を (ヘッダ+ポイント, 全文) に分ける。ポイントが無ければ前半は空。"""
-    m = re.search(r"## ポイント\n((?:- .+\n?)+)", text)
-    return (m.group(0).strip() if m else ""), text
+    """本文を (ポイント, 全文) に分ける。ポイントが無ければ前半は空。
+
+    「## ポイント」の次の行から本文区切り（---）までを丸ごと拾って正規化する。
+    「- 」で始まる行の連続だけを見る書き方だと、LLM が見出しを綴り間違えた行
+    （実測: `## ポイnts`）が1行挟まっただけで抽出が空になり、その動画が
+    納品物から丸ごと消える。
+    """
+    _, sep, after = text.partition("## ポイント")
+    if not sep:
+        return "", text
+    section = re.split(r"\n-{3,}\n", after, maxsplit=1)[0]
+    bullets = normalize_bullets(section)
+    return (f"## ポイント\n{bullets}" if bullets else ""), text
 
 
 def _write_points(out_dir: Path, entries: list[dict]) -> int:

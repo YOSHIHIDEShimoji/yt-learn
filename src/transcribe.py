@@ -196,6 +196,37 @@ def _save_index(channel_name: str, index: dict) -> None:
     p.write_text(json.dumps(index, ensure_ascii=False, indent=2), encoding="utf-8")
 
 
+def _repair_points() -> int:
+    """既存トランスクリプトの「## ポイント」節を書式だけ整え直す。
+
+    書式を LLM に任せていた頃のファイルには、綴りの崩れた見出し（`## ポイnts` 等）や
+    番号付き・`**` 混じりの行が残っている。崩れた行が1つ挟まるだけで抽出が空になり、
+    その動画が要約・分類・納品物から丸ごと消えるため、まとめて直す。
+    LLM は呼ばない（中身は触らず、行頭の記号だけ揃える）。
+    """
+    if not TRANSCRIPTS_DIR.exists():
+        _err("[warn] transcripts/ が存在しません")
+        return 0
+    fixed = 0
+    for md in sorted(TRANSCRIPTS_DIR.glob("*/*.md")):
+        text = md.read_text(encoding="utf-8")
+        before, sep, after = text.partition("## ポイント")
+        if not sep:
+            continue
+        section, tail_sep, tail = after.partition("\n---\n")
+        bullets = _normalize_points(section)
+        if not bullets:
+            _err(f"[warn] ポイントを復元できません: {md.name}")
+            continue
+        rebuilt = before + bullets + "\n" + (tail_sep + tail if tail_sep else "")
+        if rebuilt != text:
+            md.write_text(rebuilt, encoding="utf-8")
+            _err(f"[fixed] {md.parent.name}/{md.name}")
+            fixed += 1
+    _err(f"[done] {fixed} 件を整形")
+    return fixed
+
+
 def _repair_index() -> None:
     """_index.json から対応する .md ファイルが存在しないエントリを削除する。"""
     if not TRANSCRIPTS_DIR.exists():
@@ -1056,6 +1087,37 @@ def _call_ollama(prompt: str, base_url: str, model: str) -> str | None:
     return (data.get("response") or "").strip() or None
 
 
+def _normalize_points(raw: str) -> str:
+    """LLM の出力から箇条書きの中身だけを取り出し、見出しはこちらで付け直す。
+
+    書式を LLM に守らせない。実測で「## ポイnts」のように見出しの綴りが崩れることが
+    あり、崩れた見出しは後段の `## ポイント` 抽出をすり抜けて本文に混ざる
+    （要約・カテゴリ分類・納品物のすべてに伝播する）。
+    見出しは定数、中身だけが LLM の担当、という切り分けにしておけば起こらない。
+    """
+    lines = []
+    for raw_line in (raw or "").splitlines():
+        s = raw_line.strip()
+        if not s or s.startswith("#"):      # 見出しは綴りに関係なく捨てる
+            continue
+        if s.startswith(("- ", "－ ", "* ", "・")):
+            s = s.lstrip("-－*・ ").strip()
+        elif re.match(r"^\d+[.)]\s", s):
+            s = re.sub(r"^\d+[.)]\s*", "", s).strip()
+        else:
+            s = ""              # 箇条書きでない行（前置き・後書き）は捨てる
+        s = s.replace("**", "").strip()
+        if s:
+            lines.append(s)
+    if not lines:
+        # 箇条書きが1行も取れなかった場合だけ、地の文を行単位で拾う保険
+        lines = [s.replace("**", "").strip() for s in (raw or "").splitlines()
+                 if s.strip() and not s.strip().startswith("#")]
+    if not lines:
+        return ""
+    return "## ポイント\n" + "\n".join(f"- {s}" for s in lines)
+
+
 def _generate_core_summary(title: str, text: str) -> tuple[str, str]:
     local_url = os.environ.get("LOCAL_LLM_URL")
     local_model = os.environ.get("LOCAL_LLM_MODEL", "qwen2.5:14b")
@@ -1084,7 +1146,7 @@ def _generate_core_summary(title: str, text: str) -> tuple[str, str]:
 
 出力形式: 「## ポイント」という見出しの後に「- 」始まりの箇条書きのみ。それ以外の文章は一切不要。"""
 
-    result = _call_ollama(prompt, local_url, local_model)
+    result = _normalize_points(_call_ollama(prompt, local_url, local_model))
     if not result:
         raise RuntimeError("Ollama レスポンスが空でした")
     return result, f"Ollama({local_model})"
@@ -1099,12 +1161,9 @@ def _inject_core_summary(md_path: Path) -> None:
         title=re.search(r"^# (.+)", content, re.MULTILINE).group(1) if re.search(r"^# (.+)", content, re.MULTILINE) else "",
         text=raw_transcript,
     )
-    # 見出しが無いまま挿入すると、この関数の冒頭の "## ポイント" ガードが効かず
-    # 再実行のたびに二重挿入される。さらに _extract_points 側が拾えないので、
-    # その動画が要約・カテゴリ分類・納品物のすべてから黙って抜け落ちる。
-    summary = summary.strip()
-    if not summary.startswith("## ポイント"):
-        summary = "## ポイント\n" + summary
+    # ファイルに書く直前でもう一度正規化する。書式を保証する責任は
+    # 「書き込む側」に置く（正規化は冪等なので二重に通しても変わらない）。
+    summary = _normalize_points(summary)
     # 「処理日時: ...」行の直後、「---」の直前に挿入。
     # 置換文字列に LLM 出力を直接埋め込むと、バックスラッシュ（"C:\Users\..." 等）が
     # エスケープとして解釈され re.error で落ちる。関数 repl なら素通しになる
@@ -1734,6 +1793,8 @@ AI要約は別スクリプト:
 
     sub.add_parser("repair-index", help="_index.json からファイルが存在しないエントリを削除")
 
+    sub.add_parser("repair-points", help="既存トランスクリプトの「## ポイント」節の書式を整え直す")
+
     p_sync = sub.add_parser("sync", help="transcripts/ と summaries/ を Google Drive に同期")
     p_sync.add_argument("--only", choices=["transcripts", "summaries"],
                         help="同期対象を絞る（省略時は両方）")
@@ -1819,6 +1880,9 @@ AI要約は別スクリプト:
 
     elif args.cmd == "repair-index":
         _repair_index()
+
+    elif args.cmd == "repair-points":
+        _repair_points()
 
     elif args.cmd == "all":
         channels = _load_channels()
