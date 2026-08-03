@@ -248,7 +248,7 @@ def _renumber_categories(out_dir: Path, channel_name: str, entries: list[dict]) 
 _TAB_COLORS = [
     ("#3b4c8c", "#93a4e8"), ("#4a6b4a", "#8fbe8f"), ("#a4593f", "#e2977e"),
     ("#6d4260", "#c398b7"), ("#8a6a1f", "#dcc070"), ("#2f6b70", "#83c4ca"),
-    ("#7a3f4e", "#d094a0"), ("#4d5a2e", "#b3c17e"),
+    ("#7a3f4e", "#d094a0"), ("#4d5a2e", "#b3c17e"), ("#4a4f7a", "#a0a5d8"),
 ]
 
 # 手帳の索引タブを模した見た目にしてある。89本ぶんの長い1ページを「話題ごとに
@@ -565,6 +565,11 @@ _CHROME_CANDIDATES = (
     "/Applications/Chromium.app/Contents/MacOS/Chromium",
     "/Applications/Microsoft Edge.app/Contents/MacOS/Microsoft Edge",
     "google-chrome", "google-chrome-stable", "chromium", "chromium-browser",
+    # WSL には Linux 版が入っていないことが多い。パイプライン本体は WSL で動くので、
+    # 最後の砦として Windows 側の Chrome を直接呼ぶ（下の _win_path でパスを渡す）
+    "/mnt/c/Program Files/Google/Chrome/Application/chrome.exe",
+    "/mnt/c/Program Files (x86)/Google/Chrome/Application/chrome.exe",
+    "/mnt/c/Program Files (x86)/Microsoft/Edge/Application/msedge.exe",
 )
 
 
@@ -578,6 +583,21 @@ def _find_chrome() -> str | None:
     return None
 
 
+def _win_path(p: Path) -> str | None:
+    """WSL のパスを Windows 形式（\\\\wsl.localhost\\...）に直す。
+
+    Windows 側の Chrome は Linux のパスを解釈できないので、入力の HTML も
+    出力の PDF も変換して渡す必要がある。UNC 越しの読み書きは実測で通る。
+    """
+    import subprocess
+    try:
+        r = subprocess.run(["wslpath", "-w", str(p.resolve())],
+                           capture_output=True, text=True, timeout=10)
+    except (OSError, subprocess.TimeoutExpired):
+        return None
+    return r.stdout.strip() or None
+
+
 def _html_to_pdf(html_path: Path, pdf_path: Path) -> bool:
     """HTML を PDF に変換する。Chrome が無ければ HTML だけ残して諦める。"""
     import subprocess
@@ -585,11 +605,19 @@ def _html_to_pdf(html_path: Path, pdf_path: Path) -> bool:
     if not chrome:
         _err("[warn] Chrome が見つからないので PDF は作らない（HTML はできている）")
         return False
+
+    if chrome.startswith("/mnt/"):          # WSL から Windows の Chrome を呼ぶ場合
+        src, dst = _win_path(html_path), _win_path(pdf_path)
+        if not src or not dst:
+            _err("[warn] wslpath が使えないので PDF は作らない（HTML はできている）")
+            return False
+    else:
+        src, dst = html_path.resolve().as_uri(), str(pdf_path)
+
     cmd = [chrome, "--headless", "--disable-gpu", "--no-sandbox",
            "--no-pdf-header-footer",          # 既定のURL・日付・ページ番号を出さない
            "--virtual-time-budget=20000",     # フォント適用を待つ
-           f"--print-to-pdf={pdf_path}",
-           html_path.resolve().as_uri()]
+           f"--print-to-pdf={dst}", src]
     try:
         r = subprocess.run(cmd, capture_output=True, text=True, timeout=300)
     except (OSError, subprocess.TimeoutExpired) as e:

@@ -1,5 +1,7 @@
 import json
+import subprocess
 import sys
+import types
 from pathlib import Path
 
 import pytest
@@ -352,6 +354,60 @@ class TestHtmlToPdf:
         html_file = tmp_path / "a.html"
         html_file.write_text("<p>x</p>", encoding="utf-8")
         assert pkg._html_to_pdf(html_file, tmp_path / "nope.pdf") is False
+
+    def _spy(self, monkeypatch, tmp_path, chrome):
+        """Chrome を呼ばずに、組み立てたコマンドだけ捕まえる。"""
+        seen = {}
+
+        def fake_run(cmd, **kw):
+            seen["cmd"] = cmd
+            (tmp_path / "a.pdf").write_bytes(b"%PDF-1.4")
+            return types.SimpleNamespace(returncode=0, stdout="", stderr="")
+
+        monkeypatch.setattr(pkg, "_find_chrome", lambda: chrome)
+        monkeypatch.setattr(subprocess, "run", fake_run)
+        html_file = tmp_path / "a.html"
+        html_file.write_text("<p>x</p>", encoding="utf-8")
+        assert pkg._html_to_pdf(html_file, tmp_path / "a.pdf") is True
+        return seen["cmd"]
+
+    def test_native_chrome_gets_file_uri(self, tmp_path, monkeypatch):
+        cmd = self._spy(monkeypatch, tmp_path, "/usr/bin/google-chrome")
+        assert cmd[-1].startswith("file://")
+        assert cmd[-2] == f"--print-to-pdf={tmp_path / 'a.pdf'}"
+
+    def test_windows_chrome_gets_windows_paths(self, tmp_path, monkeypatch):
+        # WSL から Windows の Chrome を呼ぶ場合、file:// URI も Linux パスも通らない。
+        # 入力・出力の両方が wslpath の変換結果になっていないと PDF が黙って落ちる
+        monkeypatch.setattr(pkg, "_win_path", lambda p: rf"\\wsl.localhost\U\{p.name}")
+        cmd = self._spy(monkeypatch, tmp_path,
+                        "/mnt/c/Program Files/Google/Chrome/Application/chrome.exe")
+        assert cmd[-1] == r"\\wsl.localhost\U\a.html"
+        assert cmd[-2] == r"--print-to-pdf=\\wsl.localhost\U\a.pdf"
+        assert not any(str(tmp_path) in str(a) for a in cmd[1:])
+
+    def test_windows_chrome_without_wslpath_is_not_fatal(self, tmp_path, monkeypatch):
+        monkeypatch.setattr(pkg, "_find_chrome",
+                            lambda: "/mnt/c/Program Files/Google/Chrome/Application/chrome.exe")
+        monkeypatch.setattr(pkg, "_win_path", lambda p: None)
+        html_file = tmp_path / "a.html"
+        html_file.write_text("<p>x</p>", encoding="utf-8")
+        assert pkg._html_to_pdf(html_file, tmp_path / "a.pdf") is False
+
+    def test_win_path_returns_none_when_wslpath_missing(self, tmp_path, monkeypatch):
+        def boom(*a, **kw):
+            raise OSError("no wslpath")
+
+        monkeypatch.setattr(subprocess, "run", boom)
+        assert pkg._win_path(tmp_path / "x.html") is None
+
+    def test_win_path_uses_wslpath_output(self, tmp_path, monkeypatch):
+        def fake_run(cmd, **kw):
+            assert cmd[:2] == ["wslpath", "-w"]
+            return types.SimpleNamespace(returncode=0, stdout="C:\\tmp\\x.html\n", stderr="")
+
+        monkeypatch.setattr(subprocess, "run", fake_run)
+        assert pkg._win_path(tmp_path / "x.html") == "C:\\tmp\\x.html"
 
 
 class TestBulletsToHtml:
