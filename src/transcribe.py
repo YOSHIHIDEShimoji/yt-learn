@@ -2,6 +2,7 @@
 """YouTube動画の文字起こし・チャンネル管理ツール（AI要約なし）"""
 
 import argparse
+import gc
 import json
 import os
 import re
@@ -956,7 +957,6 @@ def _preload_cuda_libs() -> None:
 def _transcribe_faster_whisper(audio_path: str, lang: str, model_size: str,
                                 device: str, compute_type: str, label: str) -> str:
     from faster_whisper import WhisperModel
-    from tqdm import tqdm
     if device == "cuda":
         _preload_cuda_libs()
     _err(f"[model] {model_size} (faster-whisper / {label}) をロード中...")
@@ -964,6 +964,18 @@ def _transcribe_faster_whisper(audio_path: str, lang: str, model_size: str,
     if device == "cpu":
         kwargs["cpu_threads"] = 8
     model = WhisperModel(model_size, **kwargs)
+    try:
+        return _run_whisper(model, audio_path, lang)
+    finally:
+        # 動画ごとにモデルを作り直すので、明示的に解放しないと VRAM が積み上がる。
+        # GPU が足りなくなったときの失敗は WSL のインスタンスごと落とすため、
+        # ここをGCに任せない
+        del model
+        gc.collect()
+
+
+def _run_whisper(model, audio_path: str, lang: str) -> str:
+    from tqdm import tqdm
     _err(f"[transcribe] {Path(audio_path).name}")
     segments_iter, info = model.transcribe(
         audio_path,
@@ -1026,6 +1038,12 @@ def _call_ollama(prompt: str, base_url: str, model: str) -> str | None:
         "prompt": prompt,
         "stream": False,
         "think": False,
+        # 応答後すぐVRAMを解放させる。この関数は動画1本ごとに Whisper の直後で呼ばれ、
+        # Ollama の既定（5分保持）だと 14B モデルの約9.5GB を抱えたまま次の動画の
+        # Whisper ロードに入る。16GB のGPUでは載りきらず、CUDA の失敗が WSL の
+        # インスタンスごと落とす（2026-08 実測）。モデル再ロードのぶん1本あたり
+        # 数秒遅くなるが、クラッシュして全部やり直すよりはるかに安い。
+        "keep_alive": 0,
     }).encode("utf-8")
     req = urllib.request.Request(
         f"{base_url.rstrip('/')}{OLLAMA_GENERATE_PATH}",

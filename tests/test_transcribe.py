@@ -911,6 +911,35 @@ class TestResolveDateIndexLongUnavailableRun:
         assert 0 <= k <= 200
 
 
+class TestOllamaKeepAlive:
+    def test_releases_vram_after_each_call(self):
+        """_call_ollama は応答後すぐ VRAM を解放させること。
+
+        この関数は動画1本ごとに Whisper の直後で呼ばれる。Ollama の既定（5分保持）だと
+        14B モデルの約9.5GB を抱えたまま次の Whisper ロードに入り、16GB のGPUでは
+        載りきらずに CUDA の失敗が WSL のインスタンスごと落とす（2026-08 実測）。
+        """
+        captured = {}
+
+        class FakeResp:
+            def __enter__(self):
+                return self
+
+            def __exit__(self, *a):
+                return False
+
+            def read(self):
+                return json.dumps({"response": "ok"}).encode()
+
+        def fake_urlopen(req, timeout=None):
+            captured["payload"] = json.loads(req.data.decode())
+            return FakeResp()
+
+        with patch("urllib.request.urlopen", side_effect=fake_urlopen):
+            transcribe._call_ollama("p", "http://x", "m")
+        assert captured["payload"]["keep_alive"] == 0
+
+
 class TestFilterByRangeDates:
     """--after / --before の意味論（境界日の帰属）と widen の向きを固定する。
 
