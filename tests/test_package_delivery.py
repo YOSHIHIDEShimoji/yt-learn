@@ -415,6 +415,21 @@ class TestBulletsToHtml:
         out = pkg._bullets_to_html("- 一つめ\n- 二つめ")
         assert out == "<ul><li>一つめ</li><li>二つめ</li></ul>"
 
+    def test_renders_h3_subheading(self):
+        out = pkg._bullets_to_html("### ユニクロ\n- セーター")
+        assert out == "<h3 class='sub'>ユニクロ</h3>\n<ul><li>セーター</li></ul>"
+
+    def test_broken_points_heading_is_still_dropped(self):
+        # LLM が綴りを間違えた見出しを本文として出さないための守りを壊していないこと
+        out = pkg._bullets_to_html("## ポイnts\n- 中身")
+        assert "ポイnts" not in out
+        assert out == "<ul><li>中身</li></ul>"
+
+    def test_subheading_closes_open_list(self):
+        out = pkg._bullets_to_html("- 前\n### 次\n- 後")
+        assert out == ("<ul><li>前</li></ul>\n<h3 class='sub'>次</h3>\n"
+                       "<ul><li>後</li></ul>")
+
     def test_escapes_html(self):
         # LLM 出力に < や & が混ざってもページを壊さない
         out = pkg._bullets_to_html("- a < b & c")

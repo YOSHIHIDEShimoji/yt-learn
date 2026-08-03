@@ -339,6 +339,11 @@ a{color:inherit}
 .lede li:last-child{margin-bottom:0}
 .detail-label{display:block;font-size:.6875rem;letter-spacing:.18em;color:var(--ink2);
  margin:0 0 .7rem}
+/* 話題の中の小見出し。31本ぶんの買い物リストのような長い節を、スマホで
+   スクロールしながらでも現在地がわかる粒度に割るためのもの */
+.sub{font-family:var(--mincho);font-size:1.0625rem;font-weight:600;
+ margin:1.9rem 0 .6rem;padding-left:.7rem;border-left:2px solid var(--tab)}
+.sub:first-child{margin-top:0}
 
 .roll{margin-top:2rem;border-top:1px solid var(--rule);padding-top:1.25rem}
 .roll-label{font-size:.6875rem;letter-spacing:.18em;color:var(--ink2);margin:0 0 .75rem}
@@ -419,6 +424,7 @@ a{color:inherit}
  .cat{break-before:page;padding-top:0}
  .cat h2{font-size:15pt}
  .cat li{margin-bottom:2mm;break-inside:avoid}
+ .sub{font-size:11.5pt;margin:6mm 0 2mm;break-after:avoid}
  .chip{height:6mm;width:2mm}
  /* 一覧そのものは改ページをまたいでよい（塊で送ると空きページができる）。
     ただし1件が途中で割れるのは防ぐ */
@@ -458,7 +464,11 @@ a{color:inherit}
 
 
 def _bullets_to_html(text: str) -> str:
-    """LLM が出す「- 」始まりの箇条書きを HTML に起こす。装飾記法は想定しない。"""
+    """「- 」始まりの箇条書きと「### 」の小見出しを HTML に起こす。
+
+    小見出しを拾うのは「### 」だけに限る。壊れた見出し（実測: `## ポイnts`）を
+    本文として出さないための「# 始まりは捨てる」という守りを緩めないため。
+    """
     out, buf = [], []
     for raw in text.splitlines():
         line = raw.strip()
@@ -468,6 +478,9 @@ def _bullets_to_html(text: str) -> str:
         if buf:
             out.append("<ul>" + "".join(buf) + "</ul>")
             buf = []
+        if line.startswith("### "):
+            out.append(f"<h3 class='sub'>{html.escape(line[4:].strip())}</h3>")
+            continue
         if line and not line.startswith(("#", "---", "チャンネル:")):
             out.append(f"<p>{html.escape(line)}</p>")
     if buf:
