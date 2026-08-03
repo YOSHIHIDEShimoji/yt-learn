@@ -433,11 +433,17 @@ a{color:inherit}
  .lede li{font-size:10pt;margin-bottom:2mm}
 
  .notes{break-before:page;padding-top:0}
- .notes-head{font-size:15pt}
- .card{break-inside:avoid;box-shadow:none;border:1px solid var(--rule);
+ .notes-head{font-size:15pt;break-after:avoid}
+ /* カードは改ページをまたいでよい。1枚まるごと avoid にすると、紙1枚に収まらない
+    カード（要点が10個あると普通に超える）が丸ごと次ページへ送られ、そのぶんの
+    余白が全ページに生まれる（実測: 72本で135ページ、半分が空白）。割れて困るのは
+    カードではなく「見出しだけ取り残される」「要点1行が途中で切れる」の2つなので、
+    そこだけ守る。.roll で同じ直し方をしている。 */
+ .card{box-shadow:none;border:1px solid var(--rule);
   border-left:2.5pt solid var(--tab);border-radius:2pt;padding:4mm 4.5mm;margin-bottom:4mm}
- .card h3{font-size:10.5pt}
- .card li{font-size:9.5pt;margin-bottom:1.5mm}
+ .card h3{font-size:10.5pt;break-after:avoid}
+ .card .meta{break-after:avoid}
+ .card li{font-size:9.5pt;margin-bottom:1.5mm;break-inside:avoid}
  .card:target{outline:none}
  a{text-decoration:none}
 }
