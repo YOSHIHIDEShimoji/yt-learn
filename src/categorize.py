@@ -363,8 +363,32 @@ def _reduce_group(channel_name: str, category: str, group: list[str],
     return _call_llm(prompt, base_url, model)
 
 
+def _conclude(channel_name: str, category: str, body: str,
+              base_url: str, model: str) -> str | None:
+    """まとめ全体から「結論」だけを3〜5行に絞る。
+
+    読み手の困りごとは「動画を見ても忘れる」なので、詳細より先に
+    “読み返す場所” を1つ作る。詳細は下に残すので情報は落ちない。
+    """
+    prompt = f"""以下はYouTubeチャンネル「{channel_name}」の「{category}」についての要点です。
+
+{body[:REDUCE_CHARS]}
+
+## 指示
+この話題の結論を3〜5個に絞ってください。
+
+ルール:
+- 「結局どうすればいいのか」が分かる行だけを残す
+- 抽象的な心構えではなく、具体的な行動や判断基準を書く
+- 1行は40字以内
+- マークダウンの装飾（**など）は使わない
+
+出力形式: 「- 」始まりの箇条書きのみ。前置きは不要。"""
+    return _call_llm(prompt, base_url, model)
+
+
 def _write_category_file(channel_name: str, category: str, body: str,
-                         items: list[dict]) -> Path:
+                         items: list[dict], conclusion: str = "") -> Path:
     out_dir = SUMMARIES_DIR / _sanitize(channel_name)
     out_dir.mkdir(parents=True, exist_ok=True)
     path = out_dir / f"{_sanitize(category)}.md"
@@ -373,6 +397,10 @@ def _write_category_file(channel_name: str, category: str, body: str,
         "",
         f"チャンネル: {channel_name}　／　対象動画: {len(items)}本",
         "",
+    ]
+    if conclusion:
+        lines += ["## まず結論", "", conclusion.strip(), "", "## くわしく", ""]
+    lines += [
         body.strip(),
         "",
         "---",
@@ -439,7 +467,12 @@ def _summarize_categories(channel_name: str, items: list[dict], assign: dict,
             except Exception as e:
                 _err(f"  [warn] {cat}: 統合に失敗（分割のまま出力）: {e}")
                 body = "\n".join(partials)
-        path = _write_category_file(channel_name, cat, body, members)
+        try:
+            conclusion = _conclude(channel_name, cat, body, base_url, model) or ""
+        except Exception as e:
+            _err(f"  [warn] {cat}: 結論の抽出に失敗（詳細のみで出力）: {e}")
+            conclusion = ""
+        path = _write_category_file(channel_name, cat, body, members, conclusion)
         _copy_file_to_drive(path)
         _err(f"  → {path}")
 

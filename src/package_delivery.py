@@ -126,22 +126,44 @@ def _write_full(out_dir: Path, entries: list[dict]) -> int:
     return len(entries)
 
 
-def _copy_videos(out_dir: Path, entries: list[dict], channel_name: str) -> tuple[int, int]:
-    """deliver/<channel>/videos/<id>.* を連番つきで並べ直す。戻り値: (件数, 合計MB)"""
+def _pick_videos(entries: list[dict], available: set, limit: int, order: str) -> list[dict]:
+    """動画を同梱する対象を選ぶ。
+
+    スマホで見る場合、全部入れると容量も再生時間も現実的でなくなる
+    （89本＝約27時間。どの便でも見きれないうえ電池が持たない）。
+    既定は再生数の多い順。_index.json に再生数が無い動画は投稿日順で後ろに回す。
+    """
+    pool = [e for e in entries if e["id"] in available]
+    if order == "popular":
+        pool.sort(key=lambda e: (e.get("view_count") or 0), reverse=True)
+    # order == "date" のときは entries の並び（投稿が新しい順）をそのまま使う
+    if limit > 0:
+        pool = pool[:limit]
+    return sorted(pool, key=lambda e: e["num"])
+
+
+def _copy_videos(out_dir: Path, entries: list[dict], channel_name: str,
+                 limit: int = 0, order: str = "popular") -> tuple[int, int, set]:
+    """deliver/<channel>/videos/<id>.* を連番つきで並べ直す。
+
+    戻り値: (件数, 合計MB, 同梱した動画の連番の集合)
+    """
     src_dir = DELIVER_DIR / _sanitize(channel_name) / "videos"
     if not src_dir.exists():
-        return 0, 0
-    out_dir.mkdir(parents=True, exist_ok=True)
-    count, total = 0, 0
+        return 0, 0, set()
     by_id = {p.stem: p for p in src_dir.iterdir() if p.suffix in VIDEO_SUFFIXES}
-    for e in entries:
-        src = by_id.get(e["id"])
-        if not src:
-            continue
+    picked = _pick_videos(entries, set(by_id), limit, order)
+    if not picked:
+        return 0, 0, set()
+
+    out_dir.mkdir(parents=True, exist_ok=True)
+    total, nums = 0, set()
+    for e in picked:
+        src = by_id[e["id"]]
         shutil.copy2(src, out_dir / f"{e['stem']}{src.suffix}")
-        count += 1
         total += src.stat().st_size
-    return count, total // (1024 * 1024)
+        nums.add(e["num"])
+    return len(picked), total // (1024 * 1024), nums
 
 
 def _collect_categories(channel_name: str, entries: list[dict]) -> list[dict]:
@@ -172,10 +194,17 @@ def _collect_categories(channel_name: str, entries: list[dict]) -> list[dict]:
     for src in files:
         text = src.read_text(encoding="utf-8")
         head, sep, _tail = text.partition("## このカテゴリの動画")
+        # categorize.py が「まず結論」を付けていれば分けて持つ（HTML で強調するため）
+        lede, has_lede, detail = head.partition("## くわしく")
+        if has_lede:
+            lede = lede.partition("## まず結論")[2]
+        else:
+            lede, detail = "", head
         members = [by_filename[f] for f, c in assign.items()
                    if _sanitize(c) == src.stem and f in by_filename]
         members.sort(key=lambda e: e["num"])
         cats.append({"name": src.stem, "file": src, "head": head,
+                     "lede": lede, "detail": detail,
                      "has_member_section": bool(sep), "members": members})
     return cats
 
@@ -203,41 +232,210 @@ def _renumber_categories(out_dir: Path, channel_name: str, entries: list[dict]) 
     return copied
 
 
+# 索引タブの色。話題ごとに1色を割り当て、見出し・タブ・動画番号で同じ色を使う。
+# 装飾ではなく「どの話題の話か」を色で示すための対応づけ。(明色, 暗色) の対。
+_TAB_COLORS = [
+    ("#3b4c8c", "#93a4e8"), ("#4a6b4a", "#8fbe8f"), ("#a4593f", "#e2977e"),
+    ("#6d4260", "#c398b7"), ("#8a6a1f", "#dcc070"), ("#2f6b70", "#83c4ca"),
+    ("#7a3f4e", "#d094a0"), ("#4d5a2e", "#b3c17e"),
+]
+
+# 手帳の索引タブを模した見た目にしてある。89本ぶんの長い1ページを「話題ごとに
+# 見出しを立てて、いつでも別の話題へ飛べる」形にするのが目的で、飾りではない。
+# 明朝を見出し・ゴシックを本文に当てるのは日本語組版の定石だが、オフライン前提
+# なので Web フォントは使わず OS 標準の明朝／ゴシックだけで組む。
+# 機内は暗いことが多いのでダークモードは本気で作る。
 _CSS = """
-:root { color-scheme: light dark; --fg:#1c1c1e; --bg:#fff; --muted:#6b6b70;
-        --line:#e3e3e6; --accent:#0b5fff; --card:#f7f7f8; }
-@media (prefers-color-scheme: dark) {
-  :root { --fg:#e8e8ea; --bg:#141416; --muted:#9a9aa0;
-          --line:#2c2c30; --accent:#7aa2ff; --card:#1c1c1f; }
+:root{color-scheme:light dark;
+ --paper:#f2f1ee;--card:#fff;--ink:#1a1d21;--ink2:#5b5f66;--rule:#dedbd4;
+ --shadow:0 1px 2px rgba(26,29,33,.06),0 6px 20px rgba(26,29,33,.05);
+ --mincho:"Hiragino Mincho ProN","Yu Mincho",YuMincho,"Noto Serif JP","Songti SC",serif;
+ --gothic:-apple-system,BlinkMacSystemFont,"Hiragino Sans","Yu Gothic",YuGothic,"Noto Sans JP",sans-serif;
+ --mono:ui-monospace,"SF Mono","Roboto Mono",Menlo,monospace;}
+/* 話題の色は要素に (明色, 暗色) の対をインラインで持たせ、--tab をここで選ぶ。
+   インラインで --tab を直接指定すると、インラインの優先度が勝ってしまい
+   ダークモードや印刷での切り替えが効かなくなる。 */
+.tab,.cat,.card{--tab:var(--tab-l)}
+@media (prefers-color-scheme:dark){:root{
+ --paper:#15171a;--card:#1c1f23;--ink:#e7e5e1;--ink2:#989ba1;--rule:#2b2f34;
+ --shadow:none;}
+ /* 暗所では沈むので明るい対に差し替える */
+ .tab,.cat,.card{--tab:var(--tab-d)}}
+*{box-sizing:border-box}
+html{scroll-behavior:smooth}
+@media (prefers-reduced-motion:reduce){html{scroll-behavior:auto}}
+body{margin:0;background:var(--paper);color:var(--ink);font-family:var(--gothic);
+ font-size:16px;line-height:1.9;-webkit-text-size-adjust:100%;
+ font-feature-settings:"palt" 1;}
+a{color:inherit}
+:focus-visible{outline:2px solid currentColor;outline-offset:3px;border-radius:3px}
+
+/* 表紙を全幅に置き、その下を「索引 | 本文」の2段にする。
+   DOM順を 表紙→索引→本文 にしてあるので、紙に流したときもそのまま目次になる。 */
+.shell{max-width:62rem;margin:0 auto;padding:0 1.25rem 5rem;
+ display:grid;grid-template-columns:9.25rem minmax(0,1fr);
+ grid-template-areas:"cover cover" "index body";gap:0 3rem;align-items:start}
+.cover{grid-area:cover}
+.index{grid-area:index}
+.body{grid-area:body}
+
+/* ── 索引タブ ── */
+.index{position:sticky;top:1.5rem;padding-top:3rem}
+.index-label{display:block;font-size:.6875rem;letter-spacing:.22em;color:var(--ink2);
+ margin:0 0 .75rem .25rem}
+.index ol{list-style:none;margin:0;padding:0}
+.index li{margin:0 0 .25rem}
+.tab{display:flex;align-items:baseline;gap:.5rem;text-decoration:none;
+ padding:.5rem .7rem;border-left:3px solid var(--tab);border-radius:0 .4rem .4rem 0;
+ background:var(--card);box-shadow:var(--shadow);transition:transform .12s ease}
+.tab:hover{transform:translateX(3px)}
+@media (prefers-reduced-motion:reduce){.tab:hover{transform:none}}
+.tab-name{font-size:.8125rem;line-height:1.4;flex:1}
+.tab-count{font-family:var(--mono);font-size:.6875rem;color:var(--ink2);
+ font-variant-numeric:tabular-nums}
+.tab-all{border-left-color:var(--ink2);margin-top:.75rem}
+
+/* ── 表紙 ── */
+.cover{padding:3.5rem 0 2.5rem;border-bottom:1px solid var(--rule)}
+.eyebrow{font-size:.6875rem;letter-spacing:.22em;color:var(--ink2);margin:0 0 1rem}
+.cover h1{font-family:var(--mincho);font-weight:600;letter-spacing:.03em;
+ font-size:clamp(2.125rem,6vw,3.25rem);line-height:1.25;margin:0 0 1.25rem}
+.standfirst{font-size:1.0625rem;margin:0 0 2rem;max-width:32em}
+.how{border-left:2px solid var(--rule);padding-left:1.1rem;margin:0}
+.how p{margin:0 0 .4rem;font-size:.875rem;color:var(--ink2);line-height:1.8}
+.how p:last-child{margin-bottom:0}
+
+/* ── 話題 ── */
+.cat{padding-top:3.25rem;scroll-margin-top:1.5rem}
+.cat-head{display:flex;align-items:center;gap:.75rem;margin:0 0 1.25rem}
+.chip{width:.6rem;height:1.6rem;border-radius:.2rem;background:var(--tab);flex:none}
+.cat h2{font-family:var(--mincho);font-weight:600;letter-spacing:.03em;
+ font-size:clamp(1.4375rem,3.6vw,1.875rem);line-height:1.3;margin:0}
+.cat-n{font-family:var(--mono);font-size:.75rem;color:var(--ink2);
+ font-variant-numeric:tabular-nums}
+.cat ul{padding-left:1.15rem;margin:0}
+.cat li{margin:0 0 .7rem}
+.cat li::marker{color:var(--tab)}
+
+/* 「まず結論」— 読み返すときここだけ見れば思い出せる、という置き場 */
+.lede{background:var(--card);border-left:3px solid var(--tab);border-radius:0 .5rem .5rem 0;
+ padding:1.1rem 1.35rem;margin:0 0 1.75rem;box-shadow:var(--shadow)}
+.lede-label{display:block;font-size:.6875rem;letter-spacing:.18em;color:var(--ink2);
+ margin-bottom:.6rem}
+.lede ul{padding-left:1.1rem;margin:0}
+.lede li{margin:0 0 .5rem;font-weight:500}
+.lede li:last-child{margin-bottom:0}
+.detail-label{display:block;font-size:.6875rem;letter-spacing:.18em;color:var(--ink2);
+ margin:0 0 .7rem}
+
+.roll{margin-top:2rem;border-top:1px solid var(--rule);padding-top:1.25rem}
+.roll-label{font-size:.6875rem;letter-spacing:.18em;color:var(--ink2);margin:0 0 .75rem}
+.roll ul{list-style:none;padding:0;margin:0}
+.roll li{margin:0}
+.roll a{display:flex;gap:.85rem;align-items:baseline;text-decoration:none;
+ padding:.45rem .5rem;margin-left:-.5rem;border-radius:.4rem;font-size:.9375rem}
+.roll a:hover{background:var(--card)}
+.num{font-family:var(--mono);font-size:.75rem;color:var(--tab);
+ font-variant-numeric:tabular-nums;flex:none;padding-top:.15rem}
+
+/* ── 動画ごとの要点 ── */
+.notes{padding-top:4rem;scroll-margin-top:1.5rem}
+.notes-head{font-family:var(--mincho);font-weight:600;letter-spacing:.03em;
+ font-size:clamp(1.4375rem,3.6vw,1.875rem);margin:0 0 .35rem}
+.notes-sub{color:var(--ink2);font-size:.875rem;margin:0 0 1.5rem}
+.card{background:var(--card);border-radius:.7rem;padding:1.35rem 1.5rem;
+ margin:0 0 1rem;box-shadow:var(--shadow);scroll-margin-top:1.5rem;
+ border-left:3px solid var(--tab)}
+.card:target{outline:2px solid var(--tab);outline-offset:2px}
+.card h3{font-size:1rem;line-height:1.6;margin:0 0 .5rem;font-weight:600;
+ display:flex;gap:.75rem;align-items:baseline}
+.card ul{padding-left:1.15rem;margin:.6rem 0 0}
+.card li{margin:0 0 .55rem;font-size:.9375rem}
+.card li::marker{color:var(--tab)}
+.meta{font-family:var(--mono);font-size:.75rem;color:var(--ink2);margin:0}
+.meta a{color:var(--tab);text-decoration:none;font-family:var(--gothic)}
+.meta a:hover{text-decoration:underline}
+.dot{opacity:.4;margin:0 .5rem}
+
+/* ── 画面が狭いとき: 索引を上部の横スクロール帯にする ── */
+@media (max-width:820px){
+ .shell{grid-template-columns:minmax(0,1fr);gap:0;padding:0 1rem 4rem}
+ .index{position:sticky;top:0;z-index:5;padding:.6rem 1rem;margin:0 -1rem;
+  background:var(--paper);border-bottom:1px solid var(--rule);
+  overflow-x:auto;-webkit-overflow-scrolling:touch}
+ .index-label{display:none}
+ .index ol{display:flex;gap:.4rem;width:max-content}
+ .index li{margin:0}
+ .tab{border-left:none;border-bottom:3px solid var(--tab);border-radius:.4rem .4rem 0 0;
+  white-space:nowrap;padding:.4rem .7rem}
+ .tab:hover{transform:none}
+ .tab-all{border-bottom-color:var(--ink2);margin-top:0}
+ .cover{padding:2.5rem 0 2rem}
+ .cat,.notes{scroll-margin-top:3.75rem}
+ .card{scroll-margin-top:3.75rem;padding:1.15rem 1.15rem}
 }
-* { box-sizing: border-box; }
-body { margin:0; padding:0 1rem 4rem; background:var(--bg); color:var(--fg);
-       font-family:-apple-system,BlinkMacSystemFont,"Hiragino Sans","Noto Sans JP",sans-serif;
-       line-height:1.75; -webkit-text-size-adjust:100%; }
-.wrap { max-width:44rem; margin:0 auto; }
-header { padding:2rem 0 1rem; border-bottom:1px solid var(--line); }
-h1 { font-size:1.5rem; margin:0 0 .3rem; }
-h2 { font-size:1.25rem; margin:2.5rem 0 .75rem; padding-top:.5rem; }
-h3 { font-size:1rem; margin:2rem 0 .4rem; }
-.sub { color:var(--muted); font-size:.875rem; margin:0; }
-nav { background:var(--card); border-radius:.75rem; padding:1rem 1.25rem; margin:1.5rem 0; }
-nav ol { margin:.25rem 0 0; padding-left:1.25rem; }
-nav a, .vid-list a { color:var(--accent); text-decoration:none; }
-nav a:hover, .vid-list a:hover { text-decoration:underline; }
-ul { padding-left:1.25rem; }
-li { margin:.4rem 0; }
-.vid-list { list-style:none; padding:0; margin:.5rem 0 0; }
-.vid-list li { margin:.3rem 0; font-size:.9375rem; }
-.num { display:inline-block; min-width:2.6rem; color:var(--muted);
-       font-variant-numeric:tabular-nums; }
-.card { border:1px solid var(--line); border-radius:.75rem; padding:1rem 1.25rem;
-        margin:1rem 0; }
-.meta { color:var(--muted); font-size:.8125rem; margin:.2rem 0 .6rem; }
-.meta a { color:var(--accent); text-decoration:none; }
-.tip { background:var(--card); border-radius:.75rem; padding:1rem 1.25rem;
-       font-size:.9375rem; }
-.top { font-size:.8125rem; color:var(--muted); text-decoration:none; }
-hr { border:0; border-top:1px solid var(--line); margin:3rem 0 0; }
+
+/* ── 印刷 / PDF ──
+   読むのはスマホなので、A4 ではなく文庫本ほどのページにする。
+   画面幅にページを合わせたときに本文が読める大きさで出るのが目的。
+   索引は固定をやめ、表紙の次に「目次」として1度だけ流す。 */
+@media print{
+ :root{--paper:#fff;--card:#fff;--ink:#15181c;--ink2:#5c6167;--rule:#d6d3cd;--shadow:none}
+ .tab,.cat,.card{--tab:var(--tab-l)}
+ @page{size:110mm 190mm;margin:11mm 10mm}
+ body{font-size:10pt;line-height:1.85;background:#fff}
+ .shell{display:block;max-width:none;padding:0;gap:0}
+
+ /* 表紙と目次は1ページに同居させる。別ページに割ると、どちらも紙の1/3しか
+    埋まらずスカスカな冊子になる。 */
+ .cover{padding:8mm 0 7mm;border:none;break-after:auto}
+ .cover h1{font-size:22pt;line-height:1.3;margin-bottom:7mm}
+ .eyebrow{font-size:7.5pt;margin-bottom:5mm}
+ .standfirst{font-size:10.5pt;margin-bottom:7mm}
+ .how p{font-size:8.5pt}
+
+ .index{position:static;padding:7mm 0 0;margin:0;background:none;
+  border-top:1px solid var(--rule);overflow:visible;break-after:page}
+ .index-label{display:block;font-size:8pt;margin-bottom:4mm}
+ .index ol{display:block;width:auto}
+ .index li{margin:0 0 1.5mm}
+ .tab{display:flex;background:none;box-shadow:none;border-radius:0;
+  border-left:2.5pt solid var(--tab);padding:1.5mm 3mm;break-inside:avoid}
+ .tab-name{font-size:9.5pt}
+ .tab-all{border-left-color:var(--ink2);margin-top:4mm}
+
+ .cat{break-before:page;padding-top:0}
+ .cat h2{font-size:15pt}
+ .cat li{margin-bottom:2mm;break-inside:avoid}
+ .chip{height:6mm;width:2mm}
+ /* 一覧そのものは改ページをまたいでよい（塊で送ると空きページができる）。
+    ただし1件が途中で割れるのは防ぐ */
+ .roll{margin-top:6mm;padding-top:4mm}
+ .roll li{break-inside:avoid}
+ .roll a{padding:.8mm 0;margin:0;font-size:9pt}
+ .roll a:hover{background:none}
+
+ /* まず結論の枠 */
+ .lede{background:#f6f5f2;border-left:2.5pt solid var(--tab);border-radius:2pt;
+  padding:4mm 5mm;margin:0 0 6mm;break-inside:avoid}
+ .lede-label{font-size:7.5pt}
+ .lede li{font-size:10pt;margin-bottom:2mm}
+
+ .notes{break-before:page;padding-top:0}
+ .notes-head{font-size:15pt}
+ .card{break-inside:avoid;box-shadow:none;border:1px solid var(--rule);
+  border-left:2.5pt solid var(--tab);border-radius:2pt;padding:4mm 4.5mm;margin-bottom:4mm}
+ .card h3{font-size:10.5pt}
+ .card li{font-size:9.5pt;margin-bottom:1.5mm}
+ .card:target{outline:none}
+ a{text-decoration:none}
+}
+@media print and (max-width:820px){
+ .index{position:static;margin:0;padding:0;border:none;background:none}
+ .index ol{display:block;width:auto}
+ .tab{border-bottom:none;border-left:2.5pt solid var(--tab);border-radius:0;
+  white-space:normal}
+}
 """
 
 
@@ -260,7 +458,7 @@ def _bullets_to_html(text: str) -> str:
 
 
 def _write_html(out_path: Path, channel_name: str, entries: list[dict],
-                cats: list[dict], with_videos: bool) -> None:
+                cats: list[dict], video_nums=()) -> None:
     """まとめ全体を1枚の自己完結 HTML にする。
 
     飛行機で読む前提なので、外部リソースを一切参照しない（オフラインで開ける）。
@@ -269,54 +467,128 @@ def _write_html(out_path: Path, channel_name: str, entries: list[dict],
     行き来できるようにしてある。全文だけは分量が大きいので .md のまま外に置く。
     """
     esc = html.escape
-    p = []
-    p.append(f"<header><h1>{esc(channel_name)} まとめ</h1>"
-             f"<p class='sub'>対象 {len(entries)} 本／{len(cats)} カテゴリ"
-             f"　このページはオフラインで読めます</p></header>")
-    p.append("<div class='tip'>まず<strong>カテゴリ別まとめ</strong>を読んでください。"
-             "気になった動画の番号を押すと、その動画の要点に飛べます。"
-             "探し物はブラウザの検索（PCなら Ctrl/⌘+F、スマホならメニューの"
-             "「ページ内を検索」）が使えます。</div>")
 
-    p.append("<nav><strong>カテゴリ</strong><ol>")
-    for i, c in enumerate(cats):
-        p.append(f"<li><a href='#c{i}'>{esc(c['name'])}</a>"
-                 f"<span class='sub'>（{len(c['members'])}本）</span></li>")
-    p.append("</ol></nav>")
+    def tint(i):
+        light, dark = _TAB_COLORS[i % len(_TAB_COLORS)]
+        return f"--tab-l:{light};--tab-d:{dark}"
 
+    # 動画番号にも所属話題の色を当て、タブ・見出し・番号を同じ色で結ぶ
+    color_of = {e["num"]: tint(i) for i, c in enumerate(cats) for e in c["members"]}
+    default_tint = "--tab-l:#5b5f66;--tab-d:#989ba1"
+
+    nav = ["<aside class='index'><span class='index-label'>目次</span><ol>"]
     for i, c in enumerate(cats):
-        p.append(f"<h2 id='c{i}'>{esc(c['name'])}</h2>")
-        p.append(_bullets_to_html(c["head"]))
+        nav.append(f"<li><a class='tab' style='{tint(i)}' href='#c{i}'>"
+                   f"<span class='tab-name'>{esc(c['name'])}</span>"
+                   f"<span class='tab-count'>{len(c['members'])}</span></a></li>")
+    nav.append("<li><a class='tab tab-all' href='#notes'>"
+               "<span class='tab-name'>動画ごとの要点</span>"
+               f"<span class='tab-count'>{len(entries)}</span></a></li>")
+    nav.append("</ol></aside>")
+
+    cover = (
+        "<header class='cover'>"
+        "<p class='eyebrow'>持ち歩ける要点集</p>"
+        f"<h1>{esc(channel_name)}</h1>"
+        f"<p class='standfirst'>{len(entries)}本の動画を{len(cats)}つの話題に整理しました。"
+        "動画を見なくても、言っていたことの要点だけ追えます。</p>"
+        "<div class='how'>"
+        "<p>話題ごとのまとめを読み、気になった動画は番号から要点へ。</p>"
+        "<p>通信がなくても全部読めます。</p>"
+        "</div></header>")
+
+    p = ["<main class='body'>"]
+    for i, c in enumerate(cats):
+        p.append(f"<section class='cat' id='c{i}' style='{tint(i)}'>")
+        p.append(f"<div class='cat-head'><span class='chip'></span>"
+                 f"<h2>{esc(c['name'])}</h2>"
+                 f"<span class='cat-n'>{len(c['members'])}本</span></div>")
+        if c.get("lede", "").strip():
+            p.append("<div class='lede'><span class='lede-label'>まず結論</span>"
+                     + _bullets_to_html(c["lede"]) + "</div>")
+            p.append("<span class='detail-label'>くわしく</span>")
+        p.append(_bullets_to_html(c.get("detail") or c["head"]))
         if c["members"]:
-            p.append("<h3>このカテゴリの動画</h3><ul class='vid-list'>")
+            p.append("<div class='roll'><p class='roll-label'>この話題の動画</p><ul>")
             for e in c["members"]:
                 p.append(f"<li><a href='#v{e['num']:03d}'>"
                          f"<span class='num'>{e['num']:03d}</span>"
-                         f"{esc(e['title'])}</a></li>")
-            p.append("</ul>")
-        p.append("<p><a class='top' href='#'>↑ 先頭へ</a></p>")
+                         f"<span>{esc(e['title'])}</span></a></li>")
+            p.append("</ul></div>")
+        p.append("</section>")
 
-    p.append("<hr><h2 id='videos'>動画ごとの要点</h2>")
+    p.append("<section class='notes' id='notes'>"
+             "<h2 class='notes-head'>動画ごとの要点</h2>"
+             "<p class='notes-sub'>投稿が新しい順。番号はフォルダ内のファイル名と対応します。</p>")
     for e in entries:
         points = _split_transcript(e["md"].read_text(encoding="utf-8"))[0]
         if not points:
             continue
-        p.append(f"<div class='card' id='v{e['num']:03d}'>")
-        p.append(f"<h3>{e['num']:03d}　{esc(e['title'])}</h3>")
+        style = color_of.get(e["num"], default_tint)
+        p.append(f"<article class='card' id='v{e['num']:03d}' style='{style}'>")
+        p.append(f"<h3><span class='num'>{e['num']:03d}</span>"
+                 f"<span>{esc(e['title'])}</span></h3>")
         meta = [esc(e["upload_date"] or "投稿日不明")]
-        if with_videos:
+        # 動画を同梱した回だけリンクを出す。入っていない動画にリンクを張ると
+        # 押しても何も起きない（PDF でも同じ）
+        if e["num"] in video_nums:
             href = urllib.parse.quote(f"4_動画/{e['stem']}.mp4")
             meta.append(f"<a href='{href}'>動画を見る</a>")
-        p.append(f"<p class='meta'>{'　／　'.join(meta)}</p>")
+        p.append(f"<p class='meta'>{'<span class=dot>·</span>'.join(meta)}</p>")
         p.append(_bullets_to_html(points))
-        p.append("<p><a class='top' href='#'>↑ 先頭へ</a></p></div>")
+        p.append("</article>")
+    p.append("</section></main>")
 
     out_path.write_text(
         "<!doctype html>\n<html lang='ja'><head><meta charset='utf-8'>"
         "<meta name='viewport' content='width=device-width,initial-scale=1'>"
         f"<title>{esc(channel_name)} まとめ</title><style>{_CSS}</style></head>"
-        f"<body><div class='wrap'>{''.join(p)}</div></body></html>\n",
+        f"<body><div class='shell'>{cover}{''.join(nav)}{''.join(p)}</div></body></html>\n",
         encoding="utf-8")
+
+
+# PDF は Chrome のヘッドレス印刷で作る。LaTeX を挟まないのは、画面用の CSS を
+# そのまま紙面にも使えて二重管理にならないのと、日本語フォントの用意が要らないため。
+_CHROME_CANDIDATES = (
+    "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome",
+    "/Applications/Chromium.app/Contents/MacOS/Chromium",
+    "/Applications/Microsoft Edge.app/Contents/MacOS/Microsoft Edge",
+    "google-chrome", "google-chrome-stable", "chromium", "chromium-browser",
+)
+
+
+def _find_chrome() -> str | None:
+    for c in _CHROME_CANDIDATES:
+        if "/" in c:
+            if Path(c).exists():
+                return c
+        elif shutil.which(c):
+            return shutil.which(c)
+    return None
+
+
+def _html_to_pdf(html_path: Path, pdf_path: Path) -> bool:
+    """HTML を PDF に変換する。Chrome が無ければ HTML だけ残して諦める。"""
+    import subprocess
+    chrome = _find_chrome()
+    if not chrome:
+        _err("[warn] Chrome が見つからないので PDF は作らない（HTML はできている）")
+        return False
+    cmd = [chrome, "--headless", "--disable-gpu", "--no-sandbox",
+           "--no-pdf-header-footer",          # 既定のURL・日付・ページ番号を出さない
+           "--virtual-time-budget=20000",     # フォント適用を待つ
+           f"--print-to-pdf={pdf_path}",
+           html_path.resolve().as_uri()]
+    try:
+        r = subprocess.run(cmd, capture_output=True, text=True, timeout=300)
+    except (OSError, subprocess.TimeoutExpired) as e:
+        _err(f"[warn] PDF 生成に失敗（HTML はできている）: {e}")
+        return False
+    if r.returncode != 0 or not pdf_path.exists():
+        tail = (r.stderr or "").strip().splitlines()
+        _err(f"[warn] PDF 生成に失敗（HTML はできている）: {tail[-1] if tail else r.returncode}")
+        return False
+    return True
 
 
 def _write_readme(out_path: Path, channel_name: str, entries: list[dict],
@@ -328,17 +600,20 @@ def _write_readme(out_path: Path, channel_name: str, entries: list[dict],
         "",
         "## どこから読むか",
         "",
-        "**`まとめ.html` をブラウザで開いてください。それだけで足ります。**",
-        "インターネットに繋がっていなくても開けます（飛行機の中でも読めます）。",
+        "**`まとめ.pdf` を開いてください。それだけで足ります。**",
+        "スマホにそのまま入れて読めます。通信は要りません。",
         "",
-        "話題ごとのまとめと、動画1本ごとの要点が全部入っていて、",
-        "番号を押すと行き来できます。探し物はブラウザの検索機能が使えます。",
+        "話題ごとのまとめと、動画1本ごとの要点が全部入っています。",
+        "",
+        "`まとめ.html` は同じ内容のブラウザ版です。文字の大きさを変えたい、",
+        "検索したい、というときはこちらのほうが快適です。",
         "",
         "下のフォルダは、元データが欲しいとき用です。",
         "",
         "## フォルダの中身",
         "",
-        "- `まとめ.html` — **まずここ。これだけ開けばいい**",
+        "- `まとめ.pdf` — **まずここ。これだけ開けばいい**",
+        "- `まとめ.html` — 同じ内容のブラウザ版（検索が速い）",
         f"- `1_カテゴリ別まとめ/` — {n_categories} ファイル。html と同じ内容のテキスト版",
         f"- `2_動画ごとの要点/` — {n_points} ファイル。1本あたり10行程度の要点",
         f"- `3_全文/` — {len(entries)} ファイル。文字起こし全文。読む用ではなく検索用",
@@ -372,6 +647,12 @@ examples:
     parser.add_argument("channel", help="チャンネル名（transcripts/ 配下のディレクトリ名）")
     parser.add_argument("--output", help="出力先（省略時は deliver/<channel>/納品）")
     parser.add_argument("--no-videos", action="store_true", help="動画ファイルを含めない")
+    parser.add_argument("--video-limit", type=int, default=0, metavar="N",
+                        help="同梱する動画の本数上限（0=制限なし）。"
+                             "スマホに入れる場合は全部入れても見きれないので絞る")
+    parser.add_argument("--video-order", choices=["popular", "date"], default="popular",
+                        help="--video-limit で残す優先順位 (default: popular)")
+    parser.add_argument("--no-pdf", action="store_true", help="PDF を作らない")
     args = parser.parse_args()
 
     entries = _load_entries(args.channel)
@@ -386,16 +667,20 @@ examples:
     n_cat = _renumber_categories(out_root / "1_カテゴリ別まとめ", args.channel, entries)
     n_points = _write_points(out_root / "2_動画ごとの要点", entries)
     _write_full(out_root / "3_全文", entries)
-    n_videos, mb = (0, 0) if args.no_videos else \
-        _copy_videos(out_root / "4_動画", entries, args.channel)
+    n_videos, mb, video_nums = (0, 0, set()) if args.no_videos else \
+        _copy_videos(out_root / "4_動画", entries, args.channel,
+                     args.video_limit, args.video_order)
 
     cats = _collect_categories(args.channel, entries)
-    _write_html(out_root / "まとめ.html", args.channel, entries, cats, n_videos > 0)
+    html_path = out_root / "まとめ.html"
+    _write_html(html_path, args.channel, entries, cats, video_nums)
+    pdf_ok = False if args.no_pdf else _html_to_pdf(html_path, out_root / "まとめ.pdf")
     _write_readme(out_root / "00_はじめに.md", args.channel, entries,
                   n_points, n_videos, mb, len(cats))
 
     _err(f"[done] {out_root}")
-    _err(f"  まとめ.html / カテゴリ {len(cats)} / 要点 {n_points} / 全文 {len(entries)} / 動画 {n_videos}（{mb}MB）")
+    _err(f"  {'まとめ.pdf + ' if pdf_ok else ''}まとめ.html / カテゴリ {len(cats)} / "
+         f"要点 {n_points} / 全文 {len(entries)} / 動画 {n_videos}（{mb}MB）")
 
 
 if __name__ == "__main__":
